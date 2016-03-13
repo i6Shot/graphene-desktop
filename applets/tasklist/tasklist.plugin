@@ -1,0 +1,7 @@
+[Plugin]
+Module=tasklist
+Loader=python3
+Name=VosTaskList
+Description=Shows open applications
+Builtin=true
+Hidden=true

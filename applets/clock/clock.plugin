@@ -1,0 +1,7 @@
+[Plugin]
+Module=clock
+Loader=python3
+Name=VosClock
+Description=It's a clock. It does clock things.
+Builtin=true
+Hidden=true
