@@ -1,6 +1,6 @@
 CC=gcc
 MKDIR_P=mkdir -p
-CFLAGS=-Wall -I. `pkg-config --cflags --libs gobject-2.0 gtk+-3.0 libpeas-1.0 accountsservice libpulse libpulse-mainloop-glib libmutter`
+CFLAGS=-Wall -I. `pkg-config --cflags --libs glib-2.0 gobject-2.0 gtk+-3.0 libpeas-1.0 accountsservice libpulse libpulse-mainloop-glib libmutter`
 
 VDE_DATA_DIR=/usr/share/vosdesktop# MUST END WITHOUT SLASH
 CFLAGS+=-DVDE_DATA_DIR=\"$(VDE_DATA_DIR)\"
@@ -29,7 +29,12 @@ WMINCLUDE=$(patsubst %.c,%.h,$(WMSRC))
 WMOBJS=$(patsubst %.c,%.o,$(WMSRC))
 
 all: $(LIBF)/lib$(LIB).so $(PANELF)/$(PANEL).bin $(WMF)/$(WM).bin
+
+test:
+	sudo make all install
+	$(WM)
 	
+
 $(LIBF)/lib$(LIB).so: $(LIBOBJS) $(LIBINCLUDE)
 	$(CC) -fPIC -shared $(CFLAGS) $(LIBSRC) -o $@
 	
@@ -54,19 +59,24 @@ $(WMF)/$(WM).bin: $(WMOBJS) $(WMINCLUDE)
 	glib-compile-resources --sourcedir $(@D) --target $*-resource.h --generate-header $*.gresource.xml
 
 
-install:
+install: install_lib install_bins install_data
+	
+install_data:
+	$(MKDIR_P) $(VDE_DATA_DIR)
+	cp -r applets $(VDE_DATA_DIR)
+	cp $(PANELF)/panel-style.css $(VDE_DATA_DIR)
+
+install_bins:
 	cp $(WMF)/$(WM).bin /usr/bin/$(WM)
 	cp $(PANELF)/$(PANEL).bin /usr/bin/$(PANEL)
+	cp vos.desktop /usr/share/xsessions/vos.desktop
+
+install_lib:
 	cp $(LIBF)/$(GIR).typelib /usr/lib/girepository-1.0/$(GIR).typelib
 	cp $(LIBF)/$(GIR).gir /usr/share/gir-1.0/$(GIR).gir
 	cp $(LIBF)/lib$(LIB).so /usr/lib/lib$(LIB).so.$(VERSION)
 	ln -sf /usr/lib/lib$(LIB).so.$(VERSION) /usr/lib/lib$(LIB).so
-	cp vos.desktop /usr/share/xsessions/vos.desktop
-	
-	$(MKDIR_P) $(VDE_DATA_DIR)
-	cp -r applets $(VDE_DATA_DIR)
-	cp $(PANELF)/panel-style.css $(VDE_DATA_DIR)
-	
+
 fclean: clean uninstall
 
 clean:
@@ -78,4 +88,4 @@ clean:
 uninstall:
 	rm -f /usr/lib/lib$(LIB).* /usr/share/gir-1.0/$(GIR).gir /usr/lib/girepository-1.0/$(GIR).typelib /usr/share/xsessions/vos.desktop /usr/bin/$(WM) /usr/bin/$(PANEL)
 	
-.PHONY: fclean clean install uninstall all
+.PHONY: fclean clean install install_lib install_bins install_data uninstall all test
