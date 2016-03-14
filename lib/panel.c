@@ -23,6 +23,7 @@
 #include <gdk/gdkscreen.h>
 #include <cairo.h>
 #include <gio/gio.h>
+#include <glib.h>
 
 // VosPanel class (private)
 struct _VosPanel {
@@ -31,15 +32,22 @@ struct _VosPanel {
   GtkBox *AppletLayout;
   GtkBox *LauncherBox;
   GtkBox *SystemTray;
-
+  
+  GHashTable *ExtensionWidgetTable;
+  PeasEngine *Engine;
+  
   GtkPositionType Location;
   gint Height;
   gint MonitorID;
   GdkRectangle PanelRect;
   PeasExtensionSet *ExtensionSet;
   
+  GtkMenu *ContextMenu;
+  
   GtkWindow *CaptureWindow;
   int Captures; // Each time capture is called, this ++es, and when someone ends the capture this --es. When it hits 0, the capture actually ends.
+
+  gboolean Rebooting;
 };
 
 // Make sure only one panel exists at a time
@@ -59,11 +67,14 @@ static void init_capture(VosPanel *self);
 static void init_plugins(VosPanel *self);
 static void update_position(VosPanel *self);
 static void on_monitors_changed(GdkScreen *screen, VosPanel *self);
+static gboolean on_panel_clicked(VosPanel *self, GdkEventButton *event);
+static void on_context_menu_item_activate(VosPanel *self, GtkMenuItem *menuitem);
 
 // Initializes the panel (declared by G_DEFINE_TYPE; called through vos_panel_new())
 static void vos_panel_init(VosPanel *self)
 {
   PanelExists = TRUE;
+  self->Rebooting = FALSE;
   
   // Set properties
   gtk_window_set_type_hint(GTK_WINDOW(self), GDK_WINDOW_TYPE_HINT_DOCK);
@@ -79,6 +90,7 @@ static void vos_panel_init(VosPanel *self)
   // Update the position now and when the size or monitors change
   g_signal_connect(gtk_window_get_screen(GTK_WINDOW(self)), "monitors-changed", G_CALLBACK(on_monitors_changed), self);
   g_signal_connect(self, "map", G_CALLBACK(update_position), NULL);
+  g_signal_connect(self, "button_press_event", G_CALLBACK(on_panel_clicked), NULL);
   // g_signal_connect(self, "size-allocate", G_CALLBACK(on_size_allocate), NULL); // TODO: Size allocate necessary? Seems to just create lots of unnecessary position updates
 
   // Load things
@@ -108,6 +120,13 @@ static void init_layout(VosPanel *self)
   self->SystemTray = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0));
   gtk_box_pack_end(self->AppletLayout, GTK_WIDGET(self->SystemTray), FALSE, FALSE, 0);
   gtk_box_set_homogeneous(self->SystemTray, FALSE);
+  
+  // Context menu
+  self->ContextMenu = GTK_MENU(gtk_menu_new());
+  GtkWidget *reloadapplets = gtk_menu_item_new_with_label("Reload Applets");
+  g_signal_connect_swapped(reloadapplets, "activate", G_CALLBACK(on_context_menu_item_activate), self);
+  gtk_menu_shell_append(GTK_MENU_SHELL(self->ContextMenu), reloadapplets);
+  gtk_widget_show_all(GTK_WIDGET(self->ContextMenu));
   
   // Show
   gtk_widget_show_all(GTK_WIDGET(self->AppletLayout));
@@ -228,6 +247,33 @@ static void update_position(VosPanel *self)
 static void on_monitors_changed(GdkScreen *screen, VosPanel *self)
 {
   update_position(self);
+}
+
+static gboolean on_panel_clicked(VosPanel *self, GdkEventButton *event)
+{
+  if(event->type == GDK_BUTTON_PRESS && event->button == GDK_BUTTON_SECONDARY)
+  {
+    gtk_menu_popup(self->ContextMenu, NULL, NULL, NULL, NULL, event->button, event->time);
+    return GDK_EVENT_STOP;
+  }
+  return GDK_EVENT_PROPAGATE;
+}
+
+static void on_context_menu_item_activate(VosPanel *self, GtkMenuItem *menuitem)
+{
+  const gchar *name = gtk_menu_item_get_label(menuitem);
+  
+  if(g_strcmp0(name, "Reload Applets") == 0)
+  {
+    // Reboot the panel. There is apparently no way to reload a plugin using Peas without completely exiting the process.
+    self->Rebooting = TRUE;
+    g_application_quit(g_application_get_default());
+  }
+}
+
+gboolean vos_panel_is_rebooting(VosPanel *self)
+{
+  return self->Rebooting;
 }
 
 
@@ -377,20 +423,25 @@ void vos_panel_shutdown(VosPanel *self, gboolean reboot)
 
 static void load_girepository(char *name, char *version);
 static void on_extension_added(PeasExtensionSet *set, PeasPluginInfo *info, VosAppletExtension *exten, VosPanel *self);
+static void on_extension_removed(PeasExtensionSet *set, PeasPluginInfo *info, VosAppletExtension *exten, VosPanel *self);
 
 static void init_plugins(VosPanel *self)
 {
   // Init peas
   PeasEngine *engine = peas_engine_get_default();
-  peas_engine_add_search_path(engine, VDE_DATA_DIR "/applets", VDE_DATA_DIR "/applets"); // TODO: TEMP DIR
+  peas_engine_add_search_path(engine, VDE_DATA_DIR "/applets", VDE_DATA_DIR "/applets");
   peas_engine_enable_loader(engine, "python3");
   peas_engine_enable_loader(engine, "lua5.1");
   load_girepository("Vos", "1.0");
+
+  // Create a hash table between each VosAppletExtension* and its corresponding GtkWidget*
+  self->ExtensionWidgetTable = g_hash_table_new(g_direct_hash, g_direct_equal);
 
   // Create extension set
   self->ExtensionSet = peas_extension_set_new(engine, VOS_TYPE_APPLET_EXTENSION, NULL);
   peas_extension_set_foreach(self->ExtensionSet, (PeasExtensionSetForeachFunc)on_extension_added, self);
   g_signal_connect(self->ExtensionSet, "extension-added", G_CALLBACK(on_extension_added), self);
+  g_signal_connect(self->ExtensionSet, "extension-removed", G_CALLBACK(on_extension_removed), self);
   
   peas_engine_rescan_plugins(engine);
   const GList *plugins = peas_engine_get_plugin_list(engine);
@@ -447,5 +498,16 @@ static void on_extension_added(PeasExtensionSet *set, PeasPluginInfo *info, VosA
     return;
   }
   
+  g_hash_table_insert(self->ExtensionWidgetTable, exten, applet);
 	insert_extension(self, pluginmodule, applet);
+}
+
+static void on_extension_removed(PeasExtensionSet *set, PeasPluginInfo *info, VosAppletExtension *exten, VosPanel *self)
+{
+  GtkWidget *applet = GTK_WIDGET(g_hash_table_lookup(self->ExtensionWidgetTable, exten));
+  g_hash_table_remove(self->ExtensionWidgetTable, exten);
+  if(applet == NULL)
+    return;
+  
+  gtk_widget_destroy(applet);
 }

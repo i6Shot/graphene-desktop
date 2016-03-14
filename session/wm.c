@@ -24,6 +24,7 @@ struct _VosWM {
   MetaBackgroundGroup *BackgroundGroup;
 };
 
+int start_panel();
 void panel_watch_cb(GPid pid, gint status, gpointer userdata);
 
 int main(int argc, char **argv)
@@ -36,17 +37,8 @@ int main(int argc, char **argv)
   }
   
   // The VOS Window Manager acts also functions as the session manager
-  // Start the panel process. Whenever the panel closes, this WM should exit too.
-  // TODO: This feels wrong. Also looks ugly. Is there a better (but still simple) way?
-  //       Possibly implement the panel directly into the WM, but then GTK+ isn't available.
-  //       Or have the .desktop file start the panel and the session manager can watch for
-  //       an exit signal via dbus or something like that.
-  GPid panelPID = 0;
-  GError *e = NULL;
-  gchar *panelargs[] = {"vospanel", NULL};
-  g_spawn_async(NULL, panelargs, NULL, G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD, NULL, NULL, &panelPID, &e);
-  if(e) { g_critical("Unable to start panel: %s", e->message); g_error_free(e); return e->code; }
-  g_child_watch_add(panelPID, panel_watch_cb, NULL);
+  int status = start_panel();
+  if(status != 0) return status;
   
   // Start nautilus
   e = NULL;
@@ -68,17 +60,39 @@ int main(int argc, char **argv)
   return meta_run();
 }
 
+int start_panel()
+{
+  // Start the panel process. Whenever the panel closes, this WM should exit too.
+  // TODO: This feels wrong. Also looks ugly. Is there a better (but still simple) way?
+  //       Possibly implement the panel directly into the WM, but then GTK+ isn't available.
+  //       Or have the .desktop file start the panel and the session manager can watch for
+  //       an exit signal via dbus or something like that.
+  GPid panelPID = 0;
+  GError *e = NULL;
+  gchar *panelargs[] = {"vospanel", NULL};
+  g_spawn_async(NULL, panelargs, NULL, G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD, NULL, NULL, &panelPID, &e);
+  if(e) { g_critical("Unable to start panel: %s", e->message); g_error_free(e); return e->code; }
+  g_child_watch_add(panelPID, panel_watch_cb, NULL);
+}
+
 void panel_watch_cb(GPid pid, gint status, gpointer userdata)
 {
   // Close 
   g_spawn_close_pid(pid);
+  
+  if(status != 0)
+  {
+    if(start_panel() != 0)
+      meta_quit(META_EXIT_ERROR);
+    return;
+  }
   
   // Quit nautilus
   gchar *nautilusargs[] = {"nautilus", "-q", NULL};
   g_spawn_async(NULL, nautilusargs, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
 
   // Exit wm
-  meta_quit(status == 0 ? META_EXIT_SUCCESS : META_EXIT_ERROR);
+  meta_quit(META_EXIT_SUCCESS);
 }
 
 static void vos_wm_dispose(GObject *gobject); 
