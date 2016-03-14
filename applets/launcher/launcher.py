@@ -30,13 +30,6 @@ class VosLauncherExtension(GObject.Object, Vos.AppletExtension):
 class VosLauncherApplet(Gtk.Button):
     __gtype_name__ = 'VosLauncherApplet'
 
-    popup = Gtk.Window.new(Gtk.WindowType.TOPLEVEL)
-    appTree = GMenu.Tree.new("gnome-applications.menu", GMenu.TreeFlags.SORT_DISPLAY_NAME)
-    popupLayout = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-    appListBox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-    searchBar = Gtk.SearchEntry.new()
-    filter = ""
-
     def __init__(self, panel):
         super().__init__()
         self.panel = panel
@@ -53,10 +46,12 @@ class VosLauncherApplet(Gtk.Button):
         self.show_all()
 
         # Layout
+        self.popupLayout = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.popupLayout.set_halign(Gtk.Align.FILL)
         self.popupLayout.set_valign(Gtk.Align.FILL)
 
         # Create popup
+        self.popup = Gtk.Window.new(Gtk.WindowType.TOPLEVEL)
         self.popup.set_type_hint(Gdk.WindowTypeHint.POPUP_MENU) # Must be POPUP_MENU or else z-sorting conflicts with the dock
         self.popup.add(self.popupLayout)
         self.popup.connect("map", self.on_popup_mapped)
@@ -65,11 +60,14 @@ class VosLauncherApplet(Gtk.Button):
         self.popup.connect("key_release_event", self.on_key_event)
         
         # Search bar
+        self.searchBar = Gtk.SearchEntry.new()
+        self.filter = ""
         self.searchBar.connect("changed", self.on_search_changed)
         self.searchBar.connect("activate", self.on_search_enter)
         self.popupLayout.pack_start(self.searchBar, False, False, 0)
 
         # General applet box
+        self.appListBox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
         self.appListBox.set_name("launcher-app-list-box")
         self.appListBox.set_margin_top(5)
         self.appListBox.set_margin_start(5)
@@ -80,6 +78,7 @@ class VosLauncherApplet(Gtk.Button):
         self.popupLayout.show_all()
 
         # Load applications
+        self.appTree = GMenu.Tree.new("gnome-applications.menu", GMenu.TreeFlags.SORT_DISPLAY_NAME)
         self.appTree.load_sync()
 
     def on_applet_button_click(self, button, event):

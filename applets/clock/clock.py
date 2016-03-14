@@ -29,12 +29,11 @@ class VosClockExtension(GObject.Object, Vos.AppletExtension):
 class VosClockApplet(Gtk.Label):
 	__gtype_name__ = 'VosClockApplet'
 	
-	stopUpdates = False
-	updateThread = None
-	prevTimeString = None
-	
 	def __init__(self):
 		super().__init__()
+		
+		self.stopUpdates = False
+		self.prevTimeString = None
 		
 		self.connect("destroy", self.on_destroy)
 		self.updateThread = threading.Thread(target=self.update_thread)

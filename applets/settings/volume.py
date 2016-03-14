@@ -22,14 +22,15 @@ import threading, time
 class VosVolumeIcon(Gtk.Image):
 	__gtype_name__ = 'VosVolumeIcon'
 	
-	volumeControl = Vos.SystemVolumeControl.new()
-	prevIconName = None
-	
 	def __init__(self):
 		super().__init__()
 
+		self.prevIconName = None
+
 		self.get_style_context().add_class("battery-icon")
 		self.set_from_icon_name("battery-full-charged-symbolic", Gtk.IconSize.MENU)
+		
+		self.volumeControl = Vos.SystemVolumeControl.new()
 		self.volumeControl.connect("notify::volume", self.update)
 		self.volumeControl.connect("notify::muted", self.update)
 

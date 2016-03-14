@@ -22,12 +22,6 @@ import threading, time
 class VosBatteryInfo(GObject.Object):
 	__gtype_name__ = 'VosBatteryInfo'
 
-	stopUpdates = False
-	updateThread = None
-
-	prevStatus = None
-	prevPercentage = None
-
 	__gsignals__ = { 'update': (GObject.SIGNAL_RUN_LAST, GObject.TYPE_NONE, (GObject.TYPE_INT, GObject.TYPE_STRING)) }
 
 	def __init__(self):
@@ -50,7 +44,10 @@ class VosBatteryInfo(GObject.Object):
 		# monitor.connect("changed", self.change)
 		# print("cancelled: %i" % monitor.is_cancelled())
 
-
+		self.stopUpdates = False
+		self.prevStatus = None
+		self.prevPercentage = None
+		
 		self.updateThread = threading.Thread(target=self.update_thread)
 		self.updateThread.start()
 

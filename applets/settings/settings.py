@@ -31,15 +31,18 @@ class VosSettingsExtension(GObject.Object, Vos.AppletExtension):
         return VosSettingsApplet(panel)
     
 class VosSettingsPopup(Gtk.Window):
-    popupLayout = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-    profileNameLabel = Gtk.Label.new("Unknown User")
-    profileIcon = Gtk.Image.new_from_icon_name("", Gtk.IconSize.DIALOG)
+    __gtype_name__ = 'VosSettingsPopup'
     
     def __init__(self, panel):
         super().__init__()
         self.panel = panel
         
+        # Profile
+        self.profileNameLabel = Gtk.Label.new("Unknown User")
+        self.profileIcon = Gtk.Image.new_from_icon_name("", Gtk.IconSize.DIALOG)
+        
         # Layout
+        self.popupLayout = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.popupLayout.set_name("settings-layout")
         self.popupLayout.set_halign(Gtk.Align.FILL)
         self.popupLayout.set_valign(Gtk.Align.FILL)
@@ -56,6 +59,8 @@ class VosSettingsPopup(Gtk.Window):
         if manager.no_service():
             # TODO: Try again?
             print("** settings.py: Critical: Cannot access AccountsSerivce. Make sure accounts-daemon is running.\n")
+        elif manager.props.is_loaded:
+            self.on_user_manager_notify_is_loaded(manager, None)
         else:
             manager.connect("notify::is-loaded", self.on_user_manager_notify_is_loaded)
     
@@ -134,15 +139,13 @@ class VosSettingsPopup(Gtk.Window):
 class VosSettingsApplet(Gtk.Button):
     __gtype_name__ = 'VosSettingsApplet'
 
-    popup = None
-    box = Gtk.Box.new(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-    
     def __init__(self, panel):
         super().__init__()
         self.panel = panel
         self.popup = VosSettingsPopup(panel)
         
         # Init applet buttons
+        self.box = Gtk.Box.new(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self.box.set_homogeneous(True)
         self.box.set_orientation(Gtk.Orientation.HORIZONTAL)
         self.box.pack_end(VosBatteryIcon(), False, False, 0)

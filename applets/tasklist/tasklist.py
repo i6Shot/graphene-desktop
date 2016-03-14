@@ -31,12 +31,12 @@ class VosTaskListExtension(GObject.Object, Vos.AppletExtension):
 class VosTaskListApplet(Gtk.Box):
     __gtype_name__ = 'VosTaskListApplet'
 
-    buttons = {}
-    
     def __init__(self, panel):
         super().__init__()
         self.panel = panel
         
+        self.buttons = {}
+            
         self.set_homogeneous(False)
         self.set_orientation(Gtk.Orientation.HORIZONTAL)
         
@@ -44,10 +44,19 @@ class VosTaskListApplet(Gtk.Box):
         screen.connect("window_opened", self.on_window_opened)
         screen.connect("window_closed", self.on_window_closed)
         screen.connect("active_window_changed", self.on_active_window_changed)
+        
+        # On the first launch, this does nothing because Wnck hasn't loaded yet and the window_opened event
+        # will take care of calling on_window_opened once it has loaded. (get_windows() returns empty)
+        # On subsequent launches, window_opened won't be emitted at the start, so the windows have to be
+        # loaded now (get_windows() does not return empty)
+        windows = screen.get_windows()
+        for window in windows:
+            self.on_window_opened(screen, window)
+
         self.show_all()
         
     def on_window_opened(self, screen, window):
-        if not window or window.is_skip_tasklist():
+        if not window or window.is_skip_tasklist() or window in self.buttons:
             return
         
         # Create a new task list item for the window
