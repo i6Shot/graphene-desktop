@@ -1,5 +1,5 @@
 /*
- * vos-desktop
+ * graphene-desktop
  * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +15,7 @@
  * limitations under the License.
  *
  * wm.h/.c
- * Vos's window manager (a Mutter plugin)
+ * Graphene's window manager (a Mutter plugin)
  */
 
 #ifndef __VOS_WM_H__

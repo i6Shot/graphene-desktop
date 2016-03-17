@@ -1,5 +1,5 @@
 /*
- * vos-desktop
+ * graphene-desktop
  * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +15,7 @@
  * limitations under the License.
  *
  * panel.h/.c
- * The Panel class, which displays itself at a docked position on the screen and automatically loads plugins to provide applets.
+ * The Panel window, which displays itself at a docked position on the screen and automatically loads plugins to provide applets.
  */
 
 #ifndef __VOS_PANEL_H__

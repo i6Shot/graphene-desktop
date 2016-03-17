@@ -1,4 +1,4 @@
-# vos-desktop
+# graphene-desktop
 # Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
