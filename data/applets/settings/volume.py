@@ -27,8 +27,7 @@ class VosVolumeIcon(Gtk.Image):
 
 		self.prevIconName = None
 
-		self.get_style_context().add_class("battery-icon")
-		self.set_from_icon_name("battery-full-charged-symbolic", Gtk.IconSize.MENU)
+		self.set_from_icon_name("audio-volume-high-symbolic", Gtk.IconSize.MENU)
 		
 		self.volumeControl = Vos.SystemVolumeControl.new()
 		self.volumeControl.connect("notify::volume", self.update)
@@ -38,7 +37,7 @@ class VosVolumeIcon(Gtk.Image):
 		iconName = "audio-volume-"
 		volPercent = vc.get_volume()
 		
-		if vc.get_is_muted():
+		if volPercent == 0 or vc.get_is_muted():
 			iconName += "muted"
 		elif volPercent >= 2/3:
 			iconName += "high"
@@ -52,3 +51,37 @@ class VosVolumeIcon(Gtk.Image):
 		if self.prevIconName != iconName:
 			self.prevIconName = iconName
 			GLib.idle_add(self.set_from_icon_name, iconName, Gtk.IconSize.MENU)
+			
+class VosVolumeSlider(Gtk.Box):
+	__gtype_name__ = 'VosVolumeSlider'
+
+	def __init__(self):
+		super().__init__(orientation=Gtk.Orientation.HORIZONTAL)
+		
+		self.props.margin = 20
+		
+		self.volumeControl = Vos.SystemVolumeControl.new()
+		self.volumeControl.connect("notify::volume", self.update)
+		
+		self.volumeIcon = VosVolumeIcon()
+		self.volumeIcon.set_valign(Gtk.Align.START)
+
+		self.slider = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0.0, 1.5, 0.1)
+		self.slider.set_draw_value(False)
+		self.slider.set_digits(1)
+		self.slider.add_mark(1.0, Gtk.PositionType.BOTTOM, "100%")
+		self.slider.connect("value-changed", self.on_value_changed)
+
+		self.pack_start(self.volumeIcon, False, False, 0)
+		self.pack_start(self.slider, True, True, 0)
+		
+	def on_value_changed(self, scale):
+		value = self.slider.get_value()
+		self.volumeControl.set_volume(value)
+		if value == 0:
+			self.volumeControl.set_is_muted(True)
+		elif self.volumeControl.get_is_muted():
+			self.volumeControl.set_is_muted(False)
+		
+	def update(self, vc, x):
+		self.slider.set_value(vc.get_volume())

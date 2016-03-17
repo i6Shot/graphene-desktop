@@ -27,37 +27,25 @@ class VosLauncherExtension(GObject.Object, Vos.AppletExtension):
     def do_get_widget(self, panel):
         return VosLauncherApplet(panel)
 
-class VosLauncherApplet(Gtk.Button):
-    __gtype_name__ = 'VosLauncherApplet'
+class VosLauncherPopup(Gtk.Window):
+    __gtype_name__ = 'VosLauncherPopup'
 
     def __init__(self, panel):
         super().__init__()
         self.panel = panel
 
-        # Init button
-        self.set_label("")
-        self.set_name("launcher-applet-button")
-        self.connect("button_press_event", self.on_applet_button_click)
-
-        img = Gtk.Image.new_from_icon_name("open-menu-symbolic", Gtk.IconSize.INVALID);
-        img.set_pixel_size(32)
-        self.set_image(img)
-        self.set_always_show_image(True)
-        self.show_all()
-
+        self.set_type_hint(Gdk.WindowTypeHint.POPUP_MENU) # Must be POPUP_MENU or else z-sorting conflicts with the dock
+        self.connect("map", self.on_mapped)
+        self.connect("button_press_event", self.on_mouse_event)
+        self.connect("key_press_event", self.on_key_event)
+        self.connect("key_release_event", self.on_key_event)
+        
         # Layout
         self.popupLayout = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.popupLayout.get_style_context().add_class("panel")
         self.popupLayout.set_halign(Gtk.Align.FILL)
         self.popupLayout.set_valign(Gtk.Align.FILL)
-
-        # Create popup
-        self.popup = Gtk.Window.new(Gtk.WindowType.TOPLEVEL)
-        self.popup.set_type_hint(Gdk.WindowTypeHint.POPUP_MENU) # Must be POPUP_MENU or else z-sorting conflicts with the dock
-        self.popup.add(self.popupLayout)
-        self.popup.connect("map", self.on_popup_mapped)
-        self.popup.connect("button_press_event", self.on_mouse_event)
-        self.popup.connect("key_press_event", self.on_key_event)
-        self.popup.connect("key_release_event", self.on_key_event)
+        self.add(self.popupLayout)
         
         # Search bar
         self.searchBar = Gtk.SearchEntry.new()
@@ -68,10 +56,7 @@ class VosLauncherApplet(Gtk.Button):
 
         # General applet box
         self.appListBox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-        self.appListBox.set_name("launcher-app-list-box")
-        self.appListBox.set_margin_top(5)
-        self.appListBox.set_margin_start(5)
-        self.appListBox.set_margin_end(5)
+        self.appListBox.props.margin = 5
         scrolled = Gtk.ScrolledWindow.new(None, None)
         scrolled.add(self.appListBox)
         self.popupLayout.pack_start(scrolled, True, True, 0)
@@ -80,42 +65,6 @@ class VosLauncherApplet(Gtk.Button):
         # Load applications
         self.appTree = GMenu.Tree.new("gnome-applications.menu", GMenu.TreeFlags.SORT_DISPLAY_NAME)
         self.appTree.load_sync()
-
-    def on_applet_button_click(self, button, event):
-        self.show_applist()
-        
-    def show_applist(self):
-        self.populate_applist()
-
-        rect = self.panel.get_screen().get_monitor_geometry(self.panel.get_monitor())
-        self.popup.set_size_request(rect.width/4, rect.height-self.panel.get_height())
-        
-        # self.get_style_context().add_class("clicked-button")
-        self.panel.capture_screen()
-        self.popup.show()
-        self.popup.grab_add()
-
-        GLib.idle_add(self.reload_apptree) # Reload widgets when nothing else is going on
-        
-    def hide_applist(self):
-        if not self.popup.get_mapped(): # Don't do anything if the popup isn't open
-            return
-        
-        self.popup.grab_remove()
-        self.popup.hide()
-        self.panel.end_capture()
-        # self.get_style_context().remove_class("clicked-button")
-        
-        # Because the capture starts while the mouse is over the button, it never receives
-        # leave-notify-event, and it stays highlighted. This stops the highlight. It's a bit
-        # weird, but nothing else works. This doesn't seem to transition the dehighlight either. (TODO?)
-        # state = self.get_state_flags() & ~(Gtk.StateFlags.PRELIGHT | Gtk.StateFlags.ACTIVE)
-        # self.set_state_flags(Gtk.StateFlags(state), True)
-
-    def on_popup_mapped(self, popup):
-        # Force the WM to give the popup keyboard focus even though it's a DOCK
-        # TODO: Figure out how to not remove focus from other toplevel windows
-        self.popup.get_window().focus(Gdk.CURRENT_TIME)
     
     def reload_apptree(self):
         self.appTree.load_sync()
@@ -127,7 +76,7 @@ class VosLauncherApplet(Gtk.Button):
             widget.destroy()
 
         self.populate_applist_directory(self.appTree.get_root_directory())
-
+        
     def populate_applist_directory(self, directory):
         count = 0
         it = directory.iter();
@@ -143,15 +92,13 @@ class VosLauncherApplet(Gtk.Button):
                     continue
 
                 button = Gtk.Button.new_with_label(appInfo.get_display_name())
-
-                img = Gtk.Image.new_from_gicon(appInfo.get_icon(), Gtk.IconSize.LARGE_TOOLBAR);
-                button.set_image(img)
+                button.set_image(Gtk.Image.new_from_gicon(appInfo.get_icon(), Gtk.IconSize.LARGE_TOOLBAR))
                 button.set_always_show_image(True)
-
+                button.get_style_context().add_class("panel")
                 button.connect("clicked", self.on_applist_item_clicked, appInfo)
                 button.show()
-                button.get_style_context().add_class("launcherlist-button")
                 self.appListBox.pack_start(button, False, False, 0)
+
                 count += 1
 
             elif type == GMenu.TreeItemType.DIRECTORY:
@@ -159,7 +106,6 @@ class VosLauncherApplet(Gtk.Button):
 
                 label = Gtk.Label.new(directory.get_name())
                 label.set_halign(Gtk.Align.START)
-                label.get_style_context().add_class("launcherlist-label")
                 self.appListBox.pack_start(label, False, False, 0)
 
                 subcount = self.populate_applist_directory(directory)
@@ -189,11 +135,127 @@ class VosLauncherApplet(Gtk.Button):
         return Gdk.EVENT_PROPAGATE
 
     def on_mouse_event(self, widget, event):
-        if event.window.get_toplevel() != self.popup.get_window():
-            self.hide_applist()
+        if event.window.get_toplevel() != self.get_window():
+            self.hide()
         return Gdk.EVENT_PROPAGATE
 
     def on_applist_item_clicked(self, button, appInfo):
         self.searchBar.set_text("")
-        self.hide_applist()
+        self.hide()
         subprocess.Popen(appInfo.get_executable(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    
+    def show(self):
+        self.populate_applist()
+        super().show()
+        self.grab_add()
+        GLib.idle_add(self.reload_apptree) # Reload widgets when nothing else is going on
+
+    def on_mapped(self, popup):
+        # Force the WM to give the popup keyboard focus even though it's a DOCK
+        # TODO: Figure out how to not remove focus from other toplevel windows
+        self.get_window().focus(Gdk.CURRENT_TIME)
+
+    def hide(self):
+        self.grab_remove()
+        super().hide()
+        
+class VosLauncherApplet(Gtk.Button):
+    __gtype_name__ = 'VosLauncherApplet'
+
+    def __init__(self, panel):
+        super().__init__()
+        self.panel = panel
+
+        # Init button
+        self.set_label("")
+        self.connect("button_press_event", self.on_applet_button_click)
+
+        img = Gtk.Image.new_from_icon_name("open-menu-symbolic", Gtk.IconSize.INVALID);
+        img.set_pixel_size(32)
+        self.set_image(img)
+        self.set_always_show_image(True)
+        self.show_all()
+
+        # Create popup
+        self.popup = VosLauncherPopup(panel)
+        self.popup.connect("hide", self.on_popup_hide)
+
+    def on_applet_button_click(self, button, event):
+        self.show_popup()
+        return Gdk.EVENT_STOP # Required to keep the button from staying highlighted permanently 
+        
+    def show_popup(self):
+        rect = self.panel.get_screen().get_monitor_geometry(self.panel.get_monitor())
+        self.popup.move(0,0)
+        self.popup.set_size_request(rect.width/4, rect.height-self.panel.get_height())
+        
+        self.get_style_context().add_class("clicked")
+        self.panel.capture_screen()
+        self.popup.show()
+    
+    def on_popup_hide(self, popup):
+        self.panel.end_capture()
+        self.get_style_context().remove_class("clicked")
+    
+        
+        
+# print("wtf")
+# self.emit("grab_broken_event", None)
+# self.set_state_flags(Gtk.StateFlags.NORMAL, True)
+# self.released()
+# print("PRESS")
+# x = Gdk.EventCrossing()
+
+# x = Gdk.Event.new(Gdk.EventType.BUTTON_RELEASE)
+# # x.button.axes = event.axes
+# x.button.button = event.button
+# x.button.device = event.device
+# x.button.send_event = True
+# x.button.state = event.state
+# x.button.time = event.time
+# x.button.type = Gdk.EventType.BUTTON_RELEASE
+# x.button.window = event.window
+# x.button.x = event.x
+# x.button.x_root = event.x_root
+# x.button.y = event.y
+# x.button.y_root = event.y_root
+# self.emit("button-release-event", x)
+
+# y = Gdk.Event.new(Gdk.EventType.LEAVE_NOTIFY)
+# y.crossing.detail = Gdk.NotifyType.NONLINEAR
+# y.crossing.focus = True
+# y.crossing.mode = Gdk.CrossingMode.NORMAL
+# y.crossing.send_event = True
+# y.crossing.state = event.state
+# y.crossing.time = event.time
+# y.crossing.subwindow = event.window
+# y.crossing.type = Gdk.EventType.LEAVE_NOTIFY
+# y.crossing.window = event.window
+# y.crossing.x = event.x
+# y.crossing.x_root = event.x_root
+# y.crossing.y = event.y
+# y.crossing.y_root = event.y_root
+# self.emit("leave-notify-event", y)
+
+# Because the capture starts while the mouse is over the button, it never receives
+# leave-notify-event, and it stays highlighted. This stops the highlight. It's a bit
+# weird, but nothing else works. This doesn't seem to transition the dehighlight either. (TODO?)
+# 
+# GLib.timeout_add(1000, self.lev)
+
+# def lev(self):
+#     print("leave")
+#     
+#     # state = self.get_state_flags() & ~(Gtk.StateFlags.PRELIGHT | Gtk.StateFlags.ACTIVE)
+#     # self.leave()
+#     self.set_state_flags(Gtk.StateFlags.NORMAL, True)
+#     
+#     self.emit("released")
+#     self.emit("leave")
+#     # self.clicked()
+#     self.released()
+#     self.leave()
+#     self.queue_draw()
+#     # 
+#     # self.leave()
+#     # 

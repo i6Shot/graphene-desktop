@@ -83,8 +83,12 @@ static void vos_panel_init(VosPanel *self)
   gtk_window_set_keep_above(GTK_WINDOW(self), TRUE);
 
   // Set the application theme
+  // GtkCssProvider *fallbackProvider = gtk_css_provider_new();
+  // gtk_css_provider_load_from_path(fallbackProvider, VDE_DATA_DIR "/panel-fallback.css", NULL); // TODO: Check for errors
+  // gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), GTK_STYLE_PROVIDER(fallbackProvider), GTK_STYLE_PROVIDER_PRIORITY_FALLBACK);
+
   GtkCssProvider *provider = gtk_css_provider_new();
-  gtk_css_provider_load_from_path(provider, VDE_DATA_DIR "/panel-style.css", NULL); // TODO: Check for errors
+  gtk_css_provider_load_from_path(provider, VDE_DATA_DIR "/panel.css", NULL); // TODO: Check for errors
   gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
   // Update the position now and when the size or monitors change
@@ -110,7 +114,8 @@ static void init_layout(VosPanel *self)
 
   GtkStyleContext *layoutStyle = gtk_widget_get_style_context(GTK_WIDGET(self->AppletLayout));
   gtk_style_context_add_class(layoutStyle, "panel");
-
+  gtk_widget_set_name(GTK_WIDGET(self->AppletLayout), "panel-bar");
+  
   // A box for the left-side applets
   self->LauncherBox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0));
   gtk_box_pack_start(self->AppletLayout, GTK_WIDGET(self->LauncherBox), FALSE, FALSE, 0);

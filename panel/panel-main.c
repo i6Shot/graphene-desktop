@@ -30,12 +30,12 @@ static VosPanel *panel = NULL;
 
 int main(int argc, char **argv)
 {
-  GtkApplication *app = gtk_application_new("io.velt.vospanel", G_APPLICATION_FLAGS_NONE);
+  GtkApplication *app = gtk_application_new("io.velt.graphene-panel", G_APPLICATION_FLAGS_NONE);
   g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
   int status = g_application_run(G_APPLICATION(app), argc, argv);
   g_object_unref(app);
   if(VOS_IS_PANEL(panel) && vos_panel_is_rebooting(panel))
-    status = 1; // Non-zero tells the session manager to restart the panel instead of logging out
+    status = 120; // 120 tells the session manager to restart the panel instead of logging out
   g_object_unref(panel);
   return status;
 }

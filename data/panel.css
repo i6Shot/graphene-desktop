@@ -1,0 +1,128 @@
+@define-color vosred #906565;
+
+#panel-bar {
+  box-shadow: inset 0px 5px 3px alpha(black, 0.2);
+}
+
+GtkButton {
+  background-image: none;
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+  text-shadow: none;
+  transition: 300ms;
+}
+GtkViewport {
+  border: none;
+  border-radius: 0;
+}
+GtkScrolledWindow {
+  background-color: transparent;
+}
+
+VosLauncherPopup GtkRange .trough {
+  background-color: transparent;
+}
+VosLauncherPopup GtkRange .slider {
+  background-color: lightgray;
+}
+VosLauncherPopup GtkButton {
+  padding: 10px;
+  background-color: shade(@selection, 0.5);
+  box-shadow: 0px 2px 2px alpha(black, 0.2);
+}
+VosLauncherPopup GtkButton:hover {
+  background-color: alpha(@selection, 0.8);
+  box-shadow: 0px 2px 8px alpha(black, 0.2);
+}
+VosLauncherPopup GtkButton GtkLabel {
+  color: @selection;
+  transition: 300ms;
+}
+VosLauncherPanel GtkButton:hover GtkLabel {
+  color: shade(@selection, 0.5);
+}
+VosLauncherPopup GtkSearchEntry {
+  border: none;
+  border-radius: 0;
+  background-image: none;
+  background-color: transparent;
+  box-shadow: 0px 5px 8px alpha(black, 0.5);
+  font-size: 1.4em;
+  color: alpha(@selection, 0.8);
+}
+VosLauncherPopup GtkLabel {
+  color: alpha(@selection, 0.8);
+  transition: 300ms;
+}
+
+VosLauncherApplet {
+  background-color: @vosred;
+  box-shadow: inset 0px 5px 3px alpha(black, 0.2);
+  padding: 0 12px 0 12px;
+}
+VosLauncherApplet:hover, VosLauncherApplet.clicked {
+  background-color: shade(@vosred, 1.2);
+}
+VosLauncherApplet GtkImage {
+  color: shade(@selection, 0.8);
+  transition: 300ms;
+}
+VosLauncherApplet:hover GtkImage, VosLauncherApplet.clicked GtkImage {
+  color: @selection;
+}
+
+VosTaskListApplet GtkButton {
+  padding: 2px 13px 2px 13px;
+}
+VosTaskListApplet GtkButton:hover, VosSettingsApplet:hover, VosSettingsApplet.clicked {
+  background-color: shade(@panel, 1.4);
+  box-shadow: inset 0px 5px 3px alpha(black, 0.1);
+}
+VosTaskListApplet .task-active {
+  background-color: shade(@panel, 1.4);
+  transition: 100ms;
+}
+VosTaskListApplet .task-attention { /* .task-attention should come after .task-active so that it overrides it */
+  background-color: #ffbf66;
+  transition: 500ms;
+}
+
+VosSettingsApplet GtkImage {
+  color: @selection;
+  padding-left: 2px;
+  padding-right: 2px;
+}
+VosSettingsApplet:hover GtkImage, VosSettingsApplet.clicked GtkImage {
+  color: shade(@selection, 1.5);
+  transition: 300ms;
+}
+
+#profile-name-label {
+  font-size: 1.5em;
+  color: @selection;
+  padding-top: 0.3em;
+}
+#username-box GtkButton {
+  padding: 1em;
+  padding-top: 0em;
+}
+#username-box GtkButton GtkImage {
+  color: @selection;
+}
+#username-box GtkButton:hover GtkImage {
+  color: shade(@selection, 1.5);
+}
+#profile-box {
+  box-shadow: 0px 5px 8px alpha(black, 0.5);
+}
+
+VosVolumeSlider VosVolumeIcon {
+  padding-right: 10px;
+  color: @selection;
+}
+
+VosClockApplet {
+  color: @selection;
+  padding: 0.2em 1.5em 0 1em;
+}

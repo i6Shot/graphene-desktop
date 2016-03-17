@@ -114,7 +114,6 @@ class VosBatteryIcon(Gtk.Image):
 	def __init__(self):
 		super().__init__()
 
-		self.get_style_context().add_class("battery-icon")
 		self.connect("destroy", self.on_destroy)
 		self.set_from_icon_name("battery-full-charged-symbolic", Gtk.IconSize.MENU)
 		self.battery.connect("update", self.update)

@@ -24,29 +24,8 @@ struct _VosWM {
   MetaBackgroundGroup *BackgroundGroup;
 };
 
-int start_panel();
-void panel_watch_cb(GPid pid, gint status, gpointer userdata);
-
 int main(int argc, char **argv)
 {
-  // Make sure X is running before starting anything
-  if(g_environ_getenv(g_get_environ(), "DISPLAY") == NULL)
-  {
-    g_critical("Cannot start vossession without an active X server. Try running startx, or starting vossession from a login manager such as LightDM.");
-    return 1;
-  }
-  
-  // The VOS Window Manager acts also functions as the session manager
-  int status = start_panel();
-  if(status != 0) return status;
-  
-  // Start nautilus
-  e = NULL;
-  gchar *nautilusargs[] = {"nautilus", "-n", NULL};
-  g_spawn_async(NULL, nautilusargs, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, &e);
-  if(e) { g_warning("Unable to start nautilus: %s", e->message); g_error_free(e); }
-  
-  // Start mutter
   meta_plugin_manager_set_plugin_type(VOS_TYPE_WM);
   meta_set_wm_name("Mutter(VOS Desktop)");
   meta_set_gnome_wm_keybindings("Mutter,GNOME Shell");
@@ -58,41 +37,6 @@ int main(int argc, char **argv)
   g_unsetenv("NO_GAIL");
   
   return meta_run();
-}
-
-int start_panel()
-{
-  // Start the panel process. Whenever the panel closes, this WM should exit too.
-  // TODO: This feels wrong. Also looks ugly. Is there a better (but still simple) way?
-  //       Possibly implement the panel directly into the WM, but then GTK+ isn't available.
-  //       Or have the .desktop file start the panel and the session manager can watch for
-  //       an exit signal via dbus or something like that.
-  GPid panelPID = 0;
-  GError *e = NULL;
-  gchar *panelargs[] = {"vospanel", NULL};
-  g_spawn_async(NULL, panelargs, NULL, G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD, NULL, NULL, &panelPID, &e);
-  if(e) { g_critical("Unable to start panel: %s", e->message); g_error_free(e); return e->code; }
-  g_child_watch_add(panelPID, panel_watch_cb, NULL);
-}
-
-void panel_watch_cb(GPid pid, gint status, gpointer userdata)
-{
-  // Close 
-  g_spawn_close_pid(pid);
-  
-  if(status != 0)
-  {
-    if(start_panel() != 0)
-      meta_quit(META_EXIT_ERROR);
-    return;
-  }
-  
-  // Quit nautilus
-  gchar *nautilusargs[] = {"nautilus", "-q", NULL};
-  g_spawn_async(NULL, nautilusargs, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
-
-  // Exit wm
-  meta_quit(META_EXIT_SUCCESS);
 }
 
 static void vos_wm_dispose(GObject *gobject); 
@@ -202,7 +146,7 @@ static void minimize(MetaPlugin *plugin, MetaWindowActor *windowActor)
   MetaWindow *window = meta_window_actor_get_meta_window(windowActor);
   MetaRectangle rect = meta_rect(0,0,0,0);
   meta_window_get_icon_geometry(window, &rect); // This is set by the Launcher applet
-  printf("%i, %i, %i, %i\n", rect.x, rect.y, rect.width, rect.height);
+  // printf("%i, %i, %i, %i\n", rect.x, rect.y, rect.width, rect.height);
   
   // Ease the window into its minimized position
   clutter_actor_set_pivot_point(actor, 0, 0);
@@ -366,11 +310,11 @@ static void map(MetaPlugin *plugin, MetaWindowActor *windowActor)
 static const MetaPluginInfo * plugin_info(MetaPlugin *plugin)
 {
   static const MetaPluginInfo info = {
-    .name = "VOS Desktop",
+    .name = "Graphene Window Manager",
     .version = "1.0.0",
     .author = "Velt (Aidan Shafran)",
     .license = "Apache 2.0",
-    .description = "VeltOS Window Manager"
+    .description = "Graphene Window Manager for VeltOS"
   };
   
   return &info;

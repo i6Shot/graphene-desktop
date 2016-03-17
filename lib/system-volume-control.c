@@ -203,6 +203,7 @@ static void on_sink_get_info(pa_context *c, const pa_sink_info *info, int eol, v
 
   if(eol == 0 && info)
   {
+    g_message("get sink info");
     pa_volume_t originalMaxVol = pa_cvolume_max(&self->volume);
     pa_volume_t newMaxVol = pa_cvolume_max(&info->volume);
     

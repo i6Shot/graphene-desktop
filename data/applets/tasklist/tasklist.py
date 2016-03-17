@@ -19,7 +19,7 @@
 
 import gi, subprocess, bisect
 gi.require_version('Wnck', '3.0')
-from gi.repository import GObject, Gtk, Wnck, Vos
+from gi.repository import GObject, Gtk, Wnck, Vos, Gio
 from gi.repository.GdkPixbuf import InterpType
 
 class VosTaskListExtension(GObject.Object, Vos.AppletExtension):
@@ -65,10 +65,21 @@ class VosTaskListApplet(Gtk.Box):
         button.connect("clicked", self.on_button_clicked, window)
         button.connect("size_allocate", self.on_button_size_allocate, window)
         
+        
+        # cname = .lower()
+        # cname = cname[0].lower() + cname[1:]
+        
+        # print(cname)
+        # info = Gio.DesktopAppInfo.new(cname + ".desktop")
+        
         # TODO: Automatic scaling with Gtk?
         iconSize = max(min(self.panel.get_height() - 8, 32), 12)
-        scaled = window.get_icon().scale_simple(iconSize, iconSize, InterpType.BILINEAR)
-        icon = Gtk.Image.new_from_pixbuf(scaled)
+        # scaled = window.get_icon().scale_simple(iconSize, iconSize, InterpType.BILINEAR)
+        # icon = Gtk.Image.new_from_pixbuf(scaled)
+        className = window.get_class_group_name()
+        if className: className = className.lower();
+        icon = Gtk.Image.new_from_icon_name(className, Gtk.IconSize.LARGE_TOOLBAR)
+        # button.set_image(Gtk.Image.new_from_gicon(info.get_icon(), Gtk.IconSize.LARGE_TOOLBAR))
         button.set_image(icon)
         button.set_always_show_image(True)
         
@@ -87,20 +98,20 @@ class VosTaskListApplet(Gtk.Box):
     def on_window_state_changed(self, window, changed_mask, new_state):
         # TODO: Does this work correctly? Should highlight the window orange when it needs attention. Overriden by tasklist-active-window?
         if window.needs_attention():
-            self.buttons[window].get_style_context().add_class("tasklist-highlight-window")
+            self.buttons[window].get_style_context().add_class("task-attention")
         else:
-            self.buttons[window].get_style_context().remove_class("tasklist-highlight-window")
+            self.buttons[window].get_style_context().remove_class("task-attention")
 
     def on_active_window_changed(self, screen, prevWindow):
         if prevWindow and prevWindow in self.buttons:
-            self.buttons[prevWindow].get_style_context().remove_class("tasklist-active-window")
+            self.buttons[prevWindow].get_style_context().remove_class("task-active")
         
         window = screen.get_active_window()
         if not window or window.is_skip_tasklist():
             return
         
         if window in self.buttons:
-            self.buttons[window].get_style_context().add_class("tasklist-active-window")
+            self.buttons[window].get_style_context().add_class("task-active")
     
     def on_button_size_allocate(self, button, allocation, window):        
         # Set the window's icon geometry to the screen coordinates of the button
