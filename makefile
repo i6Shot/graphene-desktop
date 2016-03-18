@@ -1,8 +1,8 @@
 CC=gcc
 MKDIR_P=mkdir -p
-CFLAGS=-Wall -I. `pkg-config --cflags --libs glib-2.0 gobject-2.0 gtk+-3.0 libpeas-1.0 accountsservice libpulse libpulse-mainloop-glib libmutter`
+CFLAGS=-Wall -I. $(shell pkg-config --cflags --libs glib-2.0 gobject-2.0 gtk+-3.0 libpeas-1.0 accountsservice libpulse libpulse-mainloop-glib libmutter)
 
-VDE_DATA_DIR=/usr/share/graphene# MUST END WITHOUT SLASH
+VDE_DATA_DIR=$(DESTDIR)/usr/share/graphene# MUST END WITHOUT SLASH
 CFLAGS+=-DVDE_DATA_DIR=\"$(VDE_DATA_DIR)\"
 
 # libvos
@@ -69,17 +69,22 @@ $(SESSIONF)/$(SESSION).bin: $(SESSIONOBJS)
 
 install:
 	$(MKDIR_P) $(VDE_DATA_DIR)
+	$(MKDIR_P) $(DESTDIR)/usr/share/gir-1.0/
+	$(MKDIR_P) $(DESTDIR)/usr/lib/girepository-1.0/
+	$(MKDIR_P) $(DESTDIR)/usr/bin/
+	$(MKDIR_P) $(DESTDIR)/usr/share/xsessions/
+
 	cp -r data/* $(VDE_DATA_DIR)
 
 	cp $(WMF)/$(WM).bin $(VDE_DATA_DIR)/$(WM)
 	cp $(PANELF)/$(PANEL).bin $(VDE_DATA_DIR)/$(PANEL)
-	cp $(SESSIONF)/$(SESSION).bin /usr/bin/$(SESSION)
-	cp graphene.desktop /usr/share/xsessions/graphene.desktop
+	cp $(SESSIONF)/$(SESSION).bin $(DESTDIR)/usr/bin/$(SESSION)
+	cp graphene.desktop $(DESTDIR)/usr/share/xsessions/graphene.desktop
 
-	cp $(LIBF)/$(GIR).typelib /usr/lib/girepository-1.0/$(GIR).typelib
-	cp $(LIBF)/$(GIR).gir /usr/share/gir-1.0/$(GIR).gir
-	cp $(LIBF)/lib$(LIB).so /usr/lib/lib$(LIB).so.$(VERSION)
-	ln -sf /usr/lib/lib$(LIB).so.$(VERSION) /usr/lib/lib$(LIB).so
+	cp $(LIBF)/$(GIR).typelib $(DESTDIR)/usr/lib/girepository-1.0/$(GIR).typelib
+	cp $(LIBF)/$(GIR).gir $(DESTDIR)/usr/share/gir-1.0/$(GIR).gir
+	cp $(LIBF)/lib$(LIB).so $(DESTDIR)/usr/lib/lib$(LIB).so.$(VERSION)
+	ln -sf /usr/lib/lib$(LIB).so.$(VERSION) $(DESTDIR)/usr/lib/lib$(LIB).so
 
 fclean: clean uninstall
 
@@ -90,7 +95,7 @@ clean:
 	rm -f $(PANELRES) $(patsubst %.c,%.h,$(PANELRES))
 	
 uninstall:
-	rm -f /usr/lib/lib$(LIB).* /usr/share/gir-1.0/$(GIR).gir /usr/lib/girepository-1.0/$(GIR).typelib /usr/share/xsessions/graphene.desktop /usr/bin/$(SESSION)
+	rm -f $(DESTDIR)/usr/lib/lib$(LIB).* $(DESTDIR)/usr/share/gir-1.0/$(GIR).gir $(DESTDIR)/usr/lib/girepository-1.0/$(GIR).typelib $(DESTDIR)/usr/share/xsessions/graphene.desktop $(DESTDIR)/usr/bin/$(SESSION)
 	rm -rf $(VDE_DATA_DIR)
 	
 .PHONY: fclean clean install uninstall all test
