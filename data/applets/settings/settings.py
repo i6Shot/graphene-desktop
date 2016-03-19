@@ -118,11 +118,11 @@ class VosSettingsPopup(Gtk.Window):
             
         currentUser = manager.get_user(currentUsername)
         
-        iconFile = currentUser.get_icon_file()
-        if iconFile:
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file(iconFile)
-            pixbuf = pixbuf.scale_simple(60, 60, GdkPixbuf.InterpType.BILINEAR)
-            self.profileIcon.set_from_pixbuf(pixbuf)
+        # iconFile = currentUser.get_icon_file()
+        # if iconFile:
+        #     pixbuf = GdkPixbuf.Pixbuf.new_from_file(iconFile)
+        #     pixbuf = pixbuf.scale_simple(60, 60, GdkPixbuf.InterpType.BILINEAR)
+        #     self.profileIcon.set_from_pixbuf(pixbuf)
         
         self.profileNameLabel.set_text(currentUser.get_real_name())
     
