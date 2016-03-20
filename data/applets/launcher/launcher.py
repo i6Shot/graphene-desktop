@@ -94,7 +94,6 @@ class VosLauncherPopup(Gtk.Window):
                 button = Gtk.Button.new_with_label(appInfo.get_display_name())
                 button.set_image(Gtk.Image.new_from_gicon(appInfo.get_icon(), Gtk.IconSize.LARGE_TOOLBAR))
                 button.set_always_show_image(True)
-                button.get_style_context().add_class("panel")
                 button.connect("clicked", self.on_applist_item_clicked, appInfo)
                 button.show()
                 self.appListBox.pack_start(button, False, False, 0)

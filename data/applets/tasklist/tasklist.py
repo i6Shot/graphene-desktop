@@ -77,7 +77,10 @@ class VosTaskListApplet(Gtk.Box):
         # scaled = window.get_icon().scale_simple(iconSize, iconSize, InterpType.BILINEAR)
         # icon = Gtk.Image.new_from_pixbuf(scaled)
         className = window.get_class_group_name()
-        if className: className = className.lower();
+        if className:
+            className = className.lower()
+        else:
+            className = ""
         icon = Gtk.Image.new_from_icon_name(className, Gtk.IconSize.LARGE_TOOLBAR)
         # button.set_image(Gtk.Image.new_from_gicon(info.get_icon(), Gtk.IconSize.LARGE_TOOLBAR))
         button.set_image(icon)

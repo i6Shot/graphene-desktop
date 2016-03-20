@@ -1,4 +1,9 @@
 @define-color vosred #906565;
+@define-color panel shade(@header, 0.8);
+
+.panel {
+  background-color: @panel;
+}
 
 #panel-bar {
   box-shadow: inset 0px 5px 3px alpha(black, 0.2);
@@ -11,6 +16,9 @@ GtkButton {
   border-radius: 0;
   text-shadow: none;
   transition: 300ms;
+}
+GtkLabel {
+  color: alpha(@selection, 0.8);
 }
 GtkViewport {
   border: none;
@@ -36,7 +44,6 @@ VosLauncherPopup GtkButton:hover {
   box-shadow: 0px 2px 8px alpha(black, 0.2);
 }
 VosLauncherPopup GtkButton GtkLabel {
-  color: @selection;
   transition: 300ms;
 }
 VosLauncherPanel GtkButton:hover GtkLabel {
@@ -50,10 +57,6 @@ VosLauncherPopup GtkSearchEntry {
   box-shadow: 0px 5px 8px alpha(black, 0.5);
   font-size: 1.4em;
   color: alpha(@selection, 0.8);
-}
-VosLauncherPopup GtkLabel {
-  color: alpha(@selection, 0.8);
-  transition: 300ms;
 }
 
 VosLauncherApplet {
