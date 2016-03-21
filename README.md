@@ -1,4 +1,4 @@
-Graphene Desktop (VDE)
+Graphene Desktop
 ==========
 
 The desktop environment of VeltOS, an Arch Linux-based operating system
@@ -64,4 +64,4 @@ Aidan Shafran <zelbrium@gmail.com>
 Thanks
 --------
 
-Ikey Doherty <ikey@solus-project.com> (developer of the amazing [Budgie Desktop](https://solus-project.com/budgie/))
+Graphene was heavily influenced and inspired by the amazing [Budgie Desktop](https://solus-project.com/budgie/), developed by Ikey Doherty <ikey@solus-project.com>.
