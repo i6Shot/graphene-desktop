@@ -17,9 +17,6 @@ GtkButton {
   text-shadow: none;
   transition: 300ms;
 }
-GtkLabel {
-  color: alpha(@selection, 0.8);
-}
 GtkViewport {
   border: none;
   border-radius: 0;
@@ -57,6 +54,10 @@ VosLauncherPopup GtkSearchEntry {
   box-shadow: 0px 5px 8px alpha(black, 0.5);
   font-size: 1.4em;
   color: alpha(@selection, 0.8);
+}
+VosLauncherPopup GtkSearchEntry GtkLabel {
+  font-size: initial; /* Undo the properties set for the GtkSearchEntry */
+  color: unset;
 }
 
 VosLauncherApplet {
@@ -128,4 +129,8 @@ VosVolumeSlider VosVolumeIcon {
 VosClockApplet {
   color: @selection;
   padding: 0.2em 1.5em 0 1em;
+}
+
+VosSettingsPopup GtkLabel, VosLauncherPopup GtkLabel {
+  color: alpha(@selection, 0.8);
 }
