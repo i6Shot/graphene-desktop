@@ -144,10 +144,15 @@ class VosLauncherPopup(Gtk.Window):
         subprocess.Popen(appInfo.get_executable(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
     def show(self):
+        # TODO: Should reload when idle, but that was causing self.appTree.get_root_directory() to be None
+        # when the application list changed AFTER this applet has been loaded.
+        # Possibly because the list was mid-reload while it was trying to call get_root_directory()?
+        self.reload_apptree()
+        
         self.populate_applist()
         super().show()
         self.grab_add()
-        GLib.idle_add(self.reload_apptree) # Reload widgets when nothing else is going on
+        # GLib.idle_add(self.reload_apptree) # Reload widgets when nothing else is going on
 
     def on_mapped(self, popup):
         # Force the WM to give the popup keyboard focus even though it's a DOCK
