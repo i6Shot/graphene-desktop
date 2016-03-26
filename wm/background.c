@@ -99,7 +99,7 @@ static void update(VosWMBackground *backgroundGroup)
   
   MetaRectangle rect = meta_rect(0,0,0,0);
   meta_screen_get_monitor_geometry(backgroundGroup->Screen, backgroundGroup->ScreenIndex, &rect);
-  clutter_actor_set_position(CLUTTER_ACTOR(newActor), rect.x, rect.y);
+  clutter_actor_set_position(CLUTTER_ACTOR(newActor), 0, 0); // x,y 0,0 relative to this monitor's background group
   clutter_actor_set_size(CLUTTER_ACTOR(newActor), rect.width, rect.height);
   clutter_actor_set_opacity(CLUTTER_ACTOR(newActor), 0);
   clutter_actor_insert_child_at_index(CLUTTER_ACTOR(backgroundGroup), CLUTTER_ACTOR(newActor), -1);
