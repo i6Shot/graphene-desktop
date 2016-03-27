@@ -94,6 +94,7 @@ class VosLauncherPopup(Gtk.Window):
                 button = Gtk.Button.new_with_label(appInfo.get_display_name())
                 button.set_image(Gtk.Image.new_from_gicon(appInfo.get_icon(), Gtk.IconSize.LARGE_TOOLBAR))
                 button.set_always_show_image(True)
+                button.get_child().set_halign(Gtk.Align.START)
                 button.connect("clicked", self.on_applist_item_clicked, appInfo)
                 button.show()
                 self.appListBox.pack_start(button, False, False, 0)
@@ -105,6 +106,7 @@ class VosLauncherPopup(Gtk.Window):
 
                 label = Gtk.Label.new(directory.get_name())
                 label.set_halign(Gtk.Align.START)
+                label.get_style_context().add_class("directory-label")
                 self.appListBox.pack_start(label, False, False, 0)
 
                 subcount = self.populate_applist_directory(directory)
@@ -191,7 +193,7 @@ class VosLauncherApplet(Gtk.Button):
     def show_popup(self):
         rect = self.panel.get_screen().get_monitor_geometry(self.panel.get_monitor())
         self.popup.move(0,0)
-        self.popup.set_size_request(rect.width/4, rect.height-self.panel.get_height())
+        self.popup.set_size_request(rect.width/5, rect.height-self.panel.get_height())
         
         self.get_style_context().add_class("clicked")
         self.panel.capture_screen()

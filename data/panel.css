@@ -25,6 +25,11 @@ GtkScrolledWindow {
   background-color: transparent;
 }
 
+VosLauncherPopup .directory-label {
+  color: white;
+  padding: 1em 0 0.3em 0.5em;
+  font-weight: bold;
+}
 VosLauncherPopup GtkRange .trough {
   background-color: transparent;
 }
@@ -42,8 +47,9 @@ VosLauncherPopup GtkButton:hover {
 }
 VosLauncherPopup GtkButton GtkLabel {
   transition: 300ms;
+  padding-left: 0.5em;
 }
-VosLauncherPanel GtkButton:hover GtkLabel {
+VosLauncherPopup GtkButton:hover GtkLabel {
   color: shade(@selection, 0.5);
 }
 VosLauncherPopup GtkSearchEntry {
