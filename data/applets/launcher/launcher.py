@@ -19,7 +19,8 @@
 
 import gi, os, subprocess, time
 gi.require_version('GMenu', '3.0')
-from gi.repository import GLib, GObject, Gtk, Gdk, GMenu, Vos
+gi.require_version('GdkX11', '3.0')
+from gi.repository import GLib, GObject, Gtk, Gdk, GdkX11, GMenu, Vos
 
 class VosLauncherExtension(GObject.Object, Vos.AppletExtension):
     __gtype_name__ = 'VosLauncherExtension'
@@ -88,7 +89,7 @@ class VosLauncherPopup(Gtk.Window):
     def on_mapped(self, popup):
         # Force the WM to give the popup keyboard focus even though it's a DOCK
         # TODO: Figure out how to not remove focus from other toplevel windows
-        self.get_window().focus(Gdk.CURRENT_TIME)
+        self.get_window().focus(GdkX11.x11_get_server_time(self.get_window()))
         self.update_size()
 
     def on_monitors_changed(self, screen):
