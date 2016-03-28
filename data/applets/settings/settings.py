@@ -36,8 +36,11 @@ class VosSettingsPopup(Gtk.Window):
     def __init__(self, panel):
         super().__init__()
         self.panel = panel
+        
         self.set_type_hint(Gdk.WindowTypeHint.POPUP_MENU) # Must be POPUP_MENU or else z-sorting conflicts with the dock
+        self.connect("map", self.on_mapped)
         self.connect("button_press_event", self.on_mouse_event)
+        self.get_screen().connect("monitors-changed", self.on_mapped)
 
         # Layout
         self.popupLayout = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -58,6 +61,31 @@ class VosSettingsPopup(Gtk.Window):
         else:
             manager.connect("notify::is-loaded", self.on_user_manager_notify_is_loaded)
     
+    def show(self):
+        self.panel.capture_screen()
+        super().show()
+        self.grab_add() # Mouse events over the capture will be grabbed too
+
+    def hide(self):
+        self.grab_remove()
+        super().hide()
+        self.panel.end_capture()
+
+    def on_mapped(self, popup):
+        self.update_size()
+    
+    def on_monitors_changed(self, screen):
+        self.update_size()
+
+    def on_mouse_event(self, widget, event):
+        if event.window.get_toplevel() != self.get_window():
+            self.hide()
+        return Gdk.EVENT_PROPAGATE
+
+    def update_size(self):
+        rect = self.panel.get_screen().get_monitor_geometry(self.panel.get_monitor())
+        self.get_window().move_resize(rect.x + rect.width - (rect.width/5), rect.y, rect.width/5, rect.height-self.panel.get_height())
+
     def create_layout(self):
         self.profileNameLabel = Gtk.Label.new("Unknown User")
         self.profileNameLabel.set_name("profile-name-label")
@@ -138,19 +166,6 @@ class VosSettingsPopup(Gtk.Window):
         self.hide()
         subprocess.Popen("gnome-control-center", stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
-    def on_mouse_event(self, widget, event):
-        if event.window.get_toplevel() != self.get_window():
-            self.hide()
-        return Gdk.EVENT_PROPAGATE
-        
-    def show(self):
-        super().show()
-        self.grab_add()
-
-    def hide(self):
-        self.grab_remove()
-        super().hide()
-
 class VosSettingsApplet(Gtk.Button):
     __gtype_name__ = 'VosSettingsApplet'
 
@@ -173,21 +188,11 @@ class VosSettingsApplet(Gtk.Button):
 
         self.connect("button_press_event", self.on_clicked)
         self.popup.connect("hide", self.on_settings_menu_hide)
-        #print(GLib.get_system_config_dirs())
         
     def on_clicked(self, button, event):
-        self.show_settings_menu()
+        self.get_style_context().add_class("clicked")
+        self.popup.show()
         return Gdk.EVENT_STOP # Required to keep the button from staying highlighted permanently 
 
-    def show_settings_menu(self):
-        rect = self.panel.get_screen().get_monitor_geometry(self.panel.get_monitor())
-        self.popup.move(rect.width-(rect.width/4),0)
-        self.popup.set_size_request(rect.width/4, rect.height-self.panel.get_height())
-        
-        self.get_style_context().add_class("clicked")
-        self.panel.capture_screen()
-        self.popup.show()
-
     def on_settings_menu_hide(self, window):
-        self.panel.end_capture()
         self.get_style_context().remove_class("clicked")

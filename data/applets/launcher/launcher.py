@@ -39,7 +39,8 @@ class VosLauncherPopup(Gtk.Window):
         self.connect("button_press_event", self.on_mouse_event)
         self.connect("key_press_event", self.on_key_event)
         self.connect("key_release_event", self.on_key_event)
-        
+        self.get_screen().connect("monitors-changed", self.on_mapped)
+
         # Layout
         self.popupLayout = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.popupLayout.get_style_context().add_class("panel")
@@ -59,6 +60,7 @@ class VosLauncherPopup(Gtk.Window):
         self.appListBox.props.margin = 5
         scrolled = Gtk.ScrolledWindow.new(None, None)
         scrolled.add(self.appListBox)
+        scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC) # Keeps the popup width from being to small
         self.popupLayout.pack_start(scrolled, True, True, 0)
         self.popupLayout.show_all()
 
@@ -66,6 +68,41 @@ class VosLauncherPopup(Gtk.Window):
         self.appTree = GMenu.Tree.new("gnome-applications.menu", GMenu.TreeFlags.SORT_DISPLAY_NAME)
         self.appTree.load_sync()
     
+    def show(self):
+        # TODO: Should reload when idle, but that was causing self.appTree.get_root_directory() to be None
+        # when the application list changed AFTER this applet has been loaded.
+        # Possibly because the list was mid-reload while it was trying to call get_root_directory()?
+        self.reload_apptree()
+        
+        self.populate_applist()
+        self.panel.capture_screen()
+        super().show()
+        self.grab_add()
+        # GLib.idle_add(self.reload_apptree) # Reload widgets when nothing else is going on
+    
+    def hide(self):
+        self.grab_remove()
+        super().hide()
+        self.panel.end_capture()
+    
+    def on_mapped(self, popup):
+        # Force the WM to give the popup keyboard focus even though it's a DOCK
+        # TODO: Figure out how to not remove focus from other toplevel windows
+        self.get_window().focus(Gdk.CURRENT_TIME)
+        self.update_size()
+
+    def on_monitors_changed(self, screen):
+        self.update_size()
+
+    def on_mouse_event(self, widget, event):
+        if event.window.get_toplevel() != self.get_window():
+            self.hide()
+        return Gdk.EVENT_PROPAGATE
+
+    def update_size(self):
+        rect = self.panel.get_screen().get_monitor_geometry(self.panel.get_monitor())
+        self.get_window().move_resize(rect.x, rect.y, rect.width/5, rect.height-self.panel.get_height())
+
     def reload_apptree(self):
         self.appTree.load_sync()
         return False # Return False so that idle_add doesn't loop this continuously
@@ -135,35 +172,10 @@ class VosLauncherPopup(Gtk.Window):
             return self.searchBar.handle_event(event)
         return Gdk.EVENT_PROPAGATE
 
-    def on_mouse_event(self, widget, event):
-        if event.window.get_toplevel() != self.get_window():
-            self.hide()
-        return Gdk.EVENT_PROPAGATE
-
     def on_applist_item_clicked(self, button, appInfo):
         self.searchBar.set_text("")
         self.hide()
         subprocess.Popen(appInfo.get_executable(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    
-    def show(self):
-        # TODO: Should reload when idle, but that was causing self.appTree.get_root_directory() to be None
-        # when the application list changed AFTER this applet has been loaded.
-        # Possibly because the list was mid-reload while it was trying to call get_root_directory()?
-        self.reload_apptree()
-        
-        self.populate_applist()
-        super().show()
-        self.grab_add()
-        # GLib.idle_add(self.reload_apptree) # Reload widgets when nothing else is going on
-
-    def on_mapped(self, popup):
-        # Force the WM to give the popup keyboard focus even though it's a DOCK
-        # TODO: Figure out how to not remove focus from other toplevel windows
-        self.get_window().focus(Gdk.CURRENT_TIME)
-
-    def hide(self):
-        self.grab_remove()
-        super().hide()
         
 class VosLauncherApplet(Gtk.Button):
     __gtype_name__ = 'VosLauncherApplet'
@@ -187,17 +199,9 @@ class VosLauncherApplet(Gtk.Button):
         self.popup.connect("hide", self.on_popup_hide)
 
     def on_applet_button_click(self, button, event):
-        self.show_popup()
-        return Gdk.EVENT_STOP # Required to keep the button from staying highlighted permanently 
-        
-    def show_popup(self):
-        rect = self.panel.get_screen().get_monitor_geometry(self.panel.get_monitor())
-        self.popup.move(0,0)
-        self.popup.set_size_request(rect.width/5, rect.height-self.panel.get_height())
-        
         self.get_style_context().add_class("clicked")
-        self.panel.capture_screen()
         self.popup.show()
+        return Gdk.EVENT_STOP # Required to keep the button from staying highlighted permanently 
     
     def on_popup_hide(self, popup):
         self.panel.end_capture()
