@@ -40,7 +40,7 @@ class VosSettingsPopup(Gtk.Window):
         self.set_type_hint(Gdk.WindowTypeHint.POPUP_MENU) # Must be POPUP_MENU or else z-sorting conflicts with the dock
         self.connect("map", self.on_mapped)
         self.connect("button_press_event", self.on_mouse_event)
-        self.get_screen().connect("monitors-changed", self.on_mapped)
+        self.get_screen().connect("monitors-changed", self.on_monitors_changed)
 
         # Layout
         self.popupLayout = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -84,7 +84,8 @@ class VosSettingsPopup(Gtk.Window):
 
     def update_size(self):
         rect = self.panel.get_screen().get_monitor_geometry(self.panel.get_monitor())
-        self.get_window().move_resize(rect.x + rect.width - (rect.width/5), rect.y, rect.width/5, rect.height-self.panel.get_height())
+        if self.get_window():
+            self.get_window().move_resize(rect.x + rect.width - (rect.width/5), rect.y, rect.width/5, rect.height-self.panel.get_height())
 
     def create_layout(self):
         self.profileNameLabel = Gtk.Label.new("Unknown User")

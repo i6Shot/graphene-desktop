@@ -72,7 +72,7 @@ class VosLauncherPopup(Gtk.Window):
         self.connect("button_press_event", self.on_mouse_event)
         self.connect("key_press_event", self.on_key_event)
         self.connect("key_release_event", self.on_key_event)
-        self.get_screen().connect("monitors-changed", self.on_mapped)
+        self.get_screen().connect("monitors-changed", self.on_monitors_changed)
 
         # Layout
         self.popupLayout = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -121,7 +121,8 @@ class VosLauncherPopup(Gtk.Window):
 
     def update_size(self):
         rect = self.panel.get_screen().get_monitor_geometry(self.panel.get_monitor())
-        self.get_window().move_resize(rect.x, rect.y, rect.width/5, rect.height-self.panel.get_height())
+        if self.get_window():
+            self.get_window().move_resize(rect.x, rect.y, rect.width/5, rect.height-self.panel.get_height())
 
     def on_search_changed(self, s):
         self.filter = self.searchBar.get_text().lower()
