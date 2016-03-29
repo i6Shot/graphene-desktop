@@ -113,17 +113,17 @@ VosSettingsApplet:hover GtkImage, VosSettingsApplet.clicked GtkImage {
   color: @selection;
   padding-top: 0.3em;
 }
-#username-box GtkButton {
+#session-control-box GtkButton {
   padding: 1em;
   padding-top: 0em;
 }
-#username-box GtkButton GtkImage {
+#session-control-box GtkButton GtkImage {
   color: @selection;
 }
-#username-box GtkButton:hover GtkImage {
+#session-control-box GtkButton:hover GtkImage {
   color: shade(@selection, 1.5);
 }
-#profile-box {
+#session-box {
   box-shadow: 0px 5px 8px alpha(black, 0.5);
 }
 

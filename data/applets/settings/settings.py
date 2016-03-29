@@ -23,150 +23,15 @@ from gi.repository import GLib, GObject, Gio, Gtk, Gdk, GdkPixbuf, Vos, Accounts
 import threading, time, subprocess
 from battery import VosBatteryIcon, VosBatteryInfo
 from volume import VosVolumeIcon, VosVolumeSlider
+import users
 
 class VosSettingsExtension(GObject.Object, Vos.AppletExtension):
     __gtype_name__ = 'VosSettingsExtension'
 
     def do_get_widget(self, panel):
         return VosSettingsApplet(panel)
-    
-class VosSettingsPopup(Gtk.Window):
-    __gtype_name__ = 'VosSettingsPopup'
-    
-    def __init__(self, panel):
-        super().__init__()
-        self.panel = panel
-        
-        self.set_type_hint(Gdk.WindowTypeHint.POPUP_MENU) # Must be POPUP_MENU or else z-sorting conflicts with the dock
-        self.connect("map", self.on_mapped)
-        self.connect("button_press_event", self.on_mouse_event)
-        self.get_screen().connect("monitors-changed", self.on_monitors_changed)
 
-        # Layout
-        self.popupLayout = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        self.popupLayout.get_style_context().add_class("panel")
-        self.popupLayout.set_halign(Gtk.Align.FILL)
-        self.popupLayout.set_valign(Gtk.Align.FILL)
-        self.create_layout()
-        self.popupLayout.show_all()
-        self.add(self.popupLayout)
 
-        # Get accountsservice user manager
-        manager = AccountsService.UserManager.get_default()
-        if manager.no_service():
-            # TODO: Try again?
-            print("** settings.py: Critical: Cannot access AccountsSerivce. Make sure accounts-daemon is running.\n")
-        elif manager.props.is_loaded:
-            self.on_user_manager_notify_is_loaded(manager, None)
-        else:
-            manager.connect("notify::is-loaded", self.on_user_manager_notify_is_loaded)
-    
-    def show(self):
-        self.panel.capture_screen()
-        super().show()
-        self.grab_add() # Mouse events over the capture will be grabbed too
-
-    def hide(self):
-        self.grab_remove()
-        super().hide()
-        self.panel.end_capture()
-
-    def on_mapped(self, popup):
-        self.update_size()
-    
-    def on_monitors_changed(self, screen):
-        self.update_size()
-
-    def on_mouse_event(self, widget, event):
-        if event.window.get_toplevel() != self.get_window():
-            self.hide()
-        return Gdk.EVENT_PROPAGATE
-
-    def update_size(self):
-        rect = self.panel.get_screen().get_monitor_geometry(self.panel.get_monitor())
-        if self.get_window():
-            self.get_window().move_resize(rect.x + rect.width - (rect.width/5), rect.y, rect.width/5, rect.height-self.panel.get_height())
-
-    def create_layout(self):
-        self.profileNameLabel = Gtk.Label.new("Unknown User")
-        self.profileNameLabel.set_name("profile-name-label")
-        self.profileNameLabel.set_valign(Gtk.Align.CENTER)
-        self.profileNameLabel.set_halign(Gtk.Align.CENTER)
-
-        self.profileIcon = Gtk.Image.new_from_icon_name("", Gtk.IconSize.DIALOG)
-        self.profileIcon.set_name("profile-icon")
-        
-        # userNameBox = Gtk.Box.new(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
-        # userNameBox.pack_start(self.profileIcon, False, False, 0)
-        # userNameBox.pack_start(self.profileNameLabel, True, True, 0)
-
-        logoutBox = Gtk.Box.new(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
-        logoutButton = Gtk.Button.new_from_icon_name("application-exit-symbolic", Gtk.IconSize.DND)
-        logoutButton.connect("button_press_event", self.on_logout_button_clicked)
-        logoutBox.pack_start(logoutButton, False, False, 0)
-        # lockButton = Gtk.Button.new_from_icon_name("system-lock-screen-symbolic", Gtk.IconSize.DND)
-        # lockButton.connect("button_press_event", self.on_logout_button_clicked)
-        # logoutBox.pack_start(lockButton, False, False, 0)
-        shutdownButton = Gtk.Button.new_from_icon_name("system-shutdown-symbolic", Gtk.IconSize.DND)
-        shutdownButton.connect("button_press_event", self.on_shutdown_button_clicked)
-        logoutBox.pack_start(shutdownButton, False, False, 0)
-        settingsButton = Gtk.Button.new_from_icon_name("emblem-system-symbolic", Gtk.IconSize.DND)
-        settingsButton.connect("button_press_event", self.on_settings_button_clicked)
-        logoutBox.pack_start(settingsButton, False, False, 0)
-        logoutBox.set_halign(Gtk.Align.CENTER)
-        logoutBox.set_name("username-box")
-
-        userBox = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-        userBox.pack_start(self.profileNameLabel, False, False, 0)
-        userBox.pack_start(logoutBox, False, False, 0)
-        userBox.set_name("profile-box")
-
-        self.popupLayout.pack_start(userBox, False, False, 0)
-        
-        # Temp
-        self.popupLayout.pack_end(VosVolumeSlider(), False, False, 0)
-        
-        tempInfoBox = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-        tempInfoBox.pack_end(Gtk.Label.new(""), False, False, 0)
-        tempInfoBox.pack_end(Gtk.Label.new("Programming is hard :("), False, False, 0)
-        tempInfoBox.pack_end(Gtk.Label.new("But not yet."), False, False, 0)
-        tempInfoBox.pack_end(Gtk.Label.new("Eventually it will replace GNOME Control Center."), False, False, 0)
-        tempInfoBox.pack_end(Gtk.Label.new("You will be able to change settings here!"), False, False, 0)
-        tempInfoBox.pack_end(Gtk.Label.new(""), False, False, 0)
-        tempInfoBox.pack_end(Gtk.Label.new("You're running VeltOS (Technical Preview 2)!"), False, False, 0)
-        self.popupLayout.set_center_widget(tempInfoBox)
-    
-    def on_user_manager_notify_is_loaded(self, manager, pspec):
-        if not manager.props.is_loaded:
-            return
-        
-        currentUsername = GLib.getenv("USER")
-        if not currentUsername:
-            print("** settings.py: Critical: Cannot determine current user (env variable $USER).\n")
-            return
-            
-        currentUser = manager.get_user(currentUsername)
-        
-        # iconFile = currentUser.get_icon_file()
-        # if iconFile:
-        #     pixbuf = GdkPixbuf.Pixbuf.new_from_file(iconFile)
-        #     pixbuf = pixbuf.scale_simple(60, 60, GdkPixbuf.InterpType.BILINEAR)
-        #     self.profileIcon.set_from_pixbuf(pixbuf)
-        
-        self.profileNameLabel.set_text(currentUser.get_real_name())
-    
-    def on_logout_button_clicked(self, button, event):
-        self.hide()
-        self.panel.logout()
-    
-    def on_shutdown_button_clicked(self, button, event):
-        self.hide()
-        print("Shutdown/restart not implemented yet")
-
-    def on_settings_button_clicked(self, button, event):
-        self.hide()
-        subprocess.Popen("gnome-control-center", stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    
 class VosSettingsApplet(Gtk.Button):
     __gtype_name__ = 'VosSettingsApplet'
 
@@ -197,3 +62,110 @@ class VosSettingsApplet(Gtk.Button):
 
     def on_settings_menu_hide(self, window):
         self.get_style_context().remove_class("clicked")
+
+
+class VosSettingsPopup(Gtk.Window):
+    __gtype_name__ = 'VosSettingsPopup'
+    
+    def __init__(self, panel):
+        super().__init__()
+        self.panel = panel
+        
+        self.set_type_hint(Gdk.WindowTypeHint.POPUP_MENU) # Must be POPUP_MENU or else z-sorting conflicts with the dock
+        self.connect("map", self.on_mapped)
+        self.connect("button_press_event", self.on_mouse_event)
+        self.get_screen().connect("monitors-changed", self.on_monitors_changed)
+
+        # Layout
+        self.layout = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.layout.get_style_context().add_class("panel")
+        self.layout.set_halign(Gtk.Align.FILL)
+        self.layout.set_valign(Gtk.Align.FILL)
+        
+        # Current session info (profile name, profile icon)
+        profileNameLabel = users.ProfileNameLabel()
+        profileNameLabel.set_name("profile-name-label")
+        profileNameLabel.set_valign(Gtk.Align.CENTER)
+        profileNameLabel.set_halign(Gtk.Align.CENTER)
+
+        # self.profileIcon = Gtk.Image.new_from_icon_name("", Gtk.IconSize.DIALOG)
+        # self.profileIcon.set_name("profile-icon")
+        
+        # Create box for session control buttons (logout, shutdown, (temp)settings)
+        sessionControlBox = Gtk.Box.new(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
+        sessionControlBox.set_halign(Gtk.Align.CENTER)
+        sessionControlBox.set_name("session-control-box")
+        
+        logoutButton = Gtk.Button.new_from_icon_name("application-exit-symbolic", Gtk.IconSize.DND)
+        logoutButton.connect("button_press_event", self.on_logout_button_clicked)
+        sessionControlBox.pack_start(logoutButton, False, False, 0)
+        
+        shutdownButton = Gtk.Button.new_from_icon_name("system-shutdown-symbolic", Gtk.IconSize.DND)
+        shutdownButton.connect("button_press_event", self.on_shutdown_button_clicked)
+        sessionControlBox.pack_start(shutdownButton, False, False, 0)
+        
+        settingsButton = Gtk.Button.new_from_icon_name("emblem-system-symbolic", Gtk.IconSize.DND)
+        settingsButton.connect("button_press_event", self.on_settings_button_clicked)
+        sessionControlBox.pack_start(settingsButton, False, False, 0)
+        
+        # Create top box for session info and control
+        sessionBox = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        sessionBox.pack_start(profileNameLabel, False, False, 0)
+        sessionBox.pack_start(sessionControlBox, False, False, 0)
+        sessionBox.set_name("session-box")
+        self.layout.pack_start(sessionBox, False, False, 0)
+        
+        # Temp
+        self.layout.pack_end(VosVolumeSlider(), False, False, 0)
+        
+        tempInfoBox = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        tempInfoBox.pack_end(Gtk.Label.new(""), False, False, 0)
+        tempInfoBox.pack_end(Gtk.Label.new("Programming is hard :("), False, False, 0)
+        tempInfoBox.pack_end(Gtk.Label.new("But not yet."), False, False, 0)
+        tempInfoBox.pack_end(Gtk.Label.new("Eventually it will replace GNOME Control Center."), False, False, 0)
+        tempInfoBox.pack_end(Gtk.Label.new("You will be able to change settings here!"), False, False, 0)
+        tempInfoBox.pack_end(Gtk.Label.new(""), False, False, 0)
+        tempInfoBox.pack_end(Gtk.Label.new("You're running VeltOS (Technical Preview 2)!"), False, False, 0)
+        self.layout.set_center_widget(tempInfoBox)
+    
+        # Add layout to window
+        self.layout.show_all()
+        self.add(self.layout)
+    
+    def show(self):
+        self.panel.capture_screen()
+        super().show()
+        self.grab_add() # Mouse events over the capture will be grabbed too
+
+    def hide(self):
+        self.grab_remove()
+        super().hide()
+        self.panel.end_capture()
+
+    def on_mapped(self, popup):
+        self.update_size()
+    
+    def on_monitors_changed(self, screen):
+        self.update_size()
+
+    def on_mouse_event(self, widget, event):
+        if event.window.get_toplevel() != self.get_window():
+            self.hide()
+        return Gdk.EVENT_PROPAGATE
+
+    def update_size(self):
+        rect = self.panel.get_screen().get_monitor_geometry(self.panel.get_monitor())
+        if self.get_window():
+            self.get_window().move_resize(rect.x + rect.width - (rect.width/5), rect.y, rect.width/5, rect.height-self.panel.get_height())
+
+    def on_logout_button_clicked(self, button, event):
+        self.hide()
+        self.panel.logout()
+    
+    def on_shutdown_button_clicked(self, button, event):
+        self.hide()
+        print("Shutdown/restart not implemented yet")
+
+    def on_settings_button_clicked(self, button, event):
+        self.hide()
+        subprocess.Popen("gnome-control-center", stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
