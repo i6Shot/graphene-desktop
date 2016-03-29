@@ -118,16 +118,6 @@ class VosSettingsPopup(Gtk.Window):
         # Temp
         self.layout.pack_end(VosVolumeSlider(), False, False, 0)
         
-        tempInfoBox = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-        tempInfoBox.pack_end(Gtk.Label.new(""), False, False, 0)
-        tempInfoBox.pack_end(Gtk.Label.new("Programming is hard :("), False, False, 0)
-        tempInfoBox.pack_end(Gtk.Label.new("But not yet."), False, False, 0)
-        tempInfoBox.pack_end(Gtk.Label.new("Eventually it will replace GNOME Control Center."), False, False, 0)
-        tempInfoBox.pack_end(Gtk.Label.new("You will be able to change settings here!"), False, False, 0)
-        tempInfoBox.pack_end(Gtk.Label.new(""), False, False, 0)
-        tempInfoBox.pack_end(Gtk.Label.new("You're running VeltOS (Technical Preview 2)!"), False, False, 0)
-        self.layout.set_center_widget(tempInfoBox)
-    
         # Add layout to window
         self.layout.show_all()
         self.add(self.layout)
