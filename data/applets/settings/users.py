@@ -16,7 +16,7 @@
 # users.py
 # User settings control/info for the settings panel
 
-import gi, math
+import gi, math, cairo, os.path
 gi.require_version('AccountsService', '1.0')
 from gi.repository import GLib, GObject, Gtk, Gdk, GdkPixbuf, Gio, AccountsService
 
@@ -71,14 +71,12 @@ class ProfileNameLabel(Gtk.Label):
         self.set_text(user.get_real_name())
 
 
-class ProfilePicture(Gtk.Image):
+class ProfilePicture(Gtk.DrawingArea):
     __gtype_name__ = 'ProfilePicture'
 
     def __init__(self, username=None):
         super().__init__()
         self.username = username
-        self.on_user_updated(None)
-        self.pictureSize = 0
         
         if not self.username:
             self.username = GLib.getenv("USER")
@@ -91,11 +89,6 @@ class ProfilePicture(Gtk.Image):
         
         load_user_accounts_manager(self.on_user_manager_notify_loaded)
     
-    def do_size_allocate(self, allocation):
-        self.set_allocation(allocation)
-        self.pictureSize = min(allocation.width, allocation.height)
-        self.on_user_updated(self.user)
-
     def on_user_manager_notify_loaded(self, manager, x):
         if self.user and self.userChangedHandlerID > 0:
             self.user.disconnect(self.userChangedHandlerID)
@@ -111,54 +104,66 @@ class ProfilePicture(Gtk.Image):
         self.on_user_updated(self.user)
 
     def on_user_updated(self, user):
-        iconFile = None
-        if user and self.pictureSize > 0:
-            iconFile = user.get_icon_file()
-            
-        if iconFile:
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file(iconFile)
-            pixbuf = self.pixbuf_circle_crop(pixbuf, self.pictureSize)
-            self.set_from_pixbuf(pixbuf)
-        else:
-            self.set_from_icon_name("avatar-default-symbolic", Gtk.IconSize.DIALOG)
-    
-    # Takes the given pixbuf, scales it to a square and crops out the corners to make it a circle
-    # This method is very inefficent and can't be used for any large images.
-    def pixbuf_circle_crop(self, pixbuf, size):
-        # Create a white background and composite the pixbuf onto that
-        scaledSize = size*4 # Scale it up a bit for supersampling
-        bgbuf = GdkPixbuf.Pixbuf.new(pixbuf.get_colorspace(), True, pixbuf.get_bits_per_sample(), scaledSize, scaledSize)
-        bgbuf.fill(0xFFFFFFFF)
-        pixbuf.composite(bgbuf, 0, 0, scaledSize, scaledSize, 0, 0, scaledSize/pixbuf.get_width(), scaledSize/pixbuf.get_height(), GdkPixbuf.InterpType.BILINEAR, 255)
-        pixbuf = bgbuf
+        self.queue_draw()
         
-        # Crop the image to a circle
-        pixels = pixbuf.get_pixels()
-        height = pixbuf.get_height()
-        width = pixbuf.get_width()
-        numChannels = pixbuf.get_n_channels()
+    def get_picture_pixmap(self):
+        # First try to get picture from AccountsService
+        if self.user:
+            path = self.user.get_icon_file()
+            try:
+                return GdkPixbuf.Pixbuf.new_from_file(path), True
+            except (GLib.Error, TypeError): 
+                pass
+                
+        try:
+            return GdkPixbuf.Pixbuf.new_from_file(os.path.expanduser("~%s/.face" % self.username)), True
+        except GLib.Error: 
+            pass
         
-        centerRow = width/2
-        centerCol = height/2
-        radius = width/2
-        
-        newpixels = bytearray()
-        i = 0
-        for pixel in pixels:
-            pixelIndex = int(i/numChannels)
-            row = int(pixelIndex/width)
-            col = pixelIndex % width
-            
-            dist = math.sqrt(math.pow(row-centerRow, 2) + math.pow(col-centerCol, 2))
-            if dist < radius:
-                newpixels.append(pixel)
-            else:
-                newpixels.append(0)
-            i+=1
-        
-        newPixbuf = GdkPixbuf.Pixbuf.new_from_bytes(GLib.Bytes.new(newpixels), pixbuf.get_colorspace(),
-            pixbuf.get_has_alpha(), pixbuf.get_bits_per_sample(), pixbuf.get_width(), pixbuf.get_height(),
-            pixbuf.get_rowstride())
-        
-        newPixbuf = newPixbuf.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR) # Scale it back to requested size
-        return newPixbuf
+        try:
+            theme = Gtk.IconTheme.get_default()
+            size = min(self.get_allocated_width(), self.get_allocated_height())
+            return theme.load_icon("system-users", size, 0), False
+        except GLib.Error: 
+            return None, True
+
+    def do_draw(self, cr):        
+        # Render background
+        styleContext = self.get_style_context()
+        width = self.get_allocated_width()
+        height = self.get_allocated_height()
+        Gtk.render_background(styleContext, cr, 0, 0, width, height)
+
+        # The size of the final image
+        size = min(width, height)
+
+        # Create a image surface with the profile image, applying a white background
+        # Scale it up a bit for supersampling
+        db = cairo.ImageSurface(cairo.FORMAT_ARGB32, size*2, size*2)
+        dbcr = cairo.Context(db)
+
+        dbcr.arc(db.get_width()/2, db.get_height()/2, min(db.get_width(), db.get_height())/2, 0, 2*math.pi)
+        dbcr.clip()
+        dbcr.new_path()
+
+        img, bg = self.get_picture_pixmap()
+
+        if bg:
+            dbcr.set_source_rgb(0.827,0.827,0.827)
+            dbcr.paint()
+
+        if img:
+            dbcr.scale(db.get_width()/img.get_width(), db.get_height()/img.get_height())
+            Gdk.cairo_set_source_pixbuf(dbcr, img, 0, 0)
+            dbcr.paint()
+
+        db.flush()
+
+        # TODO: Maybe cache db so it doesn't have to recreate it every time it draws? Not really necessary right now
+
+        # Render the image to the widget
+        cr.scale(size/db.get_width(), size/db.get_height())
+        cr.set_source_surface(db,
+          (width/2)/(size/db.get_width())-db.get_width()/2,
+          (height/2)/(size/db.get_height())-db.get_height()/2)
+        cr.paint()
