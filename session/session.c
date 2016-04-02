@@ -25,12 +25,14 @@
 #include <sys/wait.h>
 
 #define MAX_RESTARTS 5
+#define SHOW_ALL_OUTPUT FALSE // Set to TRUE for release; FALSE only shows output from .desktop files with 'Graphene-ShowOutput=true'
 
 typedef struct {
   GPid pid;
   const gchar *args;
   gboolean autorestart;
   guint restartCount;
+  gboolean noOutput; // If true, redirects stdout and stderr to dev/null
 } ProcessInfo;
 
 static void activate(GApplication *app, gpointer userdata);
@@ -39,7 +41,7 @@ static void quit();
 
 static GHashTable *list_autostarts();
 static void launch_autostart_phase(const gchar *phase, GHashTable *autostarts);
-static void launch_process(const gchar *args, gboolean autorestart, guint restartCount, guint delay);
+static void launch_process(const gchar *args, gboolean autorestart, guint restartCount, guint delay, gboolean noOutput);
 static gchar ** strv_append(const gchar * const *list, const gchar *str);
 
 static gboolean Activated = FALSE;
@@ -274,7 +276,11 @@ static void launch_autostart_phase(const gchar *phase, GHashTable *autostarts)
       if(delayString)
         delay = g_ascii_strtoll(delayString, NULL, 0);
       
-      launch_process(commandline, autoRestart, 0, (guint)delay);
+      gboolean showOutput = g_desktop_app_info_get_boolean(desktopInfo, "Graphene-ShowOutput"); // For debugging, ignore output from unwanted programs
+      if(SHOW_ALL_OUTPUT)
+        showOutput = TRUE;
+        
+      launch_process(commandline, autoRestart, 0, (guint)delay, !showOutput);
       g_hash_table_iter_remove(&iter);
     }
     
@@ -291,13 +297,14 @@ static void on_process_exit(GPid pid, gint status, gpointer userdata);
  * If <autostart> is true, the process will restart automatically if it exits with a non-zero exit status.
  * <delay> number of seconds to wait before starting
  */
-static void launch_process(const gchar *args, gboolean autorestart, guint restartCount, guint delay)
+static void launch_process(const gchar *args, gboolean autorestart, guint restartCount, guint delay, gboolean noOutput)
 {
   ProcessInfo *info = g_new(ProcessInfo, 1);
   info->pid = 0;
   info->args = g_strdup(args);
   info->autorestart = autorestart;
   info->restartCount = restartCount;
+  info->noOutput = noOutput;
   
   // Hold for the processes (released when process closes)
   g_application_hold(g_application_get_default());
@@ -323,11 +330,15 @@ static gboolean process_launch_delay_cb(gpointer userdata)
   
   ProcessInfo *info = (ProcessInfo *)userdata;
   
+  GSpawnFlags flags = G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD;
+  if(info->noOutput)
+    flags |= G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL;
+  
   GPid pid = 0;
   GError *e = NULL;
 
   gchar **argsSplit = g_strsplit(info->args, " ", -1);
-  g_spawn_async(NULL, argsSplit, NULL, G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD, NULL, NULL, &pid, &e);
+  g_spawn_async(NULL, argsSplit, NULL, flags, NULL, NULL, &pid, &e);
   g_strfreev(argsSplit);
   
   if(e)
@@ -379,11 +390,11 @@ static void on_process_exit(GPid pid, gint status, gpointer userdata)
     if(isPanel && WEXITSTATUS(status) == 120) // Special exit code for rebooting the panel (not an error)
                                               // WEXITSTATUS gets the lower 8 bits of the status, which is the actual value the program returned from main().
     {
-      launch_process(info->args, TRUE, 0, 0); // Reset restartCount
+      launch_process(info->args, TRUE, 0, 0, info->noOutput); // Reset restartCount
     }
     else if(info->restartCount < MAX_RESTARTS)
     {
-      launch_process(info->args, TRUE, info->restartCount+1, 1);
+      launch_process(info->args, TRUE, info->restartCount+1, 1, info->noOutput);
     }
     else if(isPanel)
     {

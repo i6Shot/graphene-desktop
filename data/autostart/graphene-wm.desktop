@@ -8,4 +8,5 @@ NoDisplay=true
 X-GNOME-Autostart-Phase=WindowManager
 X-GNOME-Autostart-Notify=true
 X-GNOME-AutoRestart=true
+Graphene-ShowOutput=true
 OnlyShowIn=Graphene;

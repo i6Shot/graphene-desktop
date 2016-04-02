@@ -37,6 +37,7 @@ all: $(LIBF)/lib$(LIB).so $(PANELF)/$(PANEL).bin $(WMF)/$(WM).bin $(SESSIONF)/$(
 
 test:
 	sudo make all install
+	clear
 	$(SESSION)
 	
 
