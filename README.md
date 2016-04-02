@@ -57,6 +57,16 @@ will overwrite any custom changes made to that directory.**
 Eventually, this single-file make will be replaced with Autotools. Once I can
 figure out how to use Autotools.
 
+License
+--------
+
+Most of Graphene Desktop uses the Apache License 2.0 (ASL). Although we support Free Software,
+the Velt team chose ASL because we want to give users the freedom to do anything they want
+with our software.
+
+However, due to the terms of the GNU General Public License, some of Graphene must be licensed
+under GPLv3. The license information for each source file is listed at the top of the file.
+
 Authors
 --------
 
