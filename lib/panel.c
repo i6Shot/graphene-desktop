@@ -81,6 +81,7 @@ static void vos_panel_init(VosPanel *self)
   gtk_window_set_position(GTK_WINDOW(self), GTK_WIN_POS_NONE);
   gtk_window_set_decorated(GTK_WINDOW(self), FALSE);
   gtk_window_set_keep_above(GTK_WINDOW(self), TRUE);
+  gtk_window_set_role(GTK_WINDOW(self), "GrapheneDock"); // Tells graphene-wm this is the panel
 
   // Set the application theme
   // GtkCssProvider *fallbackProvider = gtk_css_provider_new();

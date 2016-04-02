@@ -17,12 +17,29 @@
 
 #include "wm.h"
 #include "background.h"
+#include <meta/meta-shadow-factory.h>
 
 // VosWM class (private)
 struct _VosWM {
   MetaPlugin parent;
   MetaBackgroundGroup *BackgroundGroup;
 };
+
+// Structs copied from meta-shadow-factory.c (commit a191554 on Jul 6, 2015)
+typedef struct
+{
+  GObject parent_instance;
+  GHashTable *shadows;
+  GHashTable *shadow_classes;
+} _MetaShadowFactory;
+typedef struct
+{
+  const char *name;
+  MetaShadowParams focused;
+  MetaShadowParams unfocused;
+} _MetaShadowClassInfo;
+
+
 
 int main(int argc, char **argv)
 {
@@ -107,6 +124,30 @@ static void start(MetaPlugin *plugin)
   // meta_keybindings_set_custom_handler("panel-main-menu", launch_rundialog);
   // meta_keybindings_set_custom_handler("switch-windows", switch_windows);
   // meta_keybindings_set_custom_handler("switch-applications", switch_windows);
+  
+  
+  
+  /*
+  The shadow factory has a bug which causes new shadow classes to not only not be created, but also
+  corrupt the "normal" class. The only way I was able to fix this is by directly modifying the factory's hash
+  table via private member variables. However, the private interface has remained the same for six years,
+  so it's probably safe for a while...
+  
+  The bug is (I think):
+    class_info->name = g_strdup (class_info->name);     on line 830 of meta-shadow-factory.c
+  should be
+    class_info->name = g_strdup (class_name);
+
+  TODO: Maybe submit a bug report? Or something.
+  */
+  // Add a shadow class for the panel
+  MetaShadowParams dockShadow = {3, -1, 0, 0, 200}; // radius, top_fade, x_offset, y_offset, opacity
+  _MetaShadowFactory *factory = (_MetaShadowFactory*)meta_shadow_factory_get_default();
+  _MetaShadowClassInfo *info = g_slice_new0(_MetaShadowClassInfo);
+  info->name = "dock";
+  info->focused = dockShadow;
+  info->unfocused = dockShadow;
+  g_hash_table_insert(factory->shadow_classes, "dock", info);
 }
 
 // static void launch_rundialog(MetaDisplay *display, MetaScreen *screen,
@@ -303,6 +344,11 @@ static void map(MetaPlugin *plugin, MetaWindowActor *windowActor)
 
     default:
       meta_plugin_map_completed(plugin, META_WINDOW_ACTOR(actor));
+  }
+  
+  if(g_strcmp0(meta_window_get_role(window), "GrapheneDock") == 0 || g_strcmp0(meta_window_get_role(window), "GraphenePopup") == 0)
+  {
+    g_object_set(windowActor, "shadow-mode", META_SHADOW_MODE_FORCED_ON, "shadow-class", "dock", NULL);
   }
 }
 

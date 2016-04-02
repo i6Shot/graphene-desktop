@@ -75,6 +75,7 @@ class VosSettingsPopup(Gtk.Window):
         self.connect("map", self.on_mapped)
         self.connect("button_press_event", self.on_mouse_event)
         self.get_screen().connect("monitors-changed", self.on_monitors_changed)
+        self.set_role("GraphenePopup") # Tells graphene-wm this is a popup
 
         # Layout
         self.layout = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=0)

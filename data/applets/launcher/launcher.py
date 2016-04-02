@@ -73,6 +73,7 @@ class VosLauncherPopup(Gtk.Window):
         self.connect("key_press_event", self.on_key_event)
         self.connect("key_release_event", self.on_key_event)
         self.get_screen().connect("monitors-changed", self.on_monitors_changed)
+        self.set_role("GraphenePopup") # Tells graphene-wm this is a popup
 
         # Layout
         self.popupLayout = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=0)
