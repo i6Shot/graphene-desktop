@@ -63,11 +63,10 @@ VosLauncherPopup GtkSearchEntry GtkLabel {
 }
 
 VosLauncherApplet {
-  background-color: @vosred;
   padding: 0 12px 0 12px;
 }
 VosLauncherApplet:hover, VosLauncherApplet.clicked {
-  background-color: shade(@vosred, 1.2);
+  background-color: shade(@panel, 1.4);
 }
 VosLauncherApplet GtkImage {
   color: shade(@selection, 0.8);
@@ -84,7 +83,7 @@ VosTaskListApplet GtkButton:hover, VosSettingsApplet:hover, VosSettingsApplet.cl
   background-color: shade(@panel, 1.4);
 }
 VosTaskListApplet .task-active {
-  background-color: shade(@panel, 1.4);
+  background-color: shade(@panel, 1.2);
   transition: 100ms;
 }
 VosTaskListApplet .task-attention { /* .task-attention should come after .task-active so that it overrides it */
