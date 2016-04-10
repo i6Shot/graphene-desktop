@@ -439,12 +439,20 @@ void vos_material_box_hide_sheet(VosMaterialBox *self, VosMaterialSheet *sheet)
     self->currentCenter = NULL;
     
   // Animate
-  GdkFrameClock *frameClock = gtk_widget_get_frame_clock(GTK_WIDGET(sheet));
-  sheetInfo->animStartTime = gdk_frame_clock_get_frame_time(frameClock) - (VOS_SHEET_TRANSITION_TIME-sheetInfo->animOffsetTime);
-  
-  if(sheetInfo->tickCallbackID > 0)
-    gtk_widget_remove_tick_callback(GTK_WIDGET(sheet), sheetInfo->tickCallbackID);
-  sheetInfo->tickCallbackID = gtk_widget_add_tick_callback(GTK_WIDGET(sheet), sheet_animate_close, sheetInfo, NULL);
+  if(gtk_widget_is_visible(self))
+  {
+    GdkFrameClock *frameClock = gtk_widget_get_frame_clock(GTK_WIDGET(sheet));
+    sheetInfo->animStartTime = gdk_frame_clock_get_frame_time(frameClock) - (VOS_SHEET_TRANSITION_TIME-sheetInfo->animOffsetTime);
+    
+    if(sheetInfo->tickCallbackID > 0)
+      gtk_widget_remove_tick_callback(GTK_WIDGET(sheet), sheetInfo->tickCallbackID);
+    sheetInfo->tickCallbackID = gtk_widget_add_tick_callback(GTK_WIDGET(sheet), sheet_animate_close, sheetInfo, NULL);
+  }
+  else
+  {
+    sheetInfo->animOffsetTime = 0;
+    gtk_widget_hide(GTK_WIDGET(sheet));
+  }
 }
 
 static void sheet_on_show(VosMaterialBox *self, VosMaterialSheet *sheet)
@@ -472,12 +480,19 @@ static void sheet_on_show(VosMaterialBox *self, VosMaterialSheet *sheet)
   }
   
   // Animate
-  GdkFrameClock *frameClock = gtk_widget_get_frame_clock(GTK_WIDGET(sheet));
-  sheetInfo->animStartTime = gdk_frame_clock_get_frame_time(frameClock) - sheetInfo->animOffsetTime;
-  
-  if(sheetInfo->tickCallbackID > 0)
-    gtk_widget_remove_tick_callback(GTK_WIDGET(sheet), sheetInfo->tickCallbackID);
-  sheetInfo->tickCallbackID = gtk_widget_add_tick_callback(GTK_WIDGET(sheet), sheet_animate_open, sheetInfo, NULL);
+  if(gtk_widget_is_visible(self))
+  {
+    GdkFrameClock *frameClock = gtk_widget_get_frame_clock(GTK_WIDGET(sheet));
+    sheetInfo->animStartTime = gdk_frame_clock_get_frame_time(frameClock) - sheetInfo->animOffsetTime;
+    
+    if(sheetInfo->tickCallbackID > 0)
+      gtk_widget_remove_tick_callback(GTK_WIDGET(sheet), sheetInfo->tickCallbackID);
+    sheetInfo->tickCallbackID = gtk_widget_add_tick_callback(GTK_WIDGET(sheet), sheet_animate_open, sheetInfo, NULL);
+  }
+  else
+  {
+    sheetInfo->animOffsetTime = VOS_SHEET_TRANSITION_TIME;
+  }
 }
 
 static void sheet_on_hide(VosMaterialBox *self, VosMaterialSheet *sheet)
