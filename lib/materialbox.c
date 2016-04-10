@@ -367,7 +367,7 @@ static void vos_material_box_show_all(VosMaterialBox *self)
   if(!sheetInfo)
     return;
   
-  vos_material_box_show_sheet(self, sheetInfo->sheet);
+  gtk_widget_show_all(sheetInfo->sheet);
 }
 
 static gboolean sheet_animate_open(VosMaterialSheet *sheet, GdkFrameClock *frameClock, VosMaterialBoxSheetInfo *sheetInfo)
@@ -407,14 +407,54 @@ static gboolean sheet_animate_close(VosMaterialSheet *sheet, GdkFrameClock *fram
  * @sheet: the sheet (GtkContainer) to show.
  *
  * Shows the sheet using a easing animation.
- * Same effect as calling gtk_widget_show on the sheet.
+ * NOT the same effect as calling gtk_widge_show on the sheet; calling show will immediately
+ * show the sheet with no animation.
  */
 void vos_material_box_show_sheet(VosMaterialBox *self, VosMaterialSheet *sheet)
 {
   g_return_if_fail(VOS_IS_MATERIAL_BOX(self));
   g_return_if_fail(VOS_IS_MATERIAL_SHEET(sheet));
 
-  gtk_widget_show(GTK_WIDGET(sheet)); // Calls show signal handler
+  // Hide everything but the current center and this
+  for(GList *children=self->children; children; children=children->next)
+  {
+    VosMaterialBoxSheetInfo *sheetInfo = (VosMaterialBoxSheetInfo *)children->data;
+    if(sheetInfo && sheetInfo->sheet != sheet && sheetInfo != self->currentCenter)
+    {
+      vos_material_box_hide_sheet(self, sheetInfo->sheet);
+    }
+  }
+  
+  // Fade in this sheet
+  VosMaterialBoxSheetInfo *sheetInfo = get_sheet_info_from_sheet(self, sheet);
+  if(!sheetInfo)
+    return;
+  
+  g_signal_handlers_block_by_func(sheet, G_CALLBACK(sheet_on_show), self);
+  gtk_widget_show(GTK_WIDGET(sheet));
+  g_signal_handlers_unblock_by_func(sheet, G_CALLBACK(sheet_on_show), self);
+
+  if(sheetInfo->location == VOS_MATERIAL_BOX_LOCATION_CENTER)
+  {
+    if(self->currentCenter)
+      vos_material_box_hide_sheet(self, self->currentCenter->sheet);
+    self->currentCenter = sheetInfo;
+  }
+  
+  // Animate
+  if(gtk_widget_is_visible(self))
+  {
+    GdkFrameClock *frameClock = gtk_widget_get_frame_clock(GTK_WIDGET(sheet));
+    sheetInfo->animStartTime = gdk_frame_clock_get_frame_time(frameClock) - sheetInfo->animOffsetTime;
+    
+    if(sheetInfo->tickCallbackID > 0)
+      gtk_widget_remove_tick_callback(GTK_WIDGET(sheet), sheetInfo->tickCallbackID);
+    sheetInfo->tickCallbackID = gtk_widget_add_tick_callback(GTK_WIDGET(sheet), sheet_animate_open, sheetInfo, NULL);
+  }
+  else
+  {
+    sheetInfo->animOffsetTime = VOS_SHEET_TRANSITION_TIME;
+  }
 }
 
 /**
@@ -457,54 +497,48 @@ void vos_material_box_hide_sheet(VosMaterialBox *self, VosMaterialSheet *sheet)
 
 static void sheet_on_show(VosMaterialBox *self, VosMaterialSheet *sheet)
 {
+  VosMaterialBoxSheetInfo *thisSheetInfo = get_sheet_info_from_sheet(self, sheet);
+  if(!thisSheetInfo)
+    return;
+    
   // Hide everything but the current center and this
   for(GList *children=self->children; children; children=children->next)
   {
     VosMaterialBoxSheetInfo *sheetInfo = (VosMaterialBoxSheetInfo *)children->data;
     if(sheetInfo && sheetInfo->sheet != sheet && sheetInfo != self->currentCenter)
     {
-      vos_material_box_hide_sheet(self, sheetInfo->sheet);
+      gtk_widget_hide(GTK_WIDGET(sheetInfo->sheet));
     }
   }
   
-  // Fade in this sheet
-  VosMaterialBoxSheetInfo *sheetInfo = get_sheet_info_from_sheet(self, sheet);
-  if(!sheetInfo)
-    return;
-  
-  if(sheetInfo->location == VOS_MATERIAL_BOX_LOCATION_CENTER)
+  if(thisSheetInfo->location == VOS_MATERIAL_BOX_LOCATION_CENTER)
   {
     if(self->currentCenter)
-      vos_material_box_hide_sheet(self, self->currentCenter->sheet);
-    self->currentCenter = sheetInfo;
+      gtk_widget_hide(GTK_WIDGET(self->currentCenter->sheet));
+    self->currentCenter = thisSheetInfo;
   }
   
-  // Animate
-  if(gtk_widget_is_visible(self))
-  {
-    GdkFrameClock *frameClock = gtk_widget_get_frame_clock(GTK_WIDGET(sheet));
-    sheetInfo->animStartTime = gdk_frame_clock_get_frame_time(frameClock) - sheetInfo->animOffsetTime;
-    
-    if(sheetInfo->tickCallbackID > 0)
-      gtk_widget_remove_tick_callback(GTK_WIDGET(sheet), sheetInfo->tickCallbackID);
-    sheetInfo->tickCallbackID = gtk_widget_add_tick_callback(GTK_WIDGET(sheet), sheet_animate_open, sheetInfo, NULL);
-  }
-  else
-  {
-    sheetInfo->animOffsetTime = VOS_SHEET_TRANSITION_TIME;
-  }
+  thisSheetInfo->animOffsetTime = VOS_SHEET_TRANSITION_TIME;
+  gtk_widget_queue_resize(sheet);
 }
 
 static void sheet_on_hide(VosMaterialBox *self, VosMaterialSheet *sheet)
 {
   VosMaterialBoxSheetInfo *sheetInfo = get_sheet_info_from_sheet(self, sheet);
   if(sheetInfo)
+  {
+    if(sheetInfo == self->currentCenter)
+      self->currentCenter = NULL;
     sheetInfo->animOffsetTime = 0;
+  }
   gtk_widget_queue_resize(sheet);
 }
 
 static VosMaterialBoxSheetInfo * get_primary_sheet_info(VosMaterialBox *self)
 {
+  if(self->currentCenter)
+    return self->currentCenter;
+    
   for(GList *children=self->children; children; children=children->next)
   {
     VosMaterialBoxSheetInfo *sheetInfo = (VosMaterialBoxSheetInfo *)children->data;
