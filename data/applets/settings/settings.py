@@ -116,21 +116,25 @@ class VosSettingsPopup(Gtk.Window):
         sessionBox.set_name("session-box")
         self.layout.pack_start(sessionBox, False, False, 0)
         
-        # Temp
-        self.layout.pack_end(VosVolumeSlider(), False, False, 0)
-        
+        # Box for all the system settings (below the session info)
+        self.settingsBox = VosSettingsView()
+        self.layout.pack_start(self.settingsBox, True, True, 0)
+
         # Add layout to window
-        self.layout.show_all()
+        sessionBox.show_all()
+        self.layout.show()
         self.add(self.layout)
     
     def show(self):
         self.panel.capture_screen()
+        self.settingsBox.show()
         super().show()
         self.grab_add() # Mouse events over the capture will be grabbed too
-
+        
     def hide(self):
         self.grab_remove()
         super().hide()
+        self.settingsBox.hide()
         self.panel.end_capture()
 
     def on_mapped(self, popup):
@@ -160,3 +164,29 @@ class VosSettingsPopup(Gtk.Window):
     def on_settings_button_clicked(self, button, event):
         self.hide()
         subprocess.Popen("gnome-control-center", stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        
+class VosSettingsView(Vos.MaterialBox):
+    __gtype_name__ = 'VosSettingsView'
+
+    def __init__(self):
+        super().__init__()
+        
+        self.centerLayout = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        self.centerLayout.props.margin = 5
+
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC) # Keeps the popup width from being to small
+        scrolled.add(self.centerLayout)
+        
+        self.add_sheet(scrolled, Vos.MaterialBoxSheetLocation.CENTER)
+        
+        self.add_setting_widget(VosVolumeSlider)
+
+        scrolled.show_all()
+
+    def add_setting_widget(self, widgetName):
+        self.centerLayout.pack_end(widgetName(), False, False, 0)
+        
+    def hide(self):
+        super().hide()
