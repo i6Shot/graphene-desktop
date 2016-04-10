@@ -7,7 +7,7 @@ CFLAGS+=-DVDE_DATA_DIR=\"$(VDE_DATA_DIR)\"
 
 # libvos
 LIBF=lib
-LIBSRC=$(LIBF)/panel.c $(LIBF)/applet-extension.c $(LIBF)/system-volume-control.c
+LIBSRC=$(LIBF)/panel.c $(LIBF)/applet-extension.c $(LIBF)/system-volume-control.c $(LIBF)/materialbox.c
 VERSION=1.0
 NAMESPACE=Vos
 SYMBOL_PREFIX=vos
