@@ -48,6 +48,10 @@ struct _VosPanel {
   int Captures; // Each time capture is called, this ++es, and when someone ends the capture this --es. When it hits 0, the capture actually ends.
 
   gboolean Rebooting;
+  
+  guint NotificationServerBusNameID;
+  GHashTable *Notifications;
+  guint32 NextNotificationID;
 };
 
 // Make sure only one panel exists at a time
@@ -58,13 +62,14 @@ static gboolean PanelExists = FALSE;
 // it creates the VosPanel struct for private data
 G_DEFINE_TYPE(VosPanel, vos_panel, GTK_TYPE_WINDOW)
 VosPanel* vos_panel_new(void) { if(PanelExists) return NULL; else return VOS_PANEL(g_object_new(VOS_TYPE_PANEL, NULL)); }
-static void vos_panel_finalize(GObject *gobject) { PanelExists = FALSE; G_OBJECT_CLASS(vos_panel_parent_class)->finalize(gobject); }
+static void vos_panel_finalize(VosPanel *self);
 static void vos_panel_class_init(VosPanelClass *klass) { GObjectClass *object_class = G_OBJECT_CLASS (klass); object_class->finalize = vos_panel_finalize; }
 
 // Private event declarations
 static void init_layout(VosPanel *self);
 static void init_capture(VosPanel *self);
 static void init_plugins(VosPanel *self);
+static void init_notifications(VosPanel *self);
 static void update_position(VosPanel *self);
 static void on_monitors_changed(GdkScreen *screen, VosPanel *self);
 static gboolean on_panel_clicked(VosPanel *self, GdkEventButton *event);
@@ -102,6 +107,16 @@ static void vos_panel_init(VosPanel *self)
   init_layout(self);
   init_capture(self);
   init_plugins(self);
+  init_notifications(self);
+}
+
+static void vos_panel_finalize(VosPanel *self)
+{
+  if(self->NotificationServerBusNameID)
+    g_bus_unown_name(self->NotificationServerBusNameID);
+    
+  PanelExists = FALSE;
+  G_OBJECT_CLASS(vos_panel_parent_class)->finalize(G_OBJECT(self));
 }
 
 static void init_layout(VosPanel *self)
@@ -516,4 +531,213 @@ static void on_extension_removed(PeasExtensionSet *set, PeasPluginInfo *info, Vo
     return;
   
   gtk_widget_destroy(applet);
+}
+
+
+
+/*
+ *
+ * NOTIFICATIONS
+ *
+ */
+
+#define NOTIFICATION_DEFAULT_SHOW_TIME 5000 // ms
+#define NOTIFICATION_URGENCY_LOW 0
+#define NOTIFICATION_URGENCY_NORMAL 1
+#define NOTIFICATION_URGENCY_CRITICAL 2
+
+static const gchar *NotificationServerInterfaceXML =
+"<node>"
+"  <interface name='org.freedesktop.Notifications'>"
+"    <method name='GetCapabilities'>"
+"      <arg type='as' direction='out' name='capabilities'/>"
+"    </method>"
+"    <method name='Notify'>"
+"      <arg type='s' direction='in' name='app_name'/>"
+"      <arg type='u' direction='in' name='replaces_id'/>"
+"      <arg type='s' direction='in' name='app_icon'/>"
+"      <arg type='s' direction='in' name='summary'/>"
+"      <arg type='s' direction='in' name='body'/>"
+"      <arg type='as' direction='in' name='actions'/>"
+"      <arg type='a{sv}' direction='in' name='hints'/>"
+"      <arg type='i' direction='in' name='expire_timeout'/>"
+"      <arg type='u' direction='out' name='id'/>"
+"    </method>"
+"    <method name='CloseNotification'>"
+"      <arg type='u' direction='in' name='id'/>"
+"    </method>"
+"    <method name='GetServerInformation'>"
+"      <arg type='s' direction='out' name='name'/>"
+"      <arg type='s' direction='out' name='vendor'/>"
+"      <arg type='s' direction='out' name='version'/>"
+"      <arg type='s' direction='out' name='spec_version'/>"
+"    </method>"
+"    <signal name='ActionInvoked'>"
+"      <arg type='u' name='id'/>"
+"      <arg type='s' name='action_key'/>"
+"    </signal>"
+"    <signal name='NotificationClosed'>"
+"      <arg type='u' name='id'/>"
+"      <arg type='u' name='reason'/>"
+"    </signal>"
+"  </interface>"
+"</node>";
+
+typedef struct {
+  guint32 id;
+  const gchar *appName;
+  const gchar *icon;
+  const gchar *summary;
+  const gchar *body;
+  const gchar *category;
+  gint timeout;
+  gint urgency;
+} NotificationInfo;
+
+static void notification_info_free(NotificationInfo *info)
+{
+  g_free(info->appName);
+  g_free(info->icon);
+  g_free(info->summary);
+  g_free(info->body);
+  g_free(info->category);
+  g_free(info);
+}
+
+static void notification_server_name_acquired(GDBusConnection *connection, const gchar *name, VosPanel *self);
+static void notification_server_name_lost(GDBusConnection *connection, const gchar *name, VosPanel *self);
+static void on_notification_server_method_called(GDBusConnection *connection, const gchar* sender,
+              const gchar *objectPath, const gchar *interfaceName, const gchar *methodName, GVariant *parameters,
+              GDBusMethodInvocation *invocation, gpointer *user_data);
+static void show_notification(VosPanel *self, NotificationInfo *info);
+static void remove_notification(VosPanel *self, guint32 id);
+
+static void init_notifications(VosPanel *self)
+{
+  self->Notifications = g_hash_table_new_full(NULL, NULL, NULL, notification_info_free);
+  
+  // TODO: Notify user on failure?
+  self->NotificationServerBusNameID = g_bus_own_name(G_BUS_TYPE_SESSION, "org.freedesktop.Notifications", G_BUS_NAME_OWNER_FLAGS_REPLACE,
+    NULL, notification_server_name_acquired, notification_server_name_lost,
+    self, NULL);
+}
+
+static void notification_server_name_acquired(GDBusConnection *connection, const gchar *name, VosPanel *self)
+{
+  self->NextNotificationID = 1;
+  
+  // TODO: Notify user on failure?
+  const GDBusNodeInfo *interfaceInfo = g_dbus_node_info_new_for_xml(NotificationServerInterfaceXML, NULL);
+  static const GDBusInterfaceVTable interfaceCallbacks = { on_notification_server_method_called, NULL, NULL };
+  g_dbus_connection_register_object(connection, "/org/freedesktop/Notifications", interfaceInfo->interfaces[0], &interfaceCallbacks, self, NULL, NULL);
+}
+
+static void notification_server_name_lost(GDBusConnection *connection, const gchar *name, VosPanel *self)
+{
+  NotificationInfo *info = g_new0(NotificationInfo, 1);
+  info->icon = g_strdup("dialog-error");
+  info->summary = g_strdup("System Notification Server Failed");
+  info->body = g_strdup("You may not receive any notifications until you relog.");
+  info->urgency = NOTIFICATION_URGENCY_CRITICAL;
+  show_notification(self, info);
+}
+
+static void on_notification_server_method_called(GDBusConnection *connection, const gchar* sender,
+              const gchar           *objectPath,
+              const gchar           *interfaceName,
+              const gchar           *methodName,
+              GVariant              *parameters,
+              GDBusMethodInvocation *invocation,
+              gpointer              *user_data)
+{
+  VosPanel *self = VOS_PANEL(user_data);
+  
+  if(g_strcmp0(methodName, "GetCapabilities") == 0)
+  {
+    const gchar *capabilities[] = {"body"};
+    g_dbus_method_invocation_return_value(invocation, g_variant_new("(as)", capabilities));
+  }
+  else if(g_strcmp0(methodName, "Notify") == 0)
+  {
+    NotificationInfo *info = g_new0(NotificationInfo, 1);
+    info->category = NULL; // TODO: Get from hints
+    info->urgency = NOTIFICATION_URGENCY_NORMAL; // TODO: Get from hints
+    
+    // Note: g_varient_get allocates new memory for getting string parameters
+    g_variant_get(parameters, "(susssasa{sv}i)", &info->appName, &info->id, &info->icon, &info->summary, &info->body, NULL, NULL, &info->timeout);
+    show_notification(self, info);
+    g_dbus_method_invocation_return_value(invocation, g_variant_new("(u)", info->id));
+  }
+  else if(g_strcmp0(methodName, "CloseNotification") == 0)
+  {
+    guint32 id;
+    
+    g_variant_get(parameters, "(u)", &id);
+    remove_notification(self, id);
+    g_dbus_method_invocation_return_value(invocation, NULL);
+  }
+  else if(g_strcmp0(methodName, "GetServerInformation") == 0)
+  {
+    g_dbus_method_invocation_return_value(invocation, g_variant_new("(ssss)", "Graphene Notifications", "Velt", "0.2", "1.2"));
+  }
+}
+
+typedef struct {
+  VosPanel *panel;
+  guint32 id;
+} ShowNotificationRemoveCbInfo;
+
+static gboolean show_notification_remove_cb(ShowNotificationRemoveCbInfo *cbinfo)
+{
+  remove_notification(cbinfo->panel, cbinfo->id);
+  g_free(cbinfo);
+  return FALSE; // Don't call again
+}
+
+/*
+ * Shows a notification on the screen. Takes a NotificationInfo *info, which must be heap-allocated.
+ * The memory for info will be automatically freed when the notification is removed. All strings in
+ * info must also be heap-allocated, and will also be freed when the notification is removed.
+ *
+ * The id value in NotificationInfo should be 0 for a new ID, or an existing ID to replace a
+ * notification.
+ *
+ * Values in info will be changed to their default values if an 'unspecified' value is passed.
+ * For example, 0 for id goes to the new ID, and -1 for timeout goes to default number of seconds.
+ * NULLs for strings are also allowed. Defaults will be used in their place.
+ *
+ * See https://developer.gnome.org/notification-spec/ for more info.
+ */
+static void show_notification(VosPanel *self, NotificationInfo *info)
+{
+  if(info->id == 0)
+  {
+    if(self->NextNotificationID == 0)
+      self->NextNotificationID = 1;
+
+    info->id = self->NextNotificationID++;
+  }
+  
+  g_hash_table_insert(self->Notifications, GUINT_TO_POINTER(info->id), info);
+  
+  g_message("NOTIFICATION #%i: %s", info->id, info->summary);
+  
+  if(info->timeout < 0)
+    info->timeout = NOTIFICATION_DEFAULT_SHOW_TIME; // milliseconds
+  
+  if(info->timeout > 0)
+  {
+    ShowNotificationRemoveCbInfo *cbinfo = g_new(ShowNotificationRemoveCbInfo, 1);
+    cbinfo->panel = self;
+    cbinfo->id = info->id;
+    g_timeout_add(info->timeout, show_notification_remove_cb, cbinfo);
+  }
+}
+
+static void remove_notification(VosPanel *self, guint32 id)
+{
+  g_message("REMOVE NOTIF #%i", id);
+  
+  // NotificationInfo *info = g_hash_table_lookup(self->Notifications, GUINT_TO_POINTER(id));
+  g_hash_table_remove(self->Notifications, GUINT_TO_POINTER(id));
 }
