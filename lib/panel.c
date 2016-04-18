@@ -74,6 +74,7 @@ static void update_position(VosPanel *self);
 static void on_monitors_changed(GdkScreen *screen, VosPanel *self);
 static gboolean on_panel_clicked(VosPanel *self, GdkEventButton *event);
 static void on_context_menu_item_activate(VosPanel *self, GtkMenuItem *menuitem);
+static void update_notification_windows(VosPanel *self);
 
 // Initializes the panel (declared by G_DEFINE_TYPE; called through vos_panel_new())
 static void vos_panel_init(VosPanel *self)
@@ -268,6 +269,7 @@ static void update_position(VosPanel *self)
 static void on_monitors_changed(GdkScreen *screen, VosPanel *self)
 {
   update_position(self);
+  update_notification_windows(self);
 }
 
 static gboolean on_panel_clicked(VosPanel *self, GdkEventButton *event)
@@ -545,6 +547,9 @@ static void on_extension_removed(PeasExtensionSet *set, PeasPluginInfo *info, Vo
 #define NOTIFICATION_URGENCY_LOW 0
 #define NOTIFICATION_URGENCY_NORMAL 1
 #define NOTIFICATION_URGENCY_CRITICAL 2
+#define NOTIFICATION_SPACING 20 // pixels
+#define NOTIFICATION_WIDTH 320
+#define NOTIFICATION_HEIGHT 60
 
 static const gchar *NotificationServerInterfaceXML =
 "<node>"
@@ -592,10 +597,15 @@ typedef struct {
   const gchar *category;
   gint timeout;
   gint urgency;
+  // Do not set these when creating a notification
+  guint timeoutSourceTag;
+  GtkWindow *window; // do not set before calling show_notification
+  VosPanel *panel; // owner; used for signal handling
 } NotificationInfo;
 
 static void notification_info_free(NotificationInfo *info)
 {
+  gtk_widget_destroy(GTK_WIDGET(info->window));
   g_free(info->appName);
   g_free(info->icon);
   g_free(info->summary);
@@ -611,6 +621,7 @@ static void on_notification_server_method_called(GDBusConnection *connection, co
               GDBusMethodInvocation *invocation, gpointer *user_data);
 static void show_notification(VosPanel *self, NotificationInfo *info);
 static void remove_notification(VosPanel *self, guint32 id);
+static gboolean on_notification_clicked(GtkWindow *window, GdkEventButton *event, NotificationInfo *notificationInfo);
 
 static void init_notifications(VosPanel *self)
 {
@@ -682,15 +693,9 @@ static void on_notification_server_method_called(GDBusConnection *connection, co
   }
 }
 
-typedef struct {
-  VosPanel *panel;
-  guint32 id;
-} ShowNotificationRemoveCbInfo;
-
-static gboolean show_notification_remove_cb(ShowNotificationRemoveCbInfo *cbinfo)
+static gboolean show_notification_remove_cb(NotificationInfo *info)
 {
-  remove_notification(cbinfo->panel, cbinfo->id);
-  g_free(cbinfo);
+  remove_notification(info->panel, info->id);
   return FALSE; // Don't call again
 }
 
@@ -718,26 +723,96 @@ static void show_notification(VosPanel *self, NotificationInfo *info)
     info->id = self->NextNotificationID++;
   }
   
-  g_hash_table_insert(self->Notifications, GUINT_TO_POINTER(info->id), info);
-  
-  g_message("NOTIFICATION #%i: %s", info->id, info->summary);
-  
   if(info->timeout < 0)
     info->timeout = NOTIFICATION_DEFAULT_SHOW_TIME; // milliseconds
   
-  if(info->timeout > 0)
+  info->panel = self;
+  
+  // Create popup window
   {
-    ShowNotificationRemoveCbInfo *cbinfo = g_new(ShowNotificationRemoveCbInfo, 1);
-    cbinfo->panel = self;
-    cbinfo->id = info->id;
-    g_timeout_add(info->timeout, show_notification_remove_cb, cbinfo);
+    info->window = GTK_WINDOW(gtk_window_new(GTK_WINDOW_POPUP));
+    GtkStyleContext *style = gtk_widget_get_style_context(GTK_WIDGET(info->window));
+    gtk_style_context_add_class(style, "notification");
+    
+    g_signal_connect(info->window, "button_press_event", on_notification_clicked, info);
+    
+    GtkBox *hBox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0));
+    gtk_box_set_homogeneous(hBox, FALSE);
+
+    GtkImage *icon = GTK_IMAGE(gtk_image_new_from_icon_name(info->icon, GTK_ICON_SIZE_DIALOG));
+    gtk_box_pack_start(hBox, GTK_WIDGET(icon), FALSE, FALSE, 5);
+    
+    GtkBox *vBox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
+    gtk_box_set_homogeneous(vBox, FALSE);
+    gtk_box_pack_start(hBox, GTK_WIDGET(vBox), TRUE, TRUE, 5);
+    
+    GtkLabel *summaryLabel = GTK_LABEL(gtk_label_new(NULL));
+    gtk_label_set_markup(summaryLabel, info->summary);
+    gtk_widget_set_halign(GTK_WIDGET(summaryLabel), GTK_ALIGN_START);
+    gtk_label_set_ellipsize(summaryLabel, PANGO_ELLIPSIZE_END);
+    gtk_box_pack_start(vBox, GTK_WIDGET(summaryLabel), TRUE, TRUE, 0);
+    
+    GtkLabel *bodyLabel = GTK_LABEL(gtk_label_new(NULL));
+    const gchar *bodyMarkup = g_strdup_printf("<span size='smaller'>%s</span>", info->body);
+    gtk_label_set_markup(bodyLabel, bodyMarkup);
+    g_free(bodyMarkup);
+    gtk_widget_set_halign(GTK_WIDGET(bodyLabel), GTK_ALIGN_START);
+    gtk_label_set_ellipsize(bodyLabel, PANGO_ELLIPSIZE_END);
+    gtk_box_pack_start(vBox, GTK_WIDGET(bodyLabel), TRUE, TRUE, 0);
+    
+    gtk_window_resize(info->window, NOTIFICATION_WIDTH, NOTIFICATION_HEIGHT);
+
+    gtk_container_add(GTK_CONTAINER(info->window), GTK_WIDGET(hBox));
+    gtk_widget_show_all(GTK_WIDGET(info->window));
   }
+
+  // Add to table
+  g_hash_table_insert(self->Notifications, GUINT_TO_POINTER(info->id), info);
+  
+  info->timeoutSourceTag = 0;
+  if(info->timeout > 0 && info->urgency != NOTIFICATION_URGENCY_CRITICAL)
+    info->timeoutSourceTag = g_timeout_add(info->timeout, show_notification_remove_cb, info);
+      
+  update_notification_windows(self);
 }
 
 static void remove_notification(VosPanel *self, guint32 id)
 {
-  g_message("REMOVE NOTIF #%i", id);
+  NotificationInfo *info = g_hash_table_lookup(self->Notifications, GUINT_TO_POINTER(id));
+  if(info && info->timeoutSourceTag > 0)
+    g_source_remove(info->timeoutSourceTag);
   
-  // NotificationInfo *info = g_hash_table_lookup(self->Notifications, GUINT_TO_POINTER(id));
-  g_hash_table_remove(self->Notifications, GUINT_TO_POINTER(id));
+  g_hash_table_remove(self->Notifications, GUINT_TO_POINTER(id)); // Destroys the window
+  update_notification_windows(self);
+}
+
+static gint notification_compare_func(const NotificationInfo *a, const NotificationInfo *b)
+{
+  // TODO: Sort "critical" notifications to the top
+  return (a->id < b->id)?1:-1; // Sort newest to the top
+}
+
+static void update_notification_windows(VosPanel *self)
+{
+  GList *notificationList = g_hash_table_get_values(self->Notifications); // NotificationInfo* list
+  notificationList = g_list_sort(notificationList, notification_compare_func);
+  
+  guint i=0;
+  for(GList *notification=notificationList; notification; notification=notification->next)
+  {
+    NotificationInfo *n = notification->data;
+    // TODO: Make sure it shows on the monitor the Panel is on
+    gtk_window_move(n->window, NOTIFICATION_SPACING, NOTIFICATION_SPACING + i*(NOTIFICATION_HEIGHT + NOTIFICATION_SPACING));
+    ++i;
+  }
+}
+
+static gboolean on_notification_clicked(GtkWindow *window, GdkEventButton *event, NotificationInfo *notificationInfo)
+{
+  if(event->type == GDK_BUTTON_PRESS && event->button == GDK_BUTTON_PRIMARY)
+  {
+    remove_notification(notificationInfo->panel, notificationInfo->id);
+    return GDK_EVENT_STOP;
+  }
+  return GDK_EVENT_PROPAGATE;
 }
