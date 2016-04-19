@@ -23,6 +23,7 @@ from gi.repository import GLib, GObject, Gio, Gtk, Gdk, GdkPixbuf, Vos, Accounts
 import threading, time, subprocess
 from battery import VosBatteryIcon, VosBatteryInfo
 from volume import VosVolumeIcon, VosVolumeSlider
+from network import VosNetworkIcon
 import users
 
 class VosSettingsExtension(GObject.Object, Vos.AppletExtension):
@@ -45,7 +46,7 @@ class VosSettingsApplet(Gtk.Button):
         self.box.set_homogeneous(True)
         self.box.set_orientation(Gtk.Orientation.HORIZONTAL)
         self.box.pack_end(VosBatteryIcon(), False, False, 0)
-        # self.box.pack_end(Gtk.Image.new_from_icon_name("network-wireless-symbolic", Gtk.IconSize.MENU), False, False, 0)
+        self.box.pack_end(VosNetworkIcon(), False, False, 0)
         self.box.pack_end(VosVolumeIcon(), False, False, 0)
         self.box.pack_end(Gtk.Image.new_from_icon_name("avatar-default-symbolic", Gtk.IconSize.MENU), False, False, 0)
         
