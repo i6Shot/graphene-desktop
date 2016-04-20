@@ -324,7 +324,7 @@ static gboolean process_launch_delay_cb(gpointer userdata)
 {
   if(!userdata)
   {
-    g_application_hold(g_application_get_default());
+    g_application_release(g_application_get_default());
     return FALSE;
   }
   
