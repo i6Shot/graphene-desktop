@@ -106,28 +106,6 @@ static void vos_wm_dispose(GObject *gobject)
 
 static void start(MetaPlugin *plugin)
 {
-  MetaScreen *screen = meta_plugin_get_screen(plugin);
-  ClutterActor *screenGroup = meta_get_window_group_for_screen(screen);
-  ClutterActor *stage = meta_get_stage_for_screen(screen);
-  
-  ClutterActor *backgroundGroup = meta_background_group_new();
-  VOS_WM(plugin)->BackgroundGroup = META_BACKGROUND_GROUP(backgroundGroup);
-  clutter_actor_set_reactive(backgroundGroup, TRUE);
-  clutter_actor_insert_child_below(screenGroup, backgroundGroup, NULL);
-  
-  g_signal_connect(screen, "monitors_changed", G_CALLBACK(on_monitors_changed), plugin);
-  on_monitors_changed(screen, plugin);
-  
-  clutter_actor_show(backgroundGroup);
-  clutter_actor_show(screenGroup);
-  clutter_actor_show(stage);
-  
-  // meta_keybindings_set_custom_handler("panel-main-menu", launch_rundialog);
-  // meta_keybindings_set_custom_handler("switch-windows", switch_windows);
-  // meta_keybindings_set_custom_handler("switch-applications", switch_windows);
-  
-  
-  
   /*
   The shadow factory has a bug which causes new shadow classes to not only not be created, but also
   corrupt the "normal" class. The only way I was able to fix this is by directly modifying the factory's hash
@@ -149,6 +127,28 @@ static void start(MetaPlugin *plugin)
   info->focused = dockShadow;
   info->unfocused = dockShadow;
   g_hash_table_insert(factory->shadow_classes, "dock", info);
+  
+  
+  MetaScreen *screen = meta_plugin_get_screen(plugin);
+  ClutterActor *screenGroup = meta_get_window_group_for_screen(screen);
+  ClutterActor *stage = meta_get_stage_for_screen(screen);
+  
+  ClutterActor *backgroundGroup = meta_background_group_new();
+  VOS_WM(plugin)->BackgroundGroup = META_BACKGROUND_GROUP(backgroundGroup);
+  clutter_actor_set_reactive(backgroundGroup, TRUE);
+  clutter_actor_insert_child_below(screenGroup, backgroundGroup, NULL);
+  
+  g_signal_connect(screen, "monitors_changed", G_CALLBACK(on_monitors_changed), plugin);
+  on_monitors_changed(screen, plugin);
+  
+  clutter_actor_show(backgroundGroup);
+  clutter_actor_show(screenGroup);
+  clutter_actor_show(stage);
+  
+  // meta_keybindings_set_custom_handler("panel-main-menu", launch_rundialog);
+  // meta_keybindings_set_custom_handler("switch-windows", switch_windows);
+  // meta_keybindings_set_custom_handler("switch-applications", switch_windows);
+
 }
 
 // static void launch_rundialog(MetaDisplay *display, MetaScreen *screen,
