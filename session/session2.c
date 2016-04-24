@@ -29,6 +29,8 @@
 #define INHIBITOR_OBJECT_PATH "/org/gnome/SessionManager/Inhibitor"
 #define CLIENT_OBJECT_PATH "/org/gnome/SessionManager/Client"
 #define SHOW_ALL_OUTPUT TRUE // Set to TRUE for release; FALSE only shows output from .desktop files with 'Graphene-ShowOutput=true'
+#define MAX_RESTARTS 5
+#define DEBUG FALSE
 
 typedef struct
 {
@@ -82,19 +84,15 @@ static void remove_client(Client *client);
 static gchar * register_client(const gchar *sender, const gchar *appId, const gchar *startupId);
 static void unregister_client(const gchar *clientObjectPath);
 static void on_client_vanished(GDBusConnection *connection, const gchar *name, Client *client);
+static void on_client_exit(Client *client, gint status);
 static Client * find_client_by_object_path(const gchar *clientObjectPath);
 static GHashTable * list_autostarts();
 static void launch_autostart_phase(const gchar *phase, GHashTable *autostarts);
-static void launch_process(const gchar *args, gboolean autoRestart, guint restartCount, guint delay, gboolean silent);
+static void launch_process(Client *client, const gchar *args, gboolean autoRestart, guint restartCount, guint delay, gboolean silent);
 static void on_process_exit(GPid pid, gint status, Client *client);
-static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender,
-              const gchar           *objectPath,
-              const gchar           *interfaceName,
-              const gchar           *methodName,
-              GVariant              *parameters,
-              GDBusMethodInvocation *invocation,
-              gpointer              *userdata);
+static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender, const gchar *objectPath, const gchar *interfaceName, const gchar *methodName, GVariant *parameters, GDBusMethodInvocation *invocation, gpointer *userdata);
 static gchar ** strv_append(const gchar * const *list, const gchar *str);
+static gchar * str_trim(const gchar *str);
 
 static const gchar *SessionManagerInterfaceXML;
 static const gchar *ClientInterfaceXML;
@@ -115,7 +113,9 @@ int main(int argc, char **argv)
     return 1;
   }
 
+#if DEBUG
   g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
+#endif
 
   // Start app
   GtkApplication *app = gtk_application_new(SESSION_MANAGER_APP_ID, G_APPLICATION_FLAGS_NONE);
@@ -191,7 +191,6 @@ static gchar * generate_client_id()
  */
 static Client * add_client(const gchar *startupId, gboolean *existed)
 {
-  g_debug("Adding client with startupId '%s'", startupId);
   Client *client = NULL;
   if(startupId)
     client = (Client *)g_hash_table_lookup(self->Clients, startupId);
@@ -214,6 +213,8 @@ static Client * add_client(const gchar *startupId, gboolean *existed)
     
     g_application_hold(self->app);
   }
+  
+  g_debug("Added client with startupId '%s'", client->id);
   return client;
 }
 
@@ -229,8 +230,6 @@ static void free_client(Client *c)
   if(c->childWatchId)
     g_source_remove(c->childWatchId);
   g_free(c->launchArgs);
-  g_free(c->appId);
-  g_free(c->objectPath);
   g_free(c);
   g_application_release(self->app);
 }
@@ -292,6 +291,15 @@ static gchar * register_client(const gchar *sender, const gchar *appId, const gc
     else
     {
       g_variant_get(vpid, "(u)", &client->processId);
+      
+      gchar *processArgs = NULL;
+      g_spawn_command_line_sync(g_strdup_printf("ps --pid %i -o args=", client->processId), &processArgs, NULL, NULL, NULL);
+      if(processArgs)
+      {
+        client->launchArgs = str_trim(processArgs);
+        g_debug("Got registered process args: '%s'", client->launchArgs);
+        g_free(processArgs);
+      }
     }
   }
 
@@ -337,8 +345,59 @@ static void unregister_client(const gchar *clientObjectPath)
  */ 
 static void on_client_vanished(GDBusConnection *connection, const gchar *name, Client *client)
 {
+  if(!client)
+    return;
   g_debug("client %s, %s vanished", name, client->appId);
-  remove_client(client);
+  // If the client successfully unregistered itself, then on_client_vanished wouldn't be called.
+  // So this is almost certainly an EXIT_FAILURE (1).
+  on_client_exit(client, 1);
+}
+
+/*
+ * Called when an autostarted client process exits, or when a client's DBus connection vanishes.
+ * Should auto-restart the client if necessary, or completely abort the session in some severe cases.
+ */
+static void on_client_exit(Client *client, gint status)
+{
+  if(!client)
+    return;
+  
+  g_debug("should restart? %i, %i", client->autoRestart, status);
+
+  // Restart it
+  if(client->autoRestart && client->launchArgs && status != 0)
+  {
+    // Make sure on_client_exit can't be called twice (once from dbus, once from child watch)
+    unregister_client(client->objectPath); // Also need to unregister the client anyways
+    if(client->childWatchId)
+      g_source_remove(client->childWatchId);
+    client->childWatchId = 0;
+    
+    g_debug("restarting client with args %s", client->launchArgs);
+    gboolean isPanel = g_str_has_prefix(client->launchArgs, "/usr/share/graphene/graphene-panel");
+    if(isPanel && WEXITSTATUS(status) == 120)
+    {
+      launch_process(client, client->launchArgs, TRUE, 0, 0, client->silent);
+    }
+    else if(client->restartCount < MAX_RESTARTS)
+    {
+      launch_process(client, client->launchArgs, TRUE, client->restartCount+1, 0, client->silent);
+    }
+    else if(isPanel)
+    {
+      g_critical("The system panel has crashed too many times! Exiting session...");
+      quit();
+    }
+    else
+    {
+      g_critical("The application with args '%s' has crashed too many times, and will not be automatically restarted.", client->launchArgs);
+    }
+  }
+  else
+  {
+    // If it shouldn't be auto-restarted, then completely remove the client
+    remove_client(client);
+  }
 }
 
 static Client * find_client_by_object_path(const gchar *clientObjectPath)
@@ -469,7 +528,7 @@ static void launch_autostart_phase(const gchar *phase, GHashTable *autostarts)
       if(SHOW_ALL_OUTPUT)
         showOutput = TRUE;
         
-      launch_process(commandline, autoRestart, 0, (guint)delay, !showOutput);
+      launch_process(NULL, commandline, autoRestart, 0, (guint)delay, !showOutput);
       g_hash_table_iter_remove(&iter);
     }
     
@@ -485,12 +544,17 @@ static gboolean process_launch_delay_cb(Client *client);
  * If <autostart> is true, the process will restart automatically if it exits with a non-zero exit status.
  * <delay> number of seconds to wait before starting
  */
-static void launch_process(const gchar *args, gboolean autoRestart, guint restartCount, guint delay, gboolean silent)
+static void launch_process(Client *client, const gchar *args, gboolean autoRestart, guint restartCount, guint delay, gboolean silent)
 {
-  Client *client = add_client(NULL, NULL);
-  client->launchArgs = g_strdup(args);
+  if(!client)
+    client = add_client(NULL, NULL); // This assignes the new process a startupId so that it can correctly register itself later
+  if(client->launchArgs != args)
+  {
+    g_free(client->launchArgs);
+    client->launchArgs = g_strdup(args);
+  }
   client->autoRestart = autoRestart;
-  client->restartCount = 0;
+  client->restartCount = restartCount;
   client->silent = silent;
   
   if(delay > 0)
@@ -514,11 +578,20 @@ static gboolean process_launch_delay_cb(Client *client)
   GPid pid = 0;
   GError *e = NULL;
   
+  #if DEBUG
+    g_unsetenv("G_MESSAGES_DEBUG"); // Don't let the child process get the DEBUG setting
+  #endif
+  
+  // TODO: Use g_shell_parse_argv
   gchar **argsSplit = g_strsplit(client->launchArgs, " ", -1);
   gchar *startupIdVar = g_strdup_printf("DESKTOP_AUTOSTART_ID=%s", client->id);
   gchar **env = strv_append(g_get_environ(), startupIdVar);
   
   g_spawn_async(NULL, argsSplit, env, flags, NULL, NULL, &pid, &e);
+  
+  #if DEBUG
+    g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
+  #endif
   
   g_strfreev(env);
   g_free(startupIdVar);
@@ -544,11 +617,12 @@ static gboolean process_launch_delay_cb(Client *client)
  */
 static void on_process_exit(GPid pid, gint status, Client *client)
 {
+  g_spawn_close_pid(pid);
+
   if(!client)
     return;
-  
-  g_debug("process exit %s, %s", client->id, client->launchArgs);
-  remove_client(client);
+  g_debug("process exit %s, %s, %i", client->id, client->launchArgs, status);
+  on_client_exit(client, status);
 }
 
 
@@ -561,7 +635,7 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
               GDBusMethodInvocation *invocation,
               gpointer              *userdata)
 {
-  g_message("method call: %s, %s.%s", sender, interfaceName, methodName);
+  g_debug("dbus method call: %s, %s.%s", sender, interfaceName, methodName);
   if(g_strcmp0(interfaceName, "org.gnome.SessionManager") == 0)
   {
     if(g_strcmp0(methodName, "RegisterClient") == 0)
@@ -604,7 +678,7 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
     else if(g_strcmp0(methodName, "GetRestartStyleHint") == 0) {
       // 0=never, 1=if-running, 2=anyway, 3=immediately
       // Not sure what 1 or 2 mean, but we'll go with 0 and 3 always (TODO: for now)
-      g_dbus_method_invocation_return_value(invocation, g_variant_new("(u)", 0));
+      g_dbus_method_invocation_return_value(invocation, g_variant_new("(u)", (guint32)client->autoRestart));
       return;
     }
     else if(g_strcmp0(methodName, "GetUnixProcessId") == 0) {
@@ -741,4 +815,33 @@ static gchar ** strv_append(const gchar * const *list, const gchar *str)
   newList[listLength + ((str==NULL)?0:1)] = NULL;
   
   return newList;
+}
+
+/*
+ * Removes trailing and leading whitespace from a string.
+ * Returns a newly allocated string. Parameter is unmodified.
+ */
+static gchar * str_trim(const gchar *str)
+{
+  if(!str)
+    return NULL;
+    
+  guint32 len=0;
+  for(;str[len]!=NULL;++len);
+  
+  guint32 start=0;
+  for(;str[start]!=NULL;++start)
+    if(!g_ascii_isspace(str[start]))
+      break;
+      
+  guint32 end=len;
+  for(;end>start;--end)
+    if(!g_ascii_isspace(str[end-1]))
+      break;
+      
+  gchar *newstr = g_new(gchar, end-start+1);
+  for(guint32 i=0;(start+i)<end;++i)
+    newstr[i] = str[start+i];
+  newstr[end-start]=NULL;
+  return newstr;
 }
