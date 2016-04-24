@@ -28,6 +28,7 @@
 #define SESSION_MANAGER_APP_ID "org.gnome.SessionManager"
 #define INHIBITOR_OBJECT_PATH "/org/gnome/SessionManager/Inhibitor"
 #define CLIENT_OBJECT_PATH "/org/gnome/SessionManager/Client"
+#define SHOW_ALL_OUTPUT FALSE // Set to TRUE for release; FALSE only shows output from .desktop files with 'Graphene-ShowOutput=true'
 
 typedef struct
 {
@@ -66,8 +67,13 @@ typedef struct
 
 static void activate(GtkApplication *app, gpointer userdata);
 static void shutdown(GtkApplication *application, gpointer userdata);
+static Client * add_client(const gchar *startupId, gboolean *existed);
 static void remove_client(Client *c);
-
+static gchar * register_client(const gchar *appId, const gchar *startupId);
+static void unregister_client(const gchar *clientObjectPath);
+static Client * find_client_by_object_path(const gchar *clientObjectPath);
+static GHashTable * list_autostarts();
+static void launch_autostart_phase(const gchar *phase, GHashTable *autostarts);
 static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender,
               const gchar           *objectPath,
               const gchar           *interfaceName,
@@ -75,6 +81,7 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
               GVariant              *parameters,
               GDBusMethodInvocation *invocation,
               gpointer              *userdata);
+static gchar ** strv_append(const gchar * const *list, const gchar *str);
 
 static const gchar *SessionManagerInterfaceXML;
 static const gchar *ClientInterfaceXML;
@@ -123,10 +130,15 @@ static void activate(GtkApplication *app, gpointer userdata)
   static const GDBusInterfaceVTable interfaceCallbacks = {on_dbus_method_call, NULL, NULL};
   self->InterfaceRegistrationId = g_dbus_connection_register_object(connection, objectPath, interfaceInfo->interfaces[0], &interfaceCallbacks, NULL, NULL, NULL);
   
-  // 
-  
-  // TEMP
-  g_application_hold(self->app);
+  // Run autostarts by phase
+  // https://wiki.gnome.org/Projects/SessionManagement/NewGnomeSession
+  GHashTable *autostarts = list_autostarts();
+  launch_autostart_phase("Initialization", autostarts);// Important GNOME stuff
+  launch_autostart_phase("WindowManager", autostarts); // This starts graphene-wm
+  launch_autostart_phase("Panel", autostarts);         // This starts graphene-panel
+  launch_autostart_phase("Desktop", autostarts);       // This starts nautilus
+  launch_autostart_phase("Applications", autostarts);  // Everything else
+  g_hash_table_unref(autostarts);
 }
 
 static void shutdown(GtkApplication *application, gpointer userdata)
@@ -139,11 +151,7 @@ static void quit()
   
 }
 
-/* 
- *
- * CLIENT MANAGEMENT
- * 
- */
+
 
 static gchar * generate_client_id()
 {
@@ -268,8 +276,8 @@ static void unregister_client(const gchar *clientObjectPath)
   client->objectRegistrationId = 0;
   client->privateObjectRegistrationId = 0;
   
-  g_clear_pointer(client->objectPath, g_free);
-  g_clear_pointer(client->appId, g_free);
+  g_clear_pointer(&client->objectPath, g_free);
+  g_clear_pointer(&client->appId, g_free);
 }
 
 static Client * find_client_by_object_path(const gchar *clientObjectPath)
@@ -290,6 +298,130 @@ static Client * find_client_by_object_path(const gchar *clientObjectPath)
 
 
 
+/*
+ * Gets a GHashTable of name->GDesktopAppInfo* containing all autostart .desktop files
+ * in all system/user config directories. Also includes Graphene-specific .desktop files.
+ *
+ * Does not include any .desktop files with the Hidden attribute set to true, or
+ * any that have the OnlyShowIn attribute set to something other than "Graphene" or "GNOME".
+ *
+ * Free the returned GHashTable by calling g_hash_table_unref() on the table itself.
+ * All keys and values are automatically destroyed.
+ */
+static GHashTable * list_autostarts() 
+{
+  GHashTable *desktopInfoTable = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_object_unref);
+  
+  gchar **configDirsSys = strv_append(g_get_system_config_dirs(), VDE_DATA_DIR);
+  gchar **configDirs = strv_append((const gchar * const *)configDirsSys, g_get_user_config_dir()); // Important that the user config dir comes last (for overwriting)
+  g_strfreev(configDirsSys);
+
+  guint numConfigDirs = g_strv_length(configDirs);
+  for(guint i=0;i<numConfigDirs;++i)
+  {
+    gchar *searchPath = g_strconcat(configDirs[i], "/autostart", NULL);
+    GFile *dir = g_file_new_for_path(searchPath);
+    
+    GFileEnumerator *iter = g_file_enumerate_children(dir, "standard::*", G_FILE_QUERY_INFO_NONE, NULL, NULL);
+    if(!iter)
+    {
+      g_warning("Failed to search the directory '%s' for .desktop files.", searchPath);
+      continue;
+    }
+    
+    GFileInfo *info = NULL;
+    while(g_file_enumerator_iterate(iter, &info, NULL, NULL, NULL) && info != NULL)
+    {
+      const gchar *_name = g_file_info_get_name(info);
+      if(!g_str_has_suffix(_name, ".desktop"))
+        continue;
+        
+      // TODO: Don't want caribou on right now. Not sure how to stop it without just getting rid of the .desktop file.
+      if(g_strcmp0(_name, "caribou-autostart.desktop") == 0)
+        continue;
+      
+      gchar *name = g_strdup(_name); // Not sure if g_file_info_get_name's return value is new memory or belongs to the object. This might be a memory leak.
+      
+      gchar *desktopInfoPath = g_strconcat(searchPath, "/", name, NULL);
+      GDesktopAppInfo *desktopInfo = g_desktop_app_info_new_from_filename(desktopInfoPath);
+      
+      if(desktopInfo)
+      {
+        // "Hidden should have been called Deleted. ... It's strictly equivalent to the .desktop file not existing at all."
+        // https://specifications.freedesktop.org/desktop-entry-spec/latest/ar01s05.html
+        gboolean deleted = g_desktop_app_info_get_is_hidden(desktopInfo);
+        gboolean shouldShow = g_desktop_app_info_get_show_in(desktopInfo, "GNOME")
+                              || g_desktop_app_info_get_show_in(desktopInfo, "Graphene");
+                              
+        if(deleted || !shouldShow) // Hidden .desktops should be completely ignored
+        {
+          g_message("Skipping '%s' because it is hidden or not available for Graphene.", name);
+          g_object_unref(desktopInfo);
+          g_hash_table_remove(desktopInfoTable, name); // Overwrite previous entries of the same name
+        }
+        else
+        {
+          g_hash_table_insert(desktopInfoTable, name, desktopInfo); // Overwrite previous entries of the same name
+        }
+      }
+      
+      g_free(desktopInfoPath);
+      
+      info = NULL; // Automatically freed
+    }
+    
+    g_object_unref(iter);
+    g_free(searchPath);
+  }
+  g_strfreev(configDirs);
+  return desktopInfoTable;
+}
+
+/*
+ * Launch a specific phase (all autostart .desktop files that have the X-GNOME-Autostart-Phase attribute equal to <phase>)
+ * Each launched .desktop is removedd from the autostart array.
+ * If <phase> is "Applications", ALL .desktop files are launched.
+ */
+static void launch_autostart_phase(const gchar *phase, GHashTable *autostarts)
+{
+  // TODO: Wait for phase to complete loading before returning / contining to the next phase
+  
+  GHashTableIter iter;
+  gpointer key, value;
+  
+  g_hash_table_iter_init(&iter, autostarts);
+  while(g_hash_table_iter_next(&iter, &key, &value))
+  {    
+    GDesktopAppInfo *desktopInfo = G_DESKTOP_APP_INFO(value);
+    
+    char *thisPhase = g_desktop_app_info_get_string(desktopInfo, "X-GNOME-Autostart-Phase");
+    if(g_strcmp0(phase, thisPhase) == 0 || g_strcmp0(phase, "Applications") == 0)
+    {
+      const gchar *commandline = g_app_info_get_commandline(G_APP_INFO(desktopInfo));
+      gboolean autoRestart = g_desktop_app_info_get_boolean(desktopInfo, "X-GNOME-AutoRestart");
+      const gchar *delayString = g_desktop_app_info_get_string(desktopInfo, "X-GNOME-Autostart-Delay");
+      gint64 delay = 0;
+      if(delayString)
+        delay = g_ascii_strtoll(delayString, NULL, 0);
+      
+      gboolean showOutput = g_desktop_app_info_get_boolean(desktopInfo, "Graphene-ShowOutput"); // For debugging, ignore output from unwanted programs
+      if(SHOW_ALL_OUTPUT)
+        showOutput = TRUE;
+        
+      g_message("launch process %s, %i, %i, %i, %i", commandline, autoRestart, 0, (guint)delay, !showOutput);
+      g_hash_table_iter_remove(&iter);
+    }
+    
+    g_free(thisPhase);
+  }
+}
+
+
+
+
+
+
+
 static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender,
               const gchar           *objectPath,
               const gchar           *interfaceName,
@@ -307,7 +439,7 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
       g_variant_get(parameters, "(ss)", &appId, &startupId);
       gchar *clientObjectPath = register_client(appId, startupId);
       g_free(appId);
-      g_free(startupid);
+      g_free(startupId);
       g_dbus_method_invocation_return_value(invocation, g_variant_new("(o)", clientObjectPath));
       return;
     }
@@ -446,3 +578,35 @@ static const gchar *ClientInterfaceXML =
 "    <signal name='CancelEndSession'> <arg type='u' name='flags'/> </signal>"
 "  </interface>"
 "</node>";
+
+
+/*
+ * Takes a list of strings and a string to append.
+ * If <list> is NULL, a new list of strings is returned containing only <str>.
+ * If <str> is NULL, a duplicated <list> is returned.
+ * If both are NULL, a new, empty list of strings is returned.
+ * The returned list is NULL-terminated (even if both parameters are NULL).
+ * The returned list should be freed with g_strfreev().
+ */
+static gchar ** strv_append(const gchar * const *list, const gchar *str)
+{
+  guint listLength = 0;
+  
+  if(list != NULL)
+  {
+    while(list[listLength])
+      ++listLength;
+  }
+  
+  gchar **newList = g_new(gchar*, listLength + ((str==NULL)?0:1) + 1); // +1 for new str, +1 for ending NULL
+  
+  for(guint i=0;i<listLength;++i)
+    newList[i] = g_strdup(list[i]);
+    
+  if(str != NULL)
+    newList[listLength] = g_strdup(str);
+    
+  newList[listLength + ((str==NULL)?0:1)] = NULL;
+  
+  return newList;
+}
