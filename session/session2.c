@@ -28,7 +28,7 @@
 #define SESSION_MANAGER_APP_ID "org.gnome.SessionManager"
 #define INHIBITOR_OBJECT_PATH "/org/gnome/SessionManager/Inhibitor"
 #define CLIENT_OBJECT_PATH "/org/gnome/SessionManager/Client"
-#define SHOW_ALL_OUTPUT FALSE // Set to TRUE for release; FALSE only shows output from .desktop files with 'Graphene-ShowOutput=true'
+#define SHOW_ALL_OUTPUT TRUE // Set to TRUE for release; FALSE only shows output from .desktop files with 'Graphene-ShowOutput=true'
 
 typedef struct
 {
@@ -37,12 +37,21 @@ typedef struct
   // client once it's been registered.
   gchar *id;
   
-  // Registration info
+  // Registration info (all of this is only set once the client registers itself)
   gboolean registered; // Set to true if the client reigsters itself via the DBus interface.
   gchar *objectPath; // Convenience: CLIENT_OBJECT_PATH + id
-  guint objectRegistrationId; 
+  guint objectRegistrationId;
   guint privateObjectRegistrationId;
+  guint busWatchId;
   gchar *appId;
+  
+  // Program info
+  const gchar *launchArgs; // Only set if the SM spawned this process
+  GPid processId; // Can be set once the process has spawned if SM-launched, or once the client registers itself
+  guint childWatchId;
+  gboolean autoRestart;
+  guint restartCount; // Number of times the process has crashed and been restarted
+  gboolean silent; // If true, redirects stdout and stderr to dev/null
   
 } Client;
 
@@ -68,12 +77,16 @@ typedef struct
 static void activate(GtkApplication *app, gpointer userdata);
 static void shutdown(GtkApplication *application, gpointer userdata);
 static Client * add_client(const gchar *startupId, gboolean *existed);
-static void remove_client(Client *c);
-static gchar * register_client(const gchar *appId, const gchar *startupId);
+static void free_client(Client *client);
+static void remove_client(Client *client);
+static gchar * register_client(const gchar *sender, const gchar *appId, const gchar *startupId);
 static void unregister_client(const gchar *clientObjectPath);
+static void on_client_vanished(GDBusConnection *connection, const gchar *name, Client *client);
 static Client * find_client_by_object_path(const gchar *clientObjectPath);
 static GHashTable * list_autostarts();
 static void launch_autostart_phase(const gchar *phase, GHashTable *autostarts);
+static void launch_process(const gchar *args, gboolean autoRestart, guint restartCount, guint delay, gboolean silent);
+static void on_process_exit(GPid pid, gint status, Client *client);
 static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender,
               const gchar           *objectPath,
               const gchar           *interfaceName,
@@ -102,7 +115,7 @@ int main(int argc, char **argv)
     return 1;
   }
 
-  // g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
+  g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
 
   // Start app
   GtkApplication *app = gtk_application_new(SESSION_MANAGER_APP_ID, G_APPLICATION_FLAGS_NONE);
@@ -118,7 +131,7 @@ static void activate(GtkApplication *app, gpointer userdata)
   ClientInterfaceInfo = g_dbus_node_info_new_for_xml(ClientInterfaceXML, NULL);
   
   self = g_new0(Session, 1);
-  self->Clients = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, remove_client);
+  self->Clients = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, free_client);
   self->app = app;
   
   // Register Session Banager DBus path 
@@ -139,6 +152,8 @@ static void activate(GtkApplication *app, gpointer userdata)
   launch_autostart_phase("Desktop", autostarts);       // This starts nautilus
   launch_autostart_phase("Applications", autostarts);  // Everything else
   g_hash_table_unref(autostarts);
+  
+  g_application_hold(app);
 }
 
 static void shutdown(GtkApplication *application, gpointer userdata)
@@ -177,7 +192,9 @@ static gchar * generate_client_id()
 static Client * add_client(const gchar *startupId, gboolean *existed)
 {
   g_debug("Adding client with startupId '%s'", startupId);
-  Client *client = (Client *)g_hash_table_lookup(self->Clients, startupId);
+  Client *client = NULL;
+  if(startupId)
+    client = (Client *)g_hash_table_lookup(self->Clients, startupId);
   
   if(existed)
     *existed = (client != NULL);
@@ -202,27 +219,36 @@ static Client * add_client(const gchar *startupId, gboolean *existed)
 
 /*
  * Automatically called by the self->Clients hashtable value destroy function.
- * This should not be called manually! Remove the client from the hastable instead.
+ * This should not be called manually! Use remove_client instead.
  */
-static void remove_client(Client *c)
+static void free_client(Client *c)
 {
   unregister_client(c->objectPath);
   
   // id freed by key destroy function
+  if(c->childWatchId)
+    g_source_remove(c->childWatchId);
+  g_free(c->launchArgs);
   g_free(c->appId);
   g_free(c->objectPath);
   g_free(c);
   g_application_release(self->app);
 }
 
+static void remove_client(Client *client)
+{
+  if(client)
+    g_hash_table_remove(self->Clients, client->id);
+}
+
 /*
  * Directly called from DBus org.gnome.SessionManager.RegisterClient.
  * Registers a client with the given startupId. If the client cannot be found, it is created using add_client.
  * Returns the client's object path. Do not free it yourself; freed when the client is destroyed.
+ * sender is the DBus name of the process that is asking to be registered.
  */
-static gchar * register_client(const gchar *appId, const gchar *startupId)
+static gchar * register_client(const gchar *sender, const gchar *appId, const gchar *startupId)
 {
-  g_debug("Registering client '%s'", appId);
   Client *client = add_client(startupId, NULL);
   
   if(!client)
@@ -240,7 +266,7 @@ static gchar * register_client(const gchar *appId, const gchar *startupId)
   if(error)
   {
     g_warning("Failed to register client '%s': %s", appId, error->message);
-    g_error_free(error);
+    g_clear_error(&error);
     return "";
   }
   
@@ -248,11 +274,32 @@ static gchar * register_client(const gchar *appId, const gchar *startupId)
   if(error)
   {
     g_warning("Failed to register client private '%s': %s", appId, error->message);
-    g_error_free(error);
+    g_clear_error(&error);
     return "";
   }
   
-  g_debug("Registered client at path '%s'", client->objectPath);
+  if(!client->processId && sender)
+  {
+    GVariant *vpid = g_dbus_connection_call_sync(connection,
+                       "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+                       "GetConnectionUnixProcessID", g_variant_new("(s)", sender), G_VARIANT_TYPE("(u)"),
+                       G_DBUS_CALL_FLAGS_NONE, -1, NULL, &error);
+    if(error)
+    {
+      g_warning("Failed to obtain process id of '%s': %s", appId, error->message);
+      g_clear_error(&error);
+    }
+    else
+    {
+      g_variant_get(vpid, "(u)", &client->processId);
+    }
+  }
+
+  client->busWatchId = g_bus_watch_name(G_BUS_TYPE_SESSION, sender, G_BUS_NAME_WATCHER_FLAGS_NONE, NULL, on_client_vanished, client, NULL);
+  if(!client->busWatchId)
+    g_warning("Failed to watch bus name of process '%s' (%s)", appId, sender);
+    
+  g_debug("Registered client '%s' at path '%s'", appId, client->objectPath);
   client->registered = TRUE;
   client->appId = g_strdup(appId);
   return client->objectPath;
@@ -261,6 +308,7 @@ static gchar * register_client(const gchar *appId, const gchar *startupId)
 /*
  * Directly called from DBus org.gnome.SessionManager.UnregisterClient.
  * Unregisters a client, but does not remove it from the Client hashtable.
+ * Note: Don't use client->id in here because unregister_client gets called from free_client
  */
 static void unregister_client(const gchar *clientObjectPath)
 {
@@ -270,6 +318,9 @@ static void unregister_client(const gchar *clientObjectPath)
   
   client->registered = FALSE;
   
+  g_bus_unwatch_name(client->busWatchId);
+  client->busWatchId = 0;
+  
   GDBusConnection *connection = g_application_get_dbus_connection(G_APPLICATION(self->app));
   g_dbus_connection_unregister_object(connection, client->objectRegistrationId);
   g_dbus_connection_unregister_object(connection, client->privateObjectRegistrationId);
@@ -278,6 +329,16 @@ static void unregister_client(const gchar *clientObjectPath)
   
   g_clear_pointer(&client->objectPath, g_free);
   g_clear_pointer(&client->appId, g_free);
+}
+
+/*
+ * Called when a registered client's DBus connection vanishes.
+ * This is effectively the same as the process exiting, and therefore the client should be removed.
+ */ 
+static void on_client_vanished(GDBusConnection *connection, const gchar *name, Client *client)
+{
+  g_debug("client %s, %s vanished", name, client->appId);
+  remove_client(client);
 }
 
 static Client * find_client_by_object_path(const gchar *clientObjectPath)
@@ -408,7 +469,7 @@ static void launch_autostart_phase(const gchar *phase, GHashTable *autostarts)
       if(SHOW_ALL_OUTPUT)
         showOutput = TRUE;
         
-      g_message("launch process %s, %i, %i, %i, %i", commandline, autoRestart, 0, (guint)delay, !showOutput);
+      launch_process(commandline, autoRestart, 0, (guint)delay, !showOutput);
       g_hash_table_iter_remove(&iter);
     }
     
@@ -416,9 +477,79 @@ static void launch_autostart_phase(const gchar *phase, GHashTable *autostarts)
   }
 }
 
+static gboolean process_launch_delay_cb(Client *client);
 
+/*
+ * Launches a process, and adds it as a client.
+ * <args> contains the entire command line.
+ * If <autostart> is true, the process will restart automatically if it exits with a non-zero exit status.
+ * <delay> number of seconds to wait before starting
+ */
+static void launch_process(const gchar *args, gboolean autoRestart, guint restartCount, guint delay, gboolean silent)
+{
+  Client *client = add_client(NULL, NULL);
+  client->launchArgs = g_strdup(args);
+  client->autoRestart = autoRestart;
+  client->restartCount = 0;
+  client->silent = silent;
+  
+  if(delay > 0)
+    g_timeout_add_seconds(delay, process_launch_delay_cb, client);
+  else
+    process_launch_delay_cb(client);
+}
 
+/*
+ * Called from launch_process(), and actually does the launching.
+ */
+static gboolean process_launch_delay_cb(Client *client)
+{
+  if(!client)
+    return;
+  
+  GSpawnFlags flags = G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD;
+  if(client->silent)
+    flags |= G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL;
+  
+  GPid pid = 0;
+  GError *e = NULL;
+  
+  gchar **argsSplit = g_strsplit(client->launchArgs, " ", -1);
+  gchar *startupIdVar = g_strdup_printf("DESKTOP_AUTOSTART_ID=%s", client->id);
+  gchar **env = strv_append(g_get_environ(), startupIdVar);
+  
+  g_spawn_async(NULL, argsSplit, env, flags, NULL, NULL, &pid, &e);
+  
+  g_strfreev(env);
+  g_free(startupIdVar);
+  g_strfreev(argsSplit);
+  
+  if(e)
+  {
+    g_critical("Failed to start process with args '%s' (%s)", client->launchArgs, e->message);
+    g_error_free(e);
+    return FALSE;
+  }
+  
+  client->processId = pid;
+  
+  if(client->processId)
+    client->childWatchId = g_child_watch_add(client->processId, on_process_exit, client);
+  
+  return FALSE; // Don't continue to call this callback
+}
 
+/*
+ * Called on process exit, removes the process as a client
+ */
+static void on_process_exit(GPid pid, gint status, Client *client)
+{
+  if(!client)
+    return;
+  
+  g_debug("process exit %s, %s", client->id, client->launchArgs);
+  remove_client(client);
+}
 
 
 
@@ -430,14 +561,14 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
               GDBusMethodInvocation *invocation,
               gpointer              *userdata)
 {
-  g_message("method call: %s.%s", interfaceName, methodName);
+  g_message("method call: %s, %s.%s", sender, interfaceName, methodName);
   if(g_strcmp0(interfaceName, "org.gnome.SessionManager") == 0)
   {
     if(g_strcmp0(methodName, "RegisterClient") == 0)
     {
       gchar *appId, *startupId;
       g_variant_get(parameters, "(ss)", &appId, &startupId);
-      gchar *clientObjectPath = register_client(appId, startupId);
+      gchar *clientObjectPath = register_client(sender, appId, startupId);
       g_free(appId);
       g_free(startupId);
       g_dbus_method_invocation_return_value(invocation, g_variant_new("(o)", clientObjectPath));
@@ -471,18 +602,19 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
       return;
     }
     else if(g_strcmp0(methodName, "GetRestartStyleHint") == 0) {
-      // TODO
+      // 0=never, 1=if-running, 2=anyway, 3=immediately
+      // Not sure what 1 or 2 mean, but we'll go with 0 and 3 always (TODO: for now)
       g_dbus_method_invocation_return_value(invocation, g_variant_new("(u)", 0));
       return;
     }
     else if(g_strcmp0(methodName, "GetUnixProcessId") == 0) {
-      // TODO
-      g_dbus_method_invocation_return_value(invocation, g_variant_new("(u)", 0));
+      g_dbus_method_invocation_return_value(invocation, g_variant_new("(u)", (guint32)client->processId));
       return;
     }
     else if(g_strcmp0(methodName, "GetStatus") == 0) {
-      // TODO
-      g_dbus_method_invocation_return_value(invocation, g_variant_new("(u)", 0));
+      // 0=unregistered, 1=registered, 2=finished, 3=failed
+      // TODO: status 2 & 3
+      g_dbus_method_invocation_return_value(invocation, g_variant_new("(u)", client->registered));
       return;
     }
   }
