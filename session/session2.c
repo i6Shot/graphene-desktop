@@ -30,11 +30,11 @@
 #define CLIENT_OBJECT_PATH "/org/gnome/SessionManager/Client"
 #define SHOW_ALL_OUTPUT TRUE // Set to TRUE for release; FALSE only shows output from .desktop files with 'Graphene-ShowOutput=true'
 #define MAX_RESTARTS 5
-#define DEBUG FALSE
+#define DEBUG TRUE
 
 typedef struct
 {
-  // Unique client ID. Given to new processes so that they can register themselves properly.
+  // Unique client ID. Given to new processes so that they can register themselves properly (startupId).
   // Appended to the end of CLIENT_OBJECT_PATH to make a DBus object path for this
   // client once it's been registered.
   gchar *id;
@@ -46,9 +46,10 @@ typedef struct
   guint privateObjectRegistrationId;
   guint busWatchId;
   gchar *appId;
+  gchar *dbusName; // The dbus name that the program registered from ("sender")
   
   // Program info
-  const gchar *launchArgs; // Only set if the SM spawned this process
+  gchar *launchArgs; // Only set if the SM spawned this process
   GPid processId; // Can be set once the process has spawned if SM-launched, or once the client registers itself
   guint childWatchId;
   gboolean autoRestart;
@@ -59,13 +60,16 @@ typedef struct
 
 typedef struct
 {
-  gchar *inhibitID;
+  // Appended to the end of INHIBITOR_OBJECT_PATH to make a DBus object path for this
+  guint32 id; // "cookie"
   
-  gchar *clientID;
+  Client *client;
   gchar *reason;
   guint flags;
   guint xid;
-  
+
+  guint objectRegistrationId;
+
 } Inhibitor;
 
 typedef struct
@@ -73,34 +77,42 @@ typedef struct
   GtkApplication *app;
   guint InterfaceRegistrationId;
   GHashTable *Clients;
-
+  GHashTable *Inhibitors;
+  guint32 InhibitCookieCounter;
+  
 } Session;
 
 static void activate(GtkApplication *app, gpointer userdata);
 static void shutdown(GtkApplication *application, gpointer userdata);
-static Client * add_client(const gchar *startupId, gboolean *existed);
+static Client * add_client(const gchar *id, const gchar *appId, const gchar *dbusName);
 static void free_client(Client *client);
 static void remove_client(Client *client);
 static gchar * register_client(const gchar *sender, const gchar *appId, const gchar *startupId);
 static void unregister_client(const gchar *clientObjectPath);
 static void on_client_vanished(GDBusConnection *connection, const gchar *name, Client *client);
 static void on_client_exit(Client *client, gint status);
-static Client * find_client_by_object_path(const gchar *clientObjectPath);
+static Client * find_client_from_given_info(const gchar *id, const gchar *objectPath, const gchar *appId, const gchar *dbusName);
 static GHashTable * list_autostarts();
 static void launch_autostart_phase(const gchar *phase, GHashTable *autostarts);
 static void launch_process(Client *client, const gchar *args, gboolean autoRestart, guint restartCount, guint delay, gboolean silent);
 static void on_process_exit(GPid pid, gint status, Client *client);
+static void free_inhibitor(Inhibitor *inhibitor);
+static guint32 inhibit(const gchar *sender, const gchar *appId, guint32 toplevelXId, const gchar *reason, guint32 flags);
+static void uninhibit(guint32 id);
 static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender, const gchar *objectPath, const gchar *interfaceName, const gchar *methodName, GVariant *parameters, GDBusMethodInvocation *invocation, gpointer *userdata);
 static gchar ** strv_append(const gchar * const *list, const gchar *str);
 static gchar * str_trim(const gchar *str);
 
 static const gchar *SessionManagerInterfaceXML;
 static const gchar *ClientInterfaceXML;
+static const gchar *InhibitorInterfaceXML;
 static GDBusNodeInfo *ClientInterfaceInfo;
+static GDBusNodeInfo *InhibitorInterfaceInfo;
 
 static const GDBusInterfaceVTable SessionManagerInterfaceCallbacks = {on_dbus_method_call, NULL, NULL};
 static const GDBusInterfaceVTable ClientInterfaceCallbacks = {on_dbus_method_call, NULL, NULL};
 static const GDBusInterfaceVTable ClientPrivateInterfaceCallbacks = {on_dbus_method_call, NULL, NULL};
+static const GDBusInterfaceVTable InhibitorInterfaceCallbacks = {on_dbus_method_call, NULL, NULL};
 
 static Session *self;
 
@@ -129,10 +141,13 @@ int main(int argc, char **argv)
 static void activate(GtkApplication *app, gpointer userdata)
 {
   ClientInterfaceInfo = g_dbus_node_info_new_for_xml(ClientInterfaceXML, NULL);
-  
+  InhibitorInterfaceInfo = g_dbus_node_info_new_for_xml(InhibitorInterfaceXML, NULL);
+
   self = g_new0(Session, 1);
   self->Clients = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, free_client);
+  self->Inhibitors = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, free_inhibitor);
   self->app = app;
+  self->InhibitCookieCounter = 1;
   
   // Register Session Banager DBus path 
   GDBusConnection *connection = g_application_get_dbus_connection(G_APPLICATION(app));
@@ -185,36 +200,31 @@ static gchar * generate_client_id()
 
 /*
  * Called when a new client is registered, or when the Session Manager launches a client of its own.
- * If the client is already added, it is not added again.
- * A client can be removed by removing its entry in the self->Clients hashtable. It's data will
- * automatically be freed.
+ * Uses the id, appId, and dbusName parameters to find an existing client object. All three are optional parameters.
+ * If an existing client cannot be found via the parameters, a new client object is created. The new client will use
+ * the given id, or if id is NULL, generate a new random id.
  */
-static Client * add_client(const gchar *startupId, gboolean *existed)
+static Client * add_client(const gchar *id, const gchar *appId, const gchar *dbusName)
 {
-  Client *client = NULL;
-  if(startupId)
-    client = (Client *)g_hash_table_lookup(self->Clients, startupId);
-  
-  if(existed)
-    *existed = (client != NULL);
+  Client *client = find_client_from_given_info(id, NULL, appId, dbusName);
   
   if(!client)
   {
     client = g_new0(Client, 1);
     if(!client)
-      return;
+      return NULL;
     
-    if(!startupId || strlen(startupId) == 0 )
+    if(!id || strlen(id) == 0 )
       client->id = generate_client_id();
     else
-      client->id = g_strdup(startupId);
+      client->id = g_strdup(id);
     
     g_hash_table_insert(self->Clients, client->id, client);
     
     g_application_hold(self->app);
+    g_debug("Added client with startupId '%s'", client->id);
   }
   
-  g_debug("Added client with startupId '%s'", client->id);
   return client;
 }
 
@@ -225,6 +235,15 @@ static Client * add_client(const gchar *startupId, gboolean *existed)
 static void free_client(Client *c)
 {
   unregister_client(c->objectPath);
+  
+  GHashTableIter iter;
+  gpointer key, value;
+  g_hash_table_iter_init(&iter, self->Inhibitors);
+  while(g_hash_table_iter_next(&iter, &key, &value))
+  {
+    if(value && ((Inhibitor *)value)->client == c)
+      uninhibit(((Inhibitor *)value)->id);
+  }
   
   // id freed by key destroy function
   if(c->childWatchId)
@@ -248,12 +267,18 @@ static void remove_client(Client *client)
  */
 static gchar * register_client(const gchar *sender, const gchar *appId, const gchar *startupId)
 {
-  Client *client = add_client(startupId, NULL);
+  Client *client = add_client(startupId, appId, sender);
   
   if(!client)
     return "";
+  
+  client->dbusName = g_strdup(sender);
+  client->appId = g_strdup(appId);
+  
+  // TODO: Make sure everything is up to date instead of just returning the cached value
   if(client->registered)
     return client->objectPath;
+    
   if(!ClientInterfaceInfo)
     return "";
   
@@ -277,11 +302,11 @@ static gchar * register_client(const gchar *sender, const gchar *appId, const gc
     return "";
   }
   
-  if(!client->processId && sender)
+  if(!client->processId && client->dbusName)
   {
     GVariant *vpid = g_dbus_connection_call_sync(connection,
                        "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
-                       "GetConnectionUnixProcessID", g_variant_new("(s)", sender), G_VARIANT_TYPE("(u)"),
+                       "GetConnectionUnixProcessID", g_variant_new("(s)", client->dbusName), G_VARIANT_TYPE("(u)"),
                        G_DBUS_CALL_FLAGS_NONE, -1, NULL, &error);
     if(error)
     {
@@ -303,13 +328,12 @@ static gchar * register_client(const gchar *sender, const gchar *appId, const gc
     }
   }
 
-  client->busWatchId = g_bus_watch_name(G_BUS_TYPE_SESSION, sender, G_BUS_NAME_WATCHER_FLAGS_NONE, NULL, on_client_vanished, client, NULL);
+  client->busWatchId = g_bus_watch_name(G_BUS_TYPE_SESSION, client->dbusName, G_BUS_NAME_WATCHER_FLAGS_NONE, NULL, on_client_vanished, client, NULL);
   if(!client->busWatchId)
-    g_warning("Failed to watch bus name of process '%s' (%s)", appId, sender);
+    g_warning("Failed to watch bus name of process '%s' (%s)", appId, client->dbusName);
     
   g_debug("Registered client '%s' at path '%s'", appId, client->objectPath);
   client->registered = TRUE;
-  client->appId = g_strdup(appId);
   return client->objectPath;
 }
 
@@ -320,7 +344,7 @@ static gchar * register_client(const gchar *sender, const gchar *appId, const gc
  */
 static void unregister_client(const gchar *clientObjectPath)
 {
-  Client *client = find_client_by_object_path(clientObjectPath);
+  Client *client = find_client_from_given_info(NULL, clientObjectPath, NULL, NULL);
   if(!client)
     return;
   
@@ -330,13 +354,16 @@ static void unregister_client(const gchar *clientObjectPath)
   client->busWatchId = 0;
   
   GDBusConnection *connection = g_application_get_dbus_connection(G_APPLICATION(self->app));
-  g_dbus_connection_unregister_object(connection, client->objectRegistrationId);
-  g_dbus_connection_unregister_object(connection, client->privateObjectRegistrationId);
+  if(client->objectRegistrationId)
+    g_dbus_connection_unregister_object(connection, client->objectRegistrationId);
   client->objectRegistrationId = 0;
+  if(client->privateObjectRegistrationId)
+    g_dbus_connection_unregister_object(connection, client->privateObjectRegistrationId);
   client->privateObjectRegistrationId = 0;
   
   g_clear_pointer(&client->objectPath, g_free);
   g_clear_pointer(&client->appId, g_free);
+  g_clear_pointer(&client->dbusName, g_free);
 }
 
 /*
@@ -400,7 +427,7 @@ static void on_client_exit(Client *client, gint status)
   }
 }
 
-static Client * find_client_by_object_path(const gchar *clientObjectPath)
+static Client * find_client_from_given_info(const gchar *id, const gchar *objectPath, const gchar *appId, const gchar *dbusName)
 {
   GHashTableIter iter;
   gpointer key, value;
@@ -409,8 +436,14 @@ static Client * find_client_by_object_path(const gchar *clientObjectPath)
   while(g_hash_table_iter_next(&iter, &key, &value))
   {
     Client *client = (Client *)value;
-    if(client && client->objectPath && g_strcmp0(client->objectPath, clientObjectPath) == 0)
-      return client;
+    if(client)
+    {
+      if((client->id && id && g_strcmp0(client->id, id) == 0) ||
+         (client->objectPath && objectPath && g_strcmp0(client->objectPath, objectPath) == 0) ||
+         (client->appId && appId && g_strcmp0(client->appId, appId) == 0) ||
+         (client->dbusName && dbusName && g_strcmp0(client->dbusName, dbusName) == 0))
+        return client;
+    }
   }
   
   return NULL;
@@ -547,7 +580,7 @@ static gboolean process_launch_delay_cb(Client *client);
 static void launch_process(Client *client, const gchar *args, gboolean autoRestart, guint restartCount, guint delay, gboolean silent)
 {
   if(!client)
-    client = add_client(NULL, NULL); // This assignes the new process a startupId so that it can correctly register itself later
+    client = add_client(NULL, NULL, NULL); // This assignes the new process a startupId so that it can correctly register itself later
   if(client->launchArgs != args)
   {
     g_free(client->launchArgs);
@@ -627,6 +660,61 @@ static void on_process_exit(GPid pid, gint status, Client *client)
 
 
 
+static guint32 inhibit(const gchar *sender, const gchar *appId, guint32 toplevelXId, const gchar *reason, guint32 flags)
+{
+  register_client(sender, appId, NULL); // Registers it if it wasn't already
+  
+  Inhibitor *inhibitor = g_new0(Inhibitor, 1);
+  inhibitor->client = find_client_from_given_info(NULL, NULL, appId, sender);
+  inhibitor->flags = flags;
+  inhibitor->id = self->InhibitCookieCounter++;
+  inhibitor->reason = g_strdup(reason);
+  inhibitor->xid = toplevelXId;
+  
+  if(!InhibitorInterfaceInfo)
+    return 0;
+  
+  GDBusConnection *connection = g_application_get_dbus_connection(G_APPLICATION(self->app));
+  gchar *objectPath = g_strdup_printf("%s%i", INHIBITOR_OBJECT_PATH, inhibitor->id);
+  
+  GError *error = NULL;
+  inhibitor->objectRegistrationId = g_dbus_connection_register_object(connection, objectPath, InhibitorInterfaceInfo->interfaces[0], &InhibitorInterfaceCallbacks, inhibitor, NULL, &error);
+  if(error)
+  {
+    g_warning("Failed to set inhibit on '%s': %s", appId, error->message);
+    g_clear_error(&error);
+    free_inhibitor(inhibitor);
+    return 0;
+  }
+  
+  g_free(objectPath);
+  g_hash_table_insert(self->Inhibitors, inhibitor->id, inhibitor);
+  g_debug("Added inhibitor %i for %s,%s becasue of '%s'", inhibitor->id, sender, appId, inhibitor->reason);
+  return inhibitor->id;
+}
+
+static void uninhibit(guint32 id)
+{
+  Inhibitor *inhibitor = g_hash_table_lookup(self->Inhibitors, id);
+  if(!inhibitor)
+    return;
+    
+  GDBusConnection *connection = g_application_get_dbus_connection(G_APPLICATION(self->app));
+  if(inhibitor->objectRegistrationId)
+    g_dbus_connection_unregister_object(connection, inhibitor->objectRegistrationId);
+  inhibitor->objectRegistrationId = 0;
+  
+  g_hash_table_remove(self->Inhibitors, id);
+  g_debug("Removed inhibitor %i", id);
+}
+
+static void free_inhibitor(Inhibitor *inhibitor)
+{
+  g_free(inhibitor->reason);
+  g_free(inhibitor);
+}
+
+
 static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender,
               const gchar           *objectPath,
               const gchar           *interfaceName,
@@ -635,6 +723,8 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
               GDBusMethodInvocation *invocation,
               gpointer              *userdata)
 {
+  // TODO: Throw errors for failed calls instead of just returning NULL/0/""?
+  
   g_debug("dbus method call: %s, %s.%s", sender, interfaceName, methodName);
   if(g_strcmp0(interfaceName, "org.gnome.SessionManager") == 0)
   {
@@ -657,6 +747,25 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
       g_dbus_method_invocation_return_value(invocation, NULL);
       return;
     }
+    else if(g_strcmp0(methodName, "Inhibit") == 0)
+    {
+      gchar *appId, *reason;
+      guint32 xId, flags;
+      g_variant_get(parameters, "(susu)", &appId, &xId, &reason, &flags);
+      guint32 cookie = inhibit(sender, appId, xId, reason, flags);
+      g_free(appId);
+      g_free(reason);
+      g_dbus_method_invocation_return_value(invocation, g_variant_new("(u)", cookie));
+      return;
+    }
+    else if(g_strcmp0(methodName, "Uninhibit") == 0)
+    {
+      guint32 cookie;
+      g_variant_get(parameters, "(u)", &cookie);
+      uninhibit(cookie);
+      g_dbus_method_invocation_return_value(invocation, NULL);
+      return;
+    }
   }
   else if(g_strcmp0(interfaceName, "org.gnome.SessionManager.Client") == 0)
   {
@@ -666,8 +775,7 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
       g_dbus_method_invocation_return_value(invocation, NULL);
       return;
     }
-
-    if(g_strcmp0(methodName, "GetAppId") == 0) {
+    else if(g_strcmp0(methodName, "GetAppId") == 0) {
       g_dbus_method_invocation_return_value(invocation, g_variant_new("(s)", client->appId));
       return;
     }
@@ -689,6 +797,35 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
       // 0=unregistered, 1=registered, 2=finished, 3=failed
       // TODO: status 2 & 3
       g_dbus_method_invocation_return_value(invocation, g_variant_new("(u)", client->registered));
+      return;
+    }
+  }
+  else if(g_strcmp0(interfaceName, "org.gnome.SessionManager.Inhibitor") == 0)
+  {
+    Inhibitor *inhibitor = (Inhibitor*)userdata;
+    if(!inhibitor)
+    {
+      g_dbus_method_invocation_return_value(invocation, NULL);
+      return;
+    }
+    else if(g_strcmp0(methodName, "GetAppId") == 0) {
+      g_dbus_method_invocation_return_value(invocation, g_variant_new("(s)", inhibitor->client ? inhibitor->client->appId : ""));
+      return;
+    }
+    else if(g_strcmp0(methodName, "GetClientId") == 0) {
+      g_dbus_method_invocation_return_value(invocation, g_variant_new("(o)", inhibitor->client ? inhibitor->client->objectPath : ""));
+      return;
+    }
+    else if(g_strcmp0(methodName, "GetReason") == 0) {
+      g_dbus_method_invocation_return_value(invocation, g_variant_new("(s)", inhibitor->reason));
+      return;
+    }
+    else if(g_strcmp0(methodName, "GetFlags") == 0) {
+      g_dbus_method_invocation_return_value(invocation, g_variant_new("(u)", inhibitor->flags));
+      return;
+    }
+    else if(g_strcmp0(methodName, "GetToplevelXid") == 0) {
+      g_dbus_method_invocation_return_value(invocation, g_variant_new("(u)", inhibitor->xid));
       return;
     }
   }
@@ -785,6 +922,16 @@ static const gchar *ClientInterfaceXML =
 "  </interface>"
 "</node>";
 
+static const gchar *InhibitorInterfaceXML =
+"<node>"
+"  <interface name='org.gnome.SessionManager.Inhibitor'>"
+"    <method name='GetAppId'>       <arg type='s' direction='out' name='app_id'/>    </method>"
+"    <method name='GetClientId'>    <arg type='o' direction='out' name='client_id'/> </method>"
+"    <method name='GetReason'>      <arg type='s' direction='out' name='reason'/>    </method>"
+"    <method name='GetFlags'>       <arg type='u' direction='out' name='flags'/>     </method>"
+"    <method name='GetToplevelXid'> <arg type='u' direction='out' name='xid'/>       </method>"
+"  </interface>"
+"</node>";
 
 /*
  * Takes a list of strings and a string to append.
