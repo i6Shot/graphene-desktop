@@ -32,6 +32,20 @@
 #define MAX_RESTARTS 5
 #define DEBUG TRUE
 
+typedef enum {
+  SESSION_PHASE_STARTUP = 0,
+  SESSION_PHASE_INITIALIZATION,
+  SESSION_PHASE_WINDOWMANAGER,
+  SESSION_PHASE_PANEL,
+  SESSION_PHASE_DESKTOP,
+  SESSION_PHASE_APPLICATION,
+  SESSION_PHASE_RUNNING,
+  SESSION_PHASE_QUERY_END_SESSION,
+  SESSION_PHASE_END_SESSION,
+  SESSION_PHASE_EXIT,
+  
+} SessionPhase;
+
 typedef struct
 {
   // Unique client ID. Given to new processes so that they can register themselves properly (startupId).
@@ -56,6 +70,8 @@ typedef struct
   guint restartCount; // Number of times the process has crashed and been restarted
   gboolean silent; // If true, redirects stdout and stderr to dev/null
   
+  SessionPhase phase; // Phase that this client was added in
+  
 } Client;
 
 typedef struct
@@ -74,16 +90,20 @@ typedef struct
 
 typedef struct
 {
-  GtkApplication *app;
+  GApplication *app;
   guint InterfaceRegistrationId;
   GHashTable *Clients;
   GHashTable *Inhibitors;
   guint32 InhibitCookieCounter;
+  SessionPhase phase;
+  guint phaseTimerId;
   
 } Session;
 
-static void activate(GtkApplication *app, gpointer userdata);
-static void shutdown(GtkApplication *application, gpointer userdata);
+static void activate(GApplication *app, gpointer userdata);
+static void shutdown(GApplication *application, gpointer userdata);
+static void on_sigterm_or_sigint(gpointer userdata);
+static gboolean run_phase(guint phase);
 static Client * add_client(const gchar *id, const gchar *appId, const gchar *dbusName);
 static void free_client(Client *client);
 static void remove_client(Client *client);
@@ -100,6 +120,13 @@ static void free_inhibitor(Inhibitor *inhibitor);
 static guint32 inhibit(const gchar *sender, const gchar *appId, guint32 toplevelXId, const gchar *reason, guint32 flags);
 static void uninhibit(guint32 id);
 static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender, const gchar *objectPath, const gchar *interfaceName, const gchar *methodName, GVariant *parameters, GDBusMethodInvocation *invocation, gpointer *userdata);
+GVariant *on_dbus_get_property(GDBusConnection *connection,
+                                  const gchar *sender,
+                                  const gchar *object_path,
+                                  const gchar *interface_name,
+                                  const gchar *property_name,
+                                  GError **error,
+                                  gpointer user_data);
 static gchar ** strv_append(const gchar * const *list, const gchar *str);
 static gchar * str_trim(const gchar *str);
 
@@ -109,12 +136,13 @@ static const gchar *InhibitorInterfaceXML;
 static GDBusNodeInfo *ClientInterfaceInfo;
 static GDBusNodeInfo *InhibitorInterfaceInfo;
 
-static const GDBusInterfaceVTable SessionManagerInterfaceCallbacks = {on_dbus_method_call, NULL, NULL};
-static const GDBusInterfaceVTable ClientInterfaceCallbacks = {on_dbus_method_call, NULL, NULL};
-static const GDBusInterfaceVTable ClientPrivateInterfaceCallbacks = {on_dbus_method_call, NULL, NULL};
-static const GDBusInterfaceVTable InhibitorInterfaceCallbacks = {on_dbus_method_call, NULL, NULL};
+static const GDBusInterfaceVTable SessionManagerInterfaceCallbacks = {on_dbus_method_call, on_dbus_get_property, NULL};
+static const GDBusInterfaceVTable ClientInterfaceCallbacks = {on_dbus_method_call, on_dbus_get_property, NULL};
+static const GDBusInterfaceVTable ClientPrivateInterfaceCallbacks = {on_dbus_method_call, on_dbus_get_property, NULL};
+static const GDBusInterfaceVTable InhibitorInterfaceCallbacks = {on_dbus_method_call, on_dbus_get_property, NULL};
 
 static Session *self;
+GHashTable *autostarts;
 
 int main(int argc, char **argv)
 {
@@ -129,8 +157,11 @@ int main(int argc, char **argv)
   g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
 #endif
 
+  g_unix_signal_add(SIGTERM, on_sigterm_or_sigint, NULL);
+  g_unix_signal_add(SIGINT, on_sigterm_or_sigint, NULL);
+
   // Start app
-  GtkApplication *app = gtk_application_new(SESSION_MANAGER_APP_ID, G_APPLICATION_FLAGS_NONE);
+  GApplication *app = g_application_new(SESSION_MANAGER_APP_ID, G_APPLICATION_FLAGS_NONE);
   g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
   g_signal_connect(app, "shutdown", G_CALLBACK(shutdown), NULL);
   int status = g_application_run(G_APPLICATION(app), argc, argv);
@@ -138,7 +169,7 @@ int main(int argc, char **argv)
   return status;
 }
 
-static void activate(GtkApplication *app, gpointer userdata)
+static void activate(GApplication *app, gpointer userdata)
 {
   ClientInterfaceInfo = g_dbus_node_info_new_for_xml(ClientInterfaceXML, NULL);
   InhibitorInterfaceInfo = g_dbus_node_info_new_for_xml(InhibitorInterfaceXML, NULL);
@@ -148,6 +179,7 @@ static void activate(GtkApplication *app, gpointer userdata)
   self->Inhibitors = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, free_inhibitor);
   self->app = app;
   self->InhibitCookieCounter = 1;
+  self->phase = SESSION_PHASE_STARTUP;
   
   // Register Session Banager DBus path 
   GDBusConnection *connection = g_application_get_dbus_connection(G_APPLICATION(app));
@@ -160,28 +192,186 @@ static void activate(GtkApplication *app, gpointer userdata)
   
   // Run autostarts by phase
   // https://wiki.gnome.org/Projects/SessionManagement/NewGnomeSession
-  GHashTable *autostarts = list_autostarts();
-  launch_autostart_phase("Initialization", autostarts);// Important GNOME stuff
-  launch_autostart_phase("WindowManager", autostarts); // This starts graphene-wm
-  launch_autostart_phase("Panel", autostarts);         // This starts graphene-panel
-  launch_autostart_phase("Desktop", autostarts);       // This starts nautilus
-  launch_autostart_phase("Applications", autostarts);  // Everything else
-  g_hash_table_unref(autostarts);
+  autostarts = list_autostarts();
+  // launch_autostart_phase("Initialization", autostarts);// Important GNOME stuff
+  // launch_autostart_phase("WindowManager", autostarts); // This starts graphene-wm
+  // launch_autostart_phase("Panel", autostarts);         // This starts graphene-panel
+  // launch_autostart_phase("Desktop", autostarts);       // This starts nautilus
+  // launch_autostart_phase("Applications", autostarts);  // Everything else
+  // g_hash_table_unref(autostarts);
+  
+  run_phase(SESSION_PHASE_STARTUP);
   
   g_application_hold(app);
 }
 
-static void shutdown(GtkApplication *application, gpointer userdata)
+static void shutdown(GApplication *application, gpointer userdata)
 {
   g_free(self);
 }
 
-static void quit()
+static void on_sigterm_or_sigint(gpointer userdata)
 {
+  if(self && self->app)
+  {
+    // TODO: Exit cleanly
+    g_debug("handling sigterm/int cleanly");
+    g_application_quit(self->app);
+  }
+  else
+  {
+    exit(0);
+  }
+}
+
+static gint end_session_responses = 0;
+
+static gboolean run_phase(guint phase)
+{
+  g_debug("STARTING PHASE %i", phase);
+
+  self->phase = phase;
   
+  if(self->phaseTimerId)
+    g_source_remove(self->phaseTimerId);
+  self->phaseTimerId = 0;
+  
+  gint waitTime = 10;
+  
+  switch(self->phase)
+  {
+    case SESSION_PHASE_STARTUP:
+      run_phase(self->phase+1);
+      waitTime = -1;
+      break;
+    case SESSION_PHASE_INITIALIZATION: // Important GNOME stuff
+      launch_autostart_phase("Initialization", autostarts);
+      break;
+    case SESSION_PHASE_WINDOWMANAGER: // This starts graphene-wm
+      launch_autostart_phase("WindowManager", autostarts);
+      break;
+    case SESSION_PHASE_PANEL: // This starts graphene-panel
+      launch_autostart_phase("Panel", autostarts);
+      break;
+    case SESSION_PHASE_DESKTOP: // This starts nautilus
+      launch_autostart_phase("Desktop", autostarts);
+      break;
+    case SESSION_PHASE_APPLICATION: // Everything else 
+      launch_autostart_phase("Applications", autostarts);
+      waitTime = 0;
+      break;
+    case SESSION_PHASE_RUNNING:
+      waitTime = -1;
+      break;
+    case SESSION_PHASE_QUERY_END_SESSION:
+      waitTime = 1;
+      break;
+    case SESSION_PHASE_END_SESSION:
+    {
+      end_session_responses = 0;
+      GDBusConnection *connection = g_application_get_dbus_connection(G_APPLICATION(self->app));
+
+      GHashTableIter iter;
+      gpointer key, value;
+      g_hash_table_iter_init(&iter, self->Clients);
+      while(g_hash_table_iter_next(&iter, &key, &value))
+      {
+        Client *client = (Client *)value;
+        if(client && client->objectPath)
+        {
+          end_session_responses++;
+          g_dbus_connection_emit_signal(connection, client->dbusName, client->objectPath, "org.gnome.SessionManager.ClientPrivate", "EndSession", g_variant_new("(u)", TRUE), NULL);
+        }
+      }
+      break;
+    }
+    case SESSION_PHASE_EXIT:
+      g_application_quit(self->app);
+      waitTime = -1;
+      break;
+  }
+  
+  if(waitTime >= 0)
+    self->phaseTimerId = g_timeout_add_seconds(waitTime, run_phase, self->phase+1);
+    
+  return FALSE; // stops timers
+}
+
+static void run_next_phase_if_ready()
+{
+  switch(self->phase)
+  {
+    case SESSION_PHASE_STARTUP:
+    case SESSION_PHASE_INITIALIZATION:
+    case SESSION_PHASE_WINDOWMANAGER:
+    case SESSION_PHASE_PANEL:
+    case SESSION_PHASE_DESKTOP:
+    case SESSION_PHASE_APPLICATION:
+    {
+      gboolean allRegistered = TRUE;
+      
+      GHashTableIter iter;
+      gpointer key, value;
+      g_hash_table_iter_init(&iter, self->Clients);
+      while(g_hash_table_iter_next(&iter, &key, &value))
+      {
+        Client *client = (Client *)value;
+        // In order to be counted as ready, the app should have either died, 
+        // exited, or registered already. Dead/exited clients get removed 
+        // from the list, so if every client left is registered, we're ready.
+        if(client->phase == self->phase && !client->registered)
+        {
+          allRegistered = FALSE;
+          break;
+        }
+      }
+      
+      if(allRegistered)
+      {
+        g_debug("Phase %i complete", self->phase);
+        g_idle_add(run_phase, self->phase+1);
+      }
+      break;
+    }
+    case SESSION_PHASE_QUERY_END_SESSION:
+    case SESSION_PHASE_END_SESSION:
+      if(end_session_responses == 0)
+      {
+        g_debug("Phase %i complete", self->phase);
+        g_idle_add(run_phase, self->phase+1);
+      }
+      break;
+    default:
+      return;
+  }
 }
 
 
+static void query_end_session(gboolean force)
+{
+  run_phase(SESSION_PHASE_QUERY_END_SESSION);
+
+  GDBusConnection *connection = g_application_get_dbus_connection(G_APPLICATION(self->app));
+  end_session_responses = 0;
+  
+  GHashTableIter iter;
+  gpointer key, value;
+  g_hash_table_iter_init(&iter, self->Clients);
+  while(g_hash_table_iter_next(&iter, &key, &value))
+  {
+    Client *client = (Client *)value;
+    if(client && client->objectPath)
+    {
+      end_session_responses++;
+      g_dbus_connection_emit_signal(connection, client->dbusName, client->objectPath, "org.gnome.SessionManager.ClientPrivate", "QueryEndSession", g_variant_new("(u)", force == TRUE), NULL);
+    }
+  }
+}
+
+// static void logout()
+// {
+//   
+// }
 
 static gchar * generate_client_id()
 {
@@ -218,6 +408,8 @@ static Client * add_client(const gchar *id, const gchar *appId, const gchar *dbu
       client->id = generate_client_id();
     else
       client->id = g_strdup(id);
+    
+    client->phase = self->phase;
     
     g_hash_table_insert(self->Clients, client->id, client);
     
@@ -257,6 +449,7 @@ static void remove_client(Client *client)
 {
   if(client)
     g_hash_table_remove(self->Clients, client->id);
+  run_next_phase_if_ready();
 }
 
 /*
@@ -334,6 +527,7 @@ static gchar * register_client(const gchar *sender, const gchar *appId, const gc
     
   g_debug("Registered client '%s' at path '%s'", appId, client->objectPath);
   client->registered = TRUE;
+  run_next_phase_if_ready();
   return client->objectPath;
 }
 
@@ -392,7 +586,7 @@ static void on_client_exit(Client *client, gint status)
   g_debug("should restart? %i, %i", client->autoRestart, status);
 
   // Restart it
-  if(client->autoRestart && client->launchArgs && status != 0)
+  if(client->autoRestart && client->launchArgs && status != 0 && self->phase == SESSION_PHASE_RUNNING)
   {
     // Make sure on_client_exit can't be called twice (once from dbus, once from child watch)
     unregister_client(client->objectPath); // Also need to unregister the client anyways
@@ -413,7 +607,8 @@ static void on_client_exit(Client *client, gint status)
     else if(isPanel)
     {
       g_critical("The system panel has crashed too many times! Exiting session...");
-      quit();
+      // TODO: Quit
+      // quit();
     }
     else
     {
@@ -537,8 +732,6 @@ static GHashTable * list_autostarts()
  */
 static void launch_autostart_phase(const gchar *phase, GHashTable *autostarts)
 {
-  // TODO: Wait for phase to complete loading before returning / contining to the next phase
-  
   GHashTableIter iter;
   gpointer key, value;
   
@@ -567,6 +760,8 @@ static void launch_autostart_phase(const gchar *phase, GHashTable *autostarts)
     
     g_free(thisPhase);
   }
+  
+  run_next_phase_if_ready();
 }
 
 static gboolean process_launch_delay_cb(Client *client);
@@ -591,6 +786,7 @@ static void launch_process(Client *client, const gchar *args, gboolean autoResta
   client->silent = silent;
   
   if(delay > 0)
+    // TODO: Stop this timeout if the client gets removed before it completes
     g_timeout_add_seconds(delay, process_launch_delay_cb, client);
   else
     process_launch_delay_cb(client);
@@ -766,6 +962,23 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
       g_dbus_method_invocation_return_value(invocation, NULL);
       return;
     }
+    else if(g_strcmp0(methodName, "Shutdown") == 0)
+    {
+    }
+    else if(g_strcmp0(methodName, "Reboot") == 0)
+    {
+    }
+    else if(g_strcmp0(methodName, "CanShutdown") == 0)
+    {
+    }
+    else if(g_strcmp0(methodName, "Logout") == 0)
+    {
+      query_end_session(FALSE);
+    }
+    else if(g_strcmp0(methodName, "IsSessionRunning") == 0)
+    {
+      g_dbus_method_invocation_return_value(invocation, g_variant_new("(b)", TRUE));
+    }
   }
   else if(g_strcmp0(interfaceName, "org.gnome.SessionManager.Client") == 0)
   {
@@ -797,6 +1010,14 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
       // 0=unregistered, 1=registered, 2=finished, 3=failed
       // TODO: status 2 & 3
       g_dbus_method_invocation_return_value(invocation, g_variant_new("(u)", client->registered));
+      return;
+    }
+  }
+  else if(g_strcmp0(interfaceName, "org.gnome.SessionManager.ClientPrivate") == 0)
+  {
+    if(g_strcmp0(methodName, "EndSessionResponse") == 0) {
+      end_session_responses--;
+      run_next_phase_if_ready();
       return;
     }
   }
@@ -832,7 +1053,16 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
   
   g_dbus_method_invocation_return_value(invocation, NULL);
 }
-
+GVariant *on_dbus_get_property(GDBusConnection *connection,
+                                  const gchar *sender,
+                                  const gchar *object_path,
+                                  const gchar *interface_name,
+                                  const gchar *property_name,
+                                  GError **error,
+                                  gpointer user_data)
+{
+  g_debug("dbus get property: %s, %s.%s", sender, interface_name, property_name);
+}
 
 static const gchar *SessionManagerInterfaceXML =
 "<node>"
@@ -840,6 +1070,10 @@ static const gchar *SessionManagerInterfaceXML =
 "    <method name='Setenv'>"
 "      <arg type='s' direction='in' name='variable'/>"
 "      <arg type='s' direction='in' name='value'/>"
+"    </method>"
+"    <method name='GetLocale'>"
+"      <arg type='i' direction='in' name='category'/>"
+"      <arg type='s' direction='out' name='value'/>"
 "    </method>"
 "    <method name='InitializationError'>"
 "      <arg type='s' direction='in' name='message'/>"
@@ -877,12 +1111,16 @@ static const gchar *SessionManagerInterfaceXML =
 "      <arg type='s' direction='in' name='condition'/>"
 "      <arg type='b' direction='out' name='handled'/>"
 "    </method>"
-"    <method name='Shutdown'></method>"
+"    <method name='Shutdown'> </method>"
+"    <method name='Reboot'> </method>"
 "    <method name='CanShutdown'>"
 "      <arg type='b' direction='out' name='is_available'/>"
 "    </method>"
 "    <method name='Logout'>"
 "      <arg type='u' direction='in' name='mode'/>"
+"    </method>"
+"    <method name='IsSessionRunning'>"
+"      <arg type='b' direction='out' name='running'/>"
 "    </method>"
 "    <signal name='ClientAdded'>"
 "      <arg type='o' name='id'/>"
@@ -898,6 +1136,9 @@ static const gchar *SessionManagerInterfaceXML =
 "    </signal>"
 "    <signal name='SessionRunning'></signal>"
 "    <signal name='SessionOver'></signal>"
+"    <property name='SessionName' type='s' access='read'> </property>"
+"    <property name='SessionIsActive' type='b' access='read'> </property>"
+"    <property name='InhibitedActions' type='u' access='read'> </property>"
 "  </interface>"
 "</node>";
 
@@ -909,6 +1150,7 @@ static const gchar *ClientInterfaceXML =
 "    <method name='GetRestartStyleHint'> <arg type='u' direction='out' name='hint'/>       </method>"
 "    <method name='GetUnixProcessId'>    <arg type='u' direction='out' name='pid'/>        </method>"
 "    <method name='GetStatus'>           <arg type='u' direction='out' name='status'/>     </method>"
+"    <method name='Stop'> </method>"
 "  </interface>"
 "  <interface name='org.gnome.SessionManager.ClientPrivate'>"
 "    <method name='EndSessionResponse'>"
