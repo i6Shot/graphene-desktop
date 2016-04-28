@@ -24,6 +24,12 @@
 struct _VosWM {
   MetaPlugin parent;
   MetaBackgroundGroup *BackgroundGroup;
+  const gchar *clientId;
+  guint dbusNameId;
+  GDBusConnection *sessionBus;
+  GDBusProxy *smProxy;
+  gchar *clientPath;
+  GDBusProxy *clientProxy;
 };
 
 // Structs copied from meta-shadow-factory.c (commit a191554 on Jul 6, 2015)
@@ -45,7 +51,7 @@ typedef struct
 int main(int argc, char **argv)
 {
   meta_plugin_manager_set_plugin_type(VOS_TYPE_WM);
-  meta_set_wm_name("Mutter(VOS Desktop)");
+  meta_set_wm_name("VOS Desktop");
   meta_set_gnome_wm_keybindings("Mutter,GNOME Shell");
   
   g_setenv("NO_GAIL", "1", TRUE);
@@ -53,12 +59,17 @@ int main(int argc, char **argv)
   meta_init();
   g_unsetenv("NO_AT_BRIDGE");
   g_unsetenv("NO_GAIL");
-  
+    
   return meta_run();
 }
 
 static void vos_wm_dispose(GObject *gobject); 
 static void start(MetaPlugin *plugin);
+static void dbus_register(MetaPlugin *plugin);
+static void quit(MetaPlugin *plugin);
+static void dbus_name_acquired(GDBusConnection *connection, const gchar *name, MetaPlugin *plugin);
+static void dbus_name_lost(GDBusConnection *connection, const gchar *name, MetaPlugin *plugin);
+static void client_proxy_signal(GDBusProxy *proxy, const gchar *sender, const gchar *signal, GVariant *parameters, MetaPlugin *plugin);
 static void on_monitors_changed(MetaScreen *screen, MetaPlugin *plugin);
 static void minimize(MetaPlugin *wm, MetaWindowActor *actor);
 static void unminimize(MetaPlugin *wm, MetaWindowActor *actor);
@@ -148,7 +159,121 @@ static void start(MetaPlugin *plugin)
   // meta_keybindings_set_custom_handler("panel-main-menu", launch_rundialog);
   // meta_keybindings_set_custom_handler("switch-windows", switch_windows);
   // meta_keybindings_set_custom_handler("switch-applications", switch_windows);
+  
+  dbus_register(plugin);
+}
 
+/*
+ * meta_register_with_session() uses XSMP. Not gonna deal with that right now, just use DBus 
+ */
+static void dbus_register(MetaPlugin *plugin)
+{
+  VosWM *wm = VOS_WM(plugin);
+  wm->smProxy = NULL;
+  wm->clientProxy = NULL;
+  
+  wm->clientId = g_getenv("DESKTOP_AUTOSTART_ID");
+  g_unsetenv("DESKTOP_AUTOSTART_ID");
+  
+  wm->dbusNameId = g_bus_own_name(G_BUS_TYPE_SESSION, "io.velt.GrapheneWM", G_BUS_NAME_OWNER_FLAGS_REPLACE,
+    NULL, dbus_name_acquired, dbus_name_lost,
+    plugin, NULL);
+}
+
+static void quit(MetaPlugin *plugin)
+{
+  VosWM *wm = VOS_WM(plugin);
+  
+  g_dbus_proxy_call_sync(wm->smProxy,
+                  "UnregisterClient",
+                  g_variant_new ("(o)", wm->clientPath),
+                  G_DBUS_CALL_FLAGS_NONE,
+                  G_MAXINT,
+                  NULL,
+                  NULL);
+  
+  if(wm->clientProxy)
+    g_object_unref(wm->clientProxy);
+  wm->clientProxy = NULL;
+  if(wm->smProxy)
+    g_object_unref(wm->smProxy);
+  wm->smProxy = NULL;
+  if(wm->dbusNameId)
+    g_bus_unown_name(wm->dbusNameId);
+  wm->dbusNameId = 0;
+  
+  meta_quit(META_EXIT_SUCCESS);
+}
+
+static void dbus_name_acquired(GDBusConnection *connection, const gchar *name, MetaPlugin *plugin)
+{
+  VosWM *wm = VOS_WM(plugin);
+
+  wm->smProxy = g_dbus_proxy_new_sync(connection,
+                  G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES | G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS,
+                  NULL,
+                  "org.gnome.SessionManager",
+                  "/org/gnome/SessionManager",
+                  "org.gnome.SessionManager",
+                  NULL,
+                  NULL);
+                  
+  if(wm->smProxy)
+  {
+    GVariant *r = g_dbus_proxy_call_sync(wm->smProxy,
+                    "RegisterClient",
+                    g_variant_new ("(ss)", "io.velt.GrapheneWM", wm->clientId),
+                    G_DBUS_CALL_FLAGS_NONE,
+                    G_MAXINT,
+                    NULL,
+                    NULL);
+                    
+    if(r)
+    {
+      g_variant_get(r, "(o)", &wm->clientPath);
+      
+      wm->clientProxy = g_dbus_proxy_new_sync(connection, 0,
+                              NULL,
+                              "org.gnome.SessionManager",
+                              wm->clientPath,
+                              "org.gnome.SessionManager.ClientPrivate",
+                              NULL,
+                              NULL);
+      
+      if(wm->clientProxy)                
+        g_signal_connect(wm->clientProxy, "g-signal", G_CALLBACK(client_proxy_signal), plugin);
+      else
+        g_critical("Failed to get connection to client object");
+    }
+    else
+      g_critical("Failed to register client");
+  }
+  else
+    g_critical("Failed to connect to session manager");
+}
+
+static void dbus_name_lost(GDBusConnection *connection, const gchar *name, MetaPlugin *plugin)
+{
+  quit(plugin);
+}
+
+static void client_proxy_signal(GDBusProxy *proxy, const gchar *sender, const gchar *signal, GVariant *parameters, MetaPlugin *plugin)
+{
+  VosWM *wm = VOS_WM(plugin);
+
+  if(g_str_equal(signal, "QueryEndSession"))
+  {
+    g_dbus_proxy_call(wm->clientProxy, "EndSessionResponse", g_variant_new ("(bs)", TRUE, ""), G_DBUS_CALL_FLAGS_NONE, G_MAXINT, NULL, NULL, NULL);
+  }
+  else if(g_str_equal(signal, "EndSession"))
+  {
+    g_dbus_proxy_call(wm->clientProxy, "EndSessionResponse", g_variant_new ("(bs)", TRUE, ""), G_DBUS_CALL_FLAGS_NONE, G_MAXINT, NULL, NULL, NULL);
+    quit(plugin);
+  }
+  else if(g_str_equal(signal, "Stop"))
+  {
+    quit(plugin);
+  }
 }
 
 // static void launch_rundialog(MetaDisplay *display, MetaScreen *screen,
