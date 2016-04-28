@@ -31,6 +31,7 @@ static VosPanel *panel = NULL;
 int main(int argc, char **argv)
 {
   GtkApplication *app = gtk_application_new("io.velt.graphene-panel", G_APPLICATION_FLAGS_NONE);
+  g_object_set(G_OBJECT(app), "register-session", TRUE);
   g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
   int status = g_application_run(G_APPLICATION(app), argc, argv);
   g_object_unref(app);
