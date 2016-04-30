@@ -412,17 +412,24 @@ void vos_panel_clear_capture(VosPanel *self)
  * vos_panel_logout:
  * @self: The #VosPanel affected.
  *
- * Closes all applications and logs out of the Velt Desktop session.
- * Internally, this literally just quits the panel, which tells the WM/session manager to exit.
- *
- * This function returns; logout occurs once the panel becomes idle.
+ * Asks the session manager for a logout dialog. Does not guarantee a logout.
  */
 void vos_panel_logout(VosPanel *self)
 {
-  // TODO: Close applications!
-  // TODO: Upon relogging in, the previous state of the screen shows for a second, including the open settings panel.
-  //       Maybe force-close all open panel windows before quitting?
-  g_application_quit(g_application_get_default());
+  GDBusConnection *connection = g_application_get_dbus_connection(g_application_get_default());
+  
+  GDBusProxy *smProxy = g_dbus_proxy_new_sync(connection,
+                  G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES | G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS,
+                  NULL,
+                  "org.gnome.SessionManager",
+                  "/org/gnome/SessionManager",
+                  "org.gnome.SessionManager",
+                  NULL,
+                  NULL);
+                  
+  g_dbus_proxy_call_sync(smProxy, "Logout", g_variant_new("(u)", 0), G_DBUS_CALL_FLAGS_NONE, G_MAXINT, NULL, NULL);
+  
+  g_object_unref(smProxy);
 }
 
 /**
@@ -430,11 +437,24 @@ void vos_panel_logout(VosPanel *self)
  * @self: The #VosPanel affected.
  * @reboot: Whether or not to reboot.
  * 
- * Closes all applications and shuts down or reboots the computer.
+ * Asks the session manager for a shutdown dialog. Does not guarantee a shutdown.
  */
 void vos_panel_shutdown(VosPanel *self, gboolean reboot)
 {
-  g_message("SHUTDOWN/REBOOT FROM VDE NOT IMPLEMENTED YET SORRY");
+  GDBusConnection *connection = g_application_get_dbus_connection(g_application_get_default());
+  
+  GDBusProxy *smProxy = g_dbus_proxy_new_sync(connection,
+                  G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES | G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS,
+                  NULL,
+                  "org.gnome.SessionManager",
+                  "/org/gnome/SessionManager",
+                  "org.gnome.SessionManager",
+                  NULL,
+                  NULL);
+                  
+  g_dbus_proxy_call_sync(smProxy, reboot ? "Reboot" : "Shutdown", g_variant_new("(u)", 0), G_DBUS_CALL_FLAGS_NONE, G_MAXINT, NULL, NULL);
+  
+  g_object_unref(smProxy);
 }
 
 
