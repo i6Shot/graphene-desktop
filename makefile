@@ -30,12 +30,13 @@ WMOBJS=$(patsubst %.c,%.o,$(WMSRC))
 
 SESSIONF=session
 SESSION=graphene-session
-SESSIONSRC=$(SESSIONF)/session.c
+SESSIONSRC=$(SESSIONF)/session2.c $(SESSIONF)/client.c
 SESSIONOBJS=$(patsubst %.c,%.o,$(SESSIONSRC))
 
 all: $(LIBF)/lib$(LIB).so $(PANELF)/$(PANEL).bin $(WMF)/$(WM).bin $(SESSIONF)/$(SESSION).bin
 
 test:
+	-@killall graphene-session graphene-wm graphene-panel nautilus
 	sudo make all install
 	clear
 	$(SESSION)
