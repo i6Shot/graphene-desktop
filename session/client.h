@@ -36,7 +36,7 @@ void graphene_session_client_spawn(GrapheneSessionClient *self, guint delay);
 void graphene_session_client_register(GrapheneSessionClient *self, const gchar *sender, const gchar *appId);
 void graphene_session_client_unregister(GrapheneSessionClient *self);
 
-void graphene_session_client_query_end_session(GrapheneSessionClient *self, gboolean forced);
+gboolean graphene_session_client_query_end_session(GrapheneSessionClient *self, gboolean forced);
 void graphene_session_client_end_session(GrapheneSessionClient *self, gboolean forced);
 void graphene_session_client_stop(GrapheneSessionClient *self);
 

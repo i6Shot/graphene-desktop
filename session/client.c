@@ -339,7 +339,7 @@ void graphene_session_client_register(GrapheneSessionClient *self, const gchar *
     g_warning("Failed to watch bus name of process '%s' (%s)", appId, self->dbusName);
     
   self->registered = TRUE;
-  g_debug("Registered client '%s' at path '%s'", appId, self->objectPath);
+  g_debug(" + Registered client '%s' at path '%s'", appId, self->objectPath);
   g_object_notify(self, "registered");
   g_signal_emit_by_name(self, "ready");
 }
@@ -423,6 +423,8 @@ static void graphene_session_client_spawn_delay_cb(GrapheneSessionClient *self)
   if(self->processId)
     self->childWatchId = g_child_watch_add(self->processId, on_process_exit, self);
   
+  g_debug(" + Spawned client with args '%s' with id '%s' and pId %i", self->launchArgs, self->id, self->processId);
+  
   return FALSE; // Don't continue to call this callback
 }
 
@@ -430,7 +432,7 @@ static void on_process_exit(GPid pid, gint status, GrapheneSessionClient *self)
 {
   if(!self)
     return;
-  g_debug("process %i, %s exited", pid, self->id);
+  g_debug(" - Process %i, %s exited", pid, self->id);
   on_client_exit(self, status);
 }
 
@@ -442,7 +444,7 @@ static void on_client_vanished(GDBusConnection *connection, const gchar *name, G
 {
   if(!self)
     return;
-  g_debug("client %s, %s vanished", name, self->appId);
+  g_debug(" - Client %s, %s vanished", name, self->appId);
   // If the client successfully unregistered itself, then on_client_vanished wouldn't be called.
   // So this is almost certainly an EXIT_FAILURE (1).
   on_client_exit(self, 1);
@@ -463,7 +465,7 @@ static void on_client_exit(GrapheneSessionClient *self, guint status)
   self->childWatchId = 0;
   
   // Restart it
-  g_debug("should restart? %i, %i", self->autoRestart, status);
+  g_debug("should restart? %i, %s, %i, %i", self->autoRestart, self->launchArgs, status, self->stopping);
   if(self->autoRestart && self->launchArgs && status != 0 && !self->stopping)
   {
     g_debug("restarting client with args %s", self->launchArgs);
@@ -554,13 +556,16 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
   g_dbus_method_invocation_return_value(invocation, NULL);
 }
 
-void graphene_session_client_query_end_session(GrapheneSessionClient *self, gboolean forced)
+gboolean graphene_session_client_query_end_session(GrapheneSessionClient *self, gboolean forced)
 {
   if(self->objectPath)
   {
     g_dbus_connection_emit_signal(self->connection, self->dbusName, self->objectPath,
       "org.gnome.SessionManager.ClientPrivate", "QueryEndSession", g_variant_new("(u)", forced == TRUE), NULL);
+    return TRUE;
   }
+  
+  return FALSE;
 }
 void graphene_session_client_end_session(GrapheneSessionClient *self, gboolean forced)
 {
@@ -572,12 +577,11 @@ void graphene_session_client_end_session(GrapheneSessionClient *self, gboolean f
   }
   else
   {
-    g_warning("Client %s (%s) is not registered. Sending SIGKILL signal to end session.", self->appId, self->id);
+    g_message("Client %s is not registered. Sending SIGKILL to %i signal to end session.", self->id, self->processId);
     if(self->processId)
-    {
-      g_warning("Process id not available. Cannot stop client.", self->appId, self->id);
       kill(self->processId, SIGKILL);
-    }
+    else
+      g_warning("Process id not available. Cannot stop client.", self->appId, self->id);
   }
 }
 void graphene_session_client_stop(GrapheneSessionClient *self)

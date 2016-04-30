@@ -134,8 +134,8 @@ int main(int argc, char **argv)
   g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
 #endif
 
-  g_unix_signal_add(SIGTERM, on_sigterm_or_sigint, NULL);
-  g_unix_signal_add(SIGINT, on_sigterm_or_sigint, NULL);
+  // g_unix_signal_add(SIGTERM, on_sigterm_or_sigint, NULL);
+  // g_unix_signal_add(SIGINT, on_sigterm_or_sigint, NULL);
 
   GApplication *app = g_application_new(SESSION_MANAGER_APP_ID, G_APPLICATION_FLAGS_NONE);
   g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
@@ -218,7 +218,10 @@ static gboolean run_phase(guint phase)
   self->phaseTaskList = NULL;
   self->phaseHasTasks = FALSE;
   
-  gint waitTime = 10;
+  // GNOME standard is 10 seconds, however many applications never bother to register which causes
+  // the startup phase to hang for way too long. For any applications that DO register, 1 second is fine.
+  // TODO: This might not be enough time for slow-booting media like CDs.
+  gint waitTime = 1;
   
   switch(self->phase)
   {
@@ -293,7 +296,7 @@ static void run_autostart_phase(const gchar *phase)
   {    
     GDesktopAppInfo *desktopInfo = G_DESKTOP_APP_INFO(value);
     
-    char *thisPhase = g_desktop_app_info_get_string(desktopInfo, "X-GNOME-Autostart-Phase");
+    const gchar *thisPhase = g_desktop_app_info_get_string(desktopInfo, "X-GNOME-Autostart-Phase");
     if(g_strcmp0(phase, thisPhase) == 0 || g_strcmp0(phase, "Applications") == 0)
     {
       const gchar *commandline = g_app_info_get_commandline(G_APP_INFO(desktopInfo));
@@ -346,8 +349,8 @@ static void begin_end_session(gboolean force)
   for(GList *clients=self->clients;clients!=NULL;clients=clients->next)
   {
     GrapheneSessionClient *client = (GrapheneSessionClient *)clients->data;
-    graphene_session_client_query_end_session(client, self->forcedExit);
-    self->phaseTaskList = g_list_prepend(self->phaseTaskList, client);
+    if(graphene_session_client_query_end_session(client, self->forcedExit))
+      self->phaseTaskList = g_list_prepend(self->phaseTaskList, client);
   }
 }
 
@@ -589,6 +592,7 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
     else if(g_strcmp0(methodName, "IsSessionRunning") == 0)
     {
       g_dbus_method_invocation_return_value(invocation, g_variant_new("(b)", self->phase == SESSION_PHASE_RUNNING));
+      return;
     }
   }
   else if(g_strcmp0(interfaceName, "org.gnome.SessionManager.Inhibitor") == 0)
@@ -600,11 +604,11 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
       return;
     }
     else if(g_strcmp0(methodName, "GetAppId") == 0) {
-      g_dbus_method_invocation_return_value(invocation, g_variant_new("(s)", inhibitor->client ? inhibitor->client->appId : ""));
+      g_dbus_method_invocation_return_value(invocation, g_variant_new("(s)", inhibitor->client ? graphene_session_client_get_app_id(inhibitor->client) : ""));
       return;
     }
     else if(g_strcmp0(methodName, "GetClientId") == 0) {
-      g_dbus_method_invocation_return_value(invocation, g_variant_new("(o)", inhibitor->client ? inhibitor->client->objectPath : ""));
+      g_dbus_method_invocation_return_value(invocation, g_variant_new("(o)", inhibitor->client ? graphene_session_client_get_object_path(inhibitor->client) : ""));
       return;
     }
     else if(g_strcmp0(methodName, "GetReason") == 0) {
