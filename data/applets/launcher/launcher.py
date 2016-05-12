@@ -123,7 +123,7 @@ class VosLauncherPopup(Gtk.Window):
     def update_size(self):
         rect = self.panel.get_screen().get_monitor_geometry(self.panel.get_monitor())
         if self.get_window():
-            self.get_window().move_resize(rect.x, rect.y, rect.width/5, rect.height-self.panel.get_height())
+            self.get_window().move_resize(rect.x, rect.y, rect.width/6, rect.height-self.panel.get_height())
 
     def on_search_changed(self, s):
         self.filter = self.searchBar.get_text().lower()

@@ -133,3 +133,33 @@ VosClockApplet {
 VosSettingsPopup GtkLabel, VosLauncherPopup GtkLabel {
   color: alpha(@selection, 0.8);
 }
+
+.settings-widget-button:hover {
+  background-color: alpha(@selection, 0.4);
+}
+
+.settings-widget-button GtkLabel {
+  font-size: 1.2em;
+  padding-right: 5em;
+}
+
+.settings-widget-switch {
+  /*padding: 20px;*/
+}
+
+.settings-widget-separator {
+  color: alpha(@selection, 0.1);
+}
+
+VosSettingsView .group-label {
+  color: white;
+  padding: 1em 0 1em 2em;
+  font-weight: bold;
+}
+
+VosSettingsView GtkRange .trough {
+  background-color: transparent;
+}
+VosSettingsView GtkRange .slider {
+  background-color: lightgray;
+}
