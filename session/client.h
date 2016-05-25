@@ -32,18 +32,20 @@ G_DECLARE_FINAL_TYPE(GrapheneSessionClient, graphene_session_client, GRAPHENE, S
 // Public methods for VosPanel
 GrapheneSessionClient * graphene_session_client_new(GDBusConnection *connection, const gchar *clientId);
 
-void graphene_session_client_spawn(GrapheneSessionClient *self, guint delay);
-void graphene_session_client_register(GrapheneSessionClient *self, const gchar *sender, const gchar *appId);
-void graphene_session_client_unregister(GrapheneSessionClient *self);
+void          graphene_session_client_spawn(GrapheneSessionClient *self, guint delay);
+void          graphene_session_client_register(GrapheneSessionClient *self, const gchar *sender, const gchar *appId);
+void          graphene_session_client_unregister(GrapheneSessionClient *self);
 
-gboolean graphene_session_client_query_end_session(GrapheneSessionClient *self, gboolean forced);
-void graphene_session_client_end_session(GrapheneSessionClient *self, gboolean forced);
-void graphene_session_client_stop(GrapheneSessionClient *self);
+gboolean      graphene_session_client_query_end_session(GrapheneSessionClient *self, gboolean forced);
+void          graphene_session_client_end_session(GrapheneSessionClient *self, gboolean forced);
+void          graphene_session_client_stop(GrapheneSessionClient *self);
 
+const gchar * graphene_session_client_get_best_name(GrapheneSessionClient *self);
 const gchar * graphene_session_client_get_id(GrapheneSessionClient *self);
 const gchar * graphene_session_client_get_object_path(GrapheneSessionClient *self);
 const gchar * graphene_session_client_get_app_id(GrapheneSessionClient *self);
 const gchar * graphene_session_client_get_dbus_name(GrapheneSessionClient *self);
+gboolean      graphene_session_client_get_is_active(GrapheneSessionClient *self);
 
 G_END_DECLS
 

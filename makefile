@@ -30,7 +30,7 @@ WMOBJS=$(patsubst %.c,%.o,$(WMSRC))
 
 SESSIONF=session
 SESSION=graphene-session
-SESSIONSRC=$(SESSIONF)/session.c $(SESSIONF)/client.c
+SESSIONSRC=$(SESSIONF)/session.c $(SESSIONF)/client.c $(SESSIONF)/util.c
 SESSIONOBJS=$(patsubst %.c,%.o,$(SESSIONSRC))
 
 all: $(LIBF)/lib$(LIB).so $(PANELF)/$(PANEL).bin $(WMF)/$(WM).bin $(SESSIONF)/$(SESSION).bin

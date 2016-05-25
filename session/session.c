@@ -25,7 +25,9 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <gtk/gtk.h>
+#include <stdlib.h>
 #include "client.h"
+#include "util.h"
 
 #define SESSION_MANAGER_APP_ID "org.gnome.SessionManager"
 #define INHIBITOR_OBJECT_PATH "/org/gnome/SessionManager/Inhibitor"
@@ -35,16 +37,16 @@
 typedef enum
 {
   SESSION_PHASE_STARTUP = 0,
-  SESSION_PHASE_INITIALIZATION,
-  SESSION_PHASE_WINDOWMANAGER,
-  SESSION_PHASE_PANEL,
-  SESSION_PHASE_DESKTOP,
-  SESSION_PHASE_APPLICATION,
-  SESSION_PHASE_RUNNING,
-  SESSION_PHASE_QUERY_END_SESSION,
-  SESSION_PHASE_END_SESSION,
-  SESSION_PHASE_EXIT,
-  SESSION_PHASE_PAUSE_END_SESSION,
+  SESSION_PHASE_INITIALIZATION, // 1
+  SESSION_PHASE_WINDOWMANAGER, // 2
+  SESSION_PHASE_PANEL, // 3
+  SESSION_PHASE_DESKTOP, // 4
+  SESSION_PHASE_APPLICATION, // 5
+  SESSION_PHASE_RUNNING, // 6
+  SESSION_PHASE_QUERY_END_SESSION, // 7
+  SESSION_PHASE_END_SESSION, // 8
+  SESSION_PHASE_EXIT, // 9
+  SESSION_PHASE_PAUSE_END_SESSION, // 10
 
 } SessionPhase;
 
@@ -69,6 +71,7 @@ typedef struct
   SessionPhase phase;
   guint phaseTimerId;
   gboolean forcedExit;
+  gboolean startupHoldActive;
   
   GList *clients;
   GList *phaseTaskList; // Contains a list of clients that still need to respond for that phase (if applicable)
@@ -89,12 +92,13 @@ static gboolean run_phase(guint phase);
 static void run_autostart_phase(const gchar *phase);
 static void begin_end_session(gboolean force);
 static void end_session();
+static void try_release_startup_hold();
 
 // CLIENT
-static gchar * register_client(const gchar *sender, const gchar *appId, const gchar *startupId);
+static const gchar * register_client(const gchar *sender, const gchar *appId, const gchar *startupId);
 static void unregister_client(const gchar *clientObjectPath);
 static void on_client_ready(GrapheneSessionClient *client);
-static void on_client_exit(GrapheneSessionClient *client, gboolean success);
+static void on_client_complete(GrapheneSessionClient *client);
 static void on_client_end_session_response(GrapheneSessionClient *client, gboolean isOk, const gchar *string);
 
 // INHIBITOR
@@ -103,10 +107,8 @@ static guint32 inhibit(const gchar *sender, const gchar *appId, guint32 toplevel
 static void uninhibit(guint32 id);
 
 // UTILITIES
-static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender, const gchar *objectPath, const gchar *interfaceName, const gchar *methodName, GVariant *parameters, GDBusMethodInvocation *invocation, gpointer *userdata);
+static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender, const gchar *objectPath, const gchar *interfaceName, const gchar *methodName, GVariant *parameters, GDBusMethodInvocation *invocation, gpointer userdata);
 static GVariant *on_dbus_get_property(GDBusConnection *connection, const gchar *sender, const gchar *objectPath, const gchar *interfaceName, const gchar *propertyName, GError **error, gpointer userdata);
-static gchar ** strv_append(const gchar * const *list, const gchar *str);
-static gchar * str_trim(const gchar *str);
 static GHashTable * list_autostarts();
 static GrapheneSessionClient * find_client_from_given_info(const gchar *id, const gchar *objectPath, const gchar *appId, const gchar *dbusName);
 
@@ -134,8 +136,8 @@ int main(int argc, char **argv)
   g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
 #endif
 
-  // g_unix_signal_add(SIGTERM, on_sigterm_or_sigint, NULL);
-  // g_unix_signal_add(SIGINT, on_sigterm_or_sigint, NULL);
+  g_unix_signal_add(SIGTERM, on_sigterm_or_sigint, NULL);
+  g_unix_signal_add(SIGINT, on_sigterm_or_sigint, NULL);
 
   GApplication *app = g_application_new(SESSION_MANAGER_APP_ID, G_APPLICATION_FLAGS_NONE);
   g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
@@ -158,13 +160,13 @@ static void activate(GApplication *app, gpointer userdata)
 
   self = g_new0(Session, 1);
   self->app = app;
-  self->inhibitors = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, free_inhibitor);
+  self->inhibitors = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)free_inhibitor);
   self->inhibitCookieCounter = 1;
   self->phase = SESSION_PHASE_STARTUP;
   
   // Register Session Banager DBus path 
-  GDBusConnection *connection = g_application_get_dbus_connection(G_APPLICATION(app));
-  const gchar *objectPath = g_application_get_dbus_object_path(G_APPLICATION(app));
+  GDBusConnection *connection = g_application_get_dbus_connection(app);
+  const gchar *objectPath = g_application_get_dbus_object_path(app);
   static const GDBusInterfaceVTable interfaceCallbacks = {on_dbus_method_call, NULL, NULL};
   self->interfaceRegistrationId = g_dbus_connection_register_object(connection, objectPath, interfaceInfo->interfaces[0], &interfaceCallbacks, NULL, NULL, NULL);
   
@@ -173,12 +175,14 @@ static void activate(GApplication *app, gpointer userdata)
   
   // Start the first phase
   g_application_hold(app); // Hold until the running phase has been reached
+  self->startupHoldActive = TRUE;
   run_phase(SESSION_PHASE_STARTUP);
 }
 
 static void shutdown(GApplication *application, gpointer userdata)
 {
-  GDBusConnection *connection = g_application_get_dbus_connection(G_APPLICATION(self->app));
+  g_debug("shutdown");
+  GDBusConnection *connection = g_application_get_dbus_connection(self->app);
   if(self->interfaceRegistrationId)
     g_dbus_connection_unregister_object(connection, self->interfaceRegistrationId);
     
@@ -191,11 +195,12 @@ static void shutdown(GApplication *application, gpointer userdata)
 
 static void on_sigterm_or_sigint(gpointer userdata)
 {
-  if(self && self->app)
+  if(self && self->app && self->phase <= SESSION_PHASE_RUNNING)
   {
     // TODO: Exit cleanly
-    g_debug("handling sigterm/int cleanly");
-    g_application_quit(self->app);
+    g_message("handling sigterm/sigint cleanly");
+    begin_end_session(FALSE);
+    
   }
   else
   {
@@ -205,7 +210,9 @@ static void on_sigterm_or_sigint(gpointer userdata)
 
 static gboolean run_phase(guint phase)
 {
-  g_debug("starting phase %i", phase);
+  g_debug("");
+  g_debug("Starting phase %i", phase);
+  g_debug("-------------");
 
   self->phase = phase;
   
@@ -218,37 +225,38 @@ static gboolean run_phase(guint phase)
   self->phaseTaskList = NULL;
   self->phaseHasTasks = FALSE;
   
-  // GNOME standard is 10 seconds, however many applications never bother to register which causes
-  // the startup phase to hang for way too long. For any applications that DO register, 1 second is fine.
-  // TODO: This might not be enough time for slow-booting media like CDs.
-  gint waitTime = 1;
+  gint waitTime = 0;
   
   switch(self->phase)
   {
     case SESSION_PHASE_STARTUP:
-      waitTime = 0;
       break;
     case SESSION_PHASE_INITIALIZATION: // Important GNOME stuff
       run_autostart_phase("Initialization");
+      waitTime = 10;
       break;
     case SESSION_PHASE_WINDOWMANAGER: // This starts graphene-wm
       run_autostart_phase("WindowManager");
+      waitTime = 10;
       break;
     case SESSION_PHASE_PANEL: // This starts graphene-panel
       run_autostart_phase("Panel");
+      waitTime = 10;
       break;
     case SESSION_PHASE_DESKTOP: // This starts nautilus
       run_autostart_phase("Desktop");
+      waitTime = 10;
       break;
     case SESSION_PHASE_APPLICATION: // Everything else 
       run_autostart_phase("Applications");
-      waitTime = 0;
+      waitTime = 5;
       break;
     case SESSION_PHASE_RUNNING:
-      g_application_release(self->app); // Release the hold that was added in activate()
+      try_release_startup_hold();
       waitTime = -1;
       break;
     case SESSION_PHASE_QUERY_END_SESSION:
+      try_release_startup_hold();
       waitTime = 1;
       break;
     case SESSION_PHASE_PAUSE_END_SESSION:
@@ -256,7 +264,9 @@ static gboolean run_phase(guint phase)
       waitTime = 5;
       break;
     case SESSION_PHASE_END_SESSION:
+      try_release_startup_hold();
       end_session();
+      waitTime = 10;
       break;
     case SESSION_PHASE_EXIT:
       g_application_quit(self->app);
@@ -265,7 +275,7 @@ static gboolean run_phase(guint phase)
   }
   
   if(waitTime >= 0)
-    self->phaseTimerId = g_timeout_add_seconds(waitTime, run_phase, self->phase+1);
+    self->phaseTimerId = g_timeout_add_seconds(waitTime, (GSourceFunc)run_phase, self->phase+1);
     
   return FALSE; // stops timers
 }
@@ -275,7 +285,7 @@ static void run_next_phase_if_ready()
   if(self->phaseHasTasks && !self->phaseTaskList)
   {
     g_debug("phase %i complete", self->phase);
-    g_idle_add(run_phase, self->phase+1);
+    g_idle_add((GSourceFunc)run_phase, self->phase+1);
   }
 }
 
@@ -296,32 +306,31 @@ static void run_autostart_phase(const gchar *phase)
   {    
     GDesktopAppInfo *desktopInfo = G_DESKTOP_APP_INFO(value);
     
-    const gchar *thisPhase = g_desktop_app_info_get_string(desktopInfo, "X-GNOME-Autostart-Phase");
+    gchar *thisPhase = g_desktop_app_info_get_string(desktopInfo, "X-GNOME-Autostart-Phase");
     if(g_strcmp0(phase, thisPhase) == 0 || g_strcmp0(phase, "Applications") == 0)
     {
-      const gchar *commandline = g_app_info_get_commandline(G_APP_INFO(desktopInfo));
-      gboolean autoRestart = g_desktop_app_info_get_boolean(desktopInfo, "X-GNOME-AutoRestart");
-      const gchar *delayString = g_desktop_app_info_get_string(desktopInfo, "X-GNOME-Autostart-Delay");
-      gint64 delay = 0;
-      if(delayString)
-        delay = g_ascii_strtoll(delayString, NULL, 0);
-      
-      gboolean showOutput = g_desktop_app_info_get_boolean(desktopInfo, "Graphene-ShowOutput"); // For debugging, ignore output from unwanted programs
-      if(SHOW_ALL_OUTPUT)
-        showOutput = TRUE;
-    
       g_application_hold(self->app);
       GrapheneSessionClient *client = graphene_session_client_new(connection, NULL);
       self->clients = g_list_prepend(self->clients, client);
       self->phaseTaskList = g_list_prepend(self->phaseTaskList, client);
+      
       g_object_set(client,
-        "launch-args", commandline,
-        "auto-restart", autoRestart,
-        "silent", !showOutput, NULL);
+        "name", g_app_info_get_display_name(G_APP_INFO(desktopInfo)),
+        "args", g_app_info_get_commandline(G_APP_INFO(desktopInfo)),
+        "auto-restart", g_desktop_app_info_get_boolean(desktopInfo, "X-GNOME-AutoRestart"),
+        "condition", g_desktop_app_info_get_string(desktopInfo, "AutostartCondition"),
+        "silent", SHOW_ALL_OUTPUT ? FALSE : !g_desktop_app_info_get_boolean(desktopInfo, "Graphene-ShowOutput"),
+        NULL);
       g_object_connect(client,
         "signal::ready", on_client_ready, NULL,
-        "signal::exit", on_client_exit, NULL,
+        "signal::complete", on_client_complete, NULL,
         "signal::end-session-response", on_client_end_session_response, NULL, NULL);
+    
+      const gchar *delayString = g_desktop_app_info_get_string(desktopInfo, "X-GNOME-Autostart-Delay");
+      gint64 delay = 0;
+      if(delayString)
+        delay = g_ascii_strtoll(delayString, NULL, 0);
+    
       graphene_session_client_spawn(client, (guint)delay);
       
       g_hash_table_iter_remove(&iter);
@@ -339,13 +348,18 @@ static void run_autostart_phase(const gchar *phase)
  */
 static void begin_end_session(gboolean force)
 {
+  g_debug("clients:");
+  for(GList *clients=self->clients;clients!=NULL;clients=clients->next)
+  {
+    GrapheneSessionClient *client = (GrapheneSessionClient *)clients->data;
+    g_debug("  %s", graphene_session_client_get_best_name(client));
+  }
+  
   self->forcedExit = force;
   
   run_phase(SESSION_PHASE_QUERY_END_SESSION);
   self->phaseHasTasks = TRUE;
 
-  GDBusConnection *connection = g_application_get_dbus_connection(G_APPLICATION(self->app));
-  
   for(GList *clients=self->clients;clients!=NULL;clients=clients->next)
   {
     GrapheneSessionClient *client = (GrapheneSessionClient *)clients->data;
@@ -363,13 +377,23 @@ static void begin_end_session(gboolean force)
  */
 static void end_session()
 {
-  GDBusConnection *connection = g_application_get_dbus_connection(G_APPLICATION(self->app));
-  
-  for(GList *clients=self->clients;clients!=NULL;clients=clients->next)
+  GList *dupClients = g_list_copy(self->clients);
+  for(GList *clients=dupClients;clients!=NULL;clients=clients->next)
   {
     GrapheneSessionClient *client = (GrapheneSessionClient *)clients->data;
     graphene_session_client_end_session(client, self->forcedExit);
   }
+}
+
+/*
+ * Release the hold added in activate() which keeps the SM from closing before the RUNNING stage is reached.
+ * If it has already been released, this does nothing.
+ */
+static void try_release_startup_hold()
+{
+  if(self->startupHoldActive)
+    g_application_release(self->app);
+  self->startupHoldActive = FALSE;
 }
 
 /*
@@ -378,20 +402,19 @@ static void end_session()
  * Returns the client's object path. Do not free it yourself; freed when the client is destroyed.
  * sender is the DBus name of the process that is asking to be registered.
  */
-static gchar * register_client(const gchar *sender, const gchar *appId, const gchar *startupId)
+static const gchar * register_client(const gchar *sender, const gchar *appId, const gchar *startupId)
 {
   GrapheneSessionClient *client = find_client_from_given_info(startupId, NULL, appId, sender);
 
   if(!client)
   {
-    GDBusConnection *connection = g_application_get_dbus_connection(G_APPLICATION(self->app));
+    GDBusConnection *connection = g_application_get_dbus_connection(self->app);
     g_application_hold(self->app);
     client = graphene_session_client_new(connection, (g_strcmp0(startupId, "") == 0) ? NULL : startupId);
     g_object_connect(client,
-      "signal::ready", on_client_ready, NULL, // TODO: Need to connect 'ready'?. Shouldn't hurt though.
-      "signal::exit", on_client_exit, NULL,
+      "signal::complete", on_client_complete, NULL,
       "signal::end-session-response", on_client_end_session_response, NULL, NULL);
-    g_list_append(self->clients, client);
+    self->clients = g_list_prepend(self->clients, client);
   }
   
   graphene_session_client_register(client, sender, appId);
@@ -413,17 +436,17 @@ static void unregister_client(const gchar *clientObjectPath)
 
 static void on_client_ready(GrapheneSessionClient *client)
 {
-  g_debug("client ready");
   if(self->phase < SESSION_PHASE_RUNNING)
-  {
+  { 
+    g_debug("client '%s' ready", graphene_session_client_get_best_name(client));
     self->phaseTaskList = g_list_remove(self->phaseTaskList, client);
     run_next_phase_if_ready();
   }
 }
 
-static void on_client_exit(GrapheneSessionClient *client, gboolean success)
+static void on_client_complete(GrapheneSessionClient *client)
 {
-  g_debug("client exited (success? %i)", success);
+  g_debug("client '%s' complete", graphene_session_client_get_best_name(client));
   g_application_release(self->app);
   self->clients = g_list_remove(self->clients, client);
   g_object_unref(client);
@@ -435,6 +458,13 @@ static void on_client_end_session_response(GrapheneSessionClient *client, gboole
   {
     self->phaseTaskList = g_list_remove(self->phaseTaskList, client);
     run_next_phase_if_ready();
+  }
+  else if(self->phase == SESSION_PHASE_END_SESSION)
+  {
+    g_debug("end session response on '%s'", graphene_session_client_get_best_name(client));
+    g_application_release(self->app);
+    self->clients = g_list_remove(self->clients, client);
+    g_object_unref(client);
   }
 }
 
@@ -452,7 +482,7 @@ static guint32 inhibit(const gchar *sender, const gchar *appId, guint32 toplevel
   if(!InhibitorInterfaceInfo)
     return 0;
   
-  GDBusConnection *connection = g_application_get_dbus_connection(G_APPLICATION(self->app));
+  GDBusConnection *connection = g_application_get_dbus_connection(self->app);
   gchar *objectPath = g_strdup_printf("%s%i", INHIBITOR_OBJECT_PATH, inhibitor->id);
   
   GError *error = NULL;
@@ -477,7 +507,7 @@ static void uninhibit(guint32 id)
   if(!inhibitor)
     return;
     
-  GDBusConnection *connection = g_application_get_dbus_connection(G_APPLICATION(self->app));
+  GDBusConnection *connection = g_application_get_dbus_connection(self->app);
   if(inhibitor->objectRegistrationId)
     g_dbus_connection_unregister_object(connection, inhibitor->objectRegistrationId);
   inhibitor->objectRegistrationId = 0;
@@ -499,7 +529,7 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
               const gchar           *methodName,
               GVariant              *parameters,
               GDBusMethodInvocation *invocation,
-              gpointer              *userdata)
+              gpointer              userdata)
 {
   // TODO: Throw errors for failed calls instead of just returning NULL/0/""?
   
@@ -510,7 +540,7 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
     {
       gchar *appId, *startupId;
       g_variant_get(parameters, "(ss)", &appId, &startupId);
-      gchar *clientObjectPath = register_client(sender, appId, startupId);
+      const gchar *clientObjectPath = register_client(sender, appId, startupId);
       g_free(appId);
       g_free(startupId);
       g_dbus_method_invocation_return_value(invocation, g_variant_new("(o)", clientObjectPath));
@@ -548,7 +578,7 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
       arr[count] = NULL;
       
       GVariant **va = g_new(GVariant*, 1);
-      va[0] = g_variant_new_objv(arr, -1);
+      va[0] = g_variant_new_objv((const gchar * const *)arr, -1);
       GVariant *v = g_variant_new_tuple(va, 1);
       
       g_dbus_method_invocation_return_value(invocation, v);
@@ -633,9 +663,10 @@ GVariant *on_dbus_get_property(GDBusConnection *connection,
                                   const gchar *interface_name,
                                   const gchar *property_name,
                                   GError **error,
-                                  gpointer user_data)
+                                  gpointer userdata)
 {
   g_debug("dbus get property: %s, %s.%s", sender, interface_name, property_name);
+  return NULL;
 }
 
 static const gchar *SessionManagerInterfaceXML =
@@ -728,66 +759,6 @@ static const gchar *InhibitorInterfaceXML =
 "</node>";
 
 /*
- * Takes a list of strings and a string to append.
- * If <list> is NULL, a new list of strings is returned containing only <str>.
- * If <str> is NULL, a duplicated <list> is returned.
- * If both are NULL, a new, empty list of strings is returned.
- * The returned list is NULL-terminated (even if both parameters are NULL).
- * The returned list should be freed with g_strfreev().
- */
-static gchar ** strv_append(const gchar * const *list, const gchar *str)
-{
-  guint listLength = 0;
-  
-  if(list != NULL)
-  {
-    while(list[listLength])
-      ++listLength;
-  }
-  
-  gchar **newList = g_new(gchar*, listLength + ((str==NULL)?0:1) + 1); // +1 for new str, +1 for ending NULL
-  
-  for(guint i=0;i<listLength;++i)
-    newList[i] = g_strdup(list[i]);
-    
-  if(str != NULL)
-    newList[listLength] = g_strdup(str);
-    
-  newList[listLength + ((str==NULL)?0:1)] = NULL;
-  
-  return newList;
-}
-
-/*
- * Removes trailing and leading whitespace from a string.
- * Returns a newly allocated string. Parameter is unmodified.
- */
-static gchar * str_trim(const gchar *str)
-{
-  if(!str)
-    return NULL;
-    
-  guint32 len=0;
-  for(;str[len]!=NULL;++len);
-  
-  guint32 start=0;
-  for(;str[start]!=NULL;++start)
-    if(!g_ascii_isspace(str[start]))
-      break;
-      
-  guint32 end=len;
-  for(;end>start;--end)
-    if(!g_ascii_isspace(str[end-1]))
-      break;
-      
-  gchar *newstr = g_new(gchar, end-start+1);
-  for(guint32 i=0;(start+i)<end;++i)
-    newstr[i] = str[start+i];
-  newstr[end-start]=NULL;
-  return newstr;
-}
-
-/*
  * Gets a GHashTable of name->GDesktopAppInfo* containing all autostart .desktop files
  * in all system/user config directories. Also includes Graphene-specific .desktop files.
  *
@@ -825,11 +796,7 @@ static GHashTable * list_autostarts()
       if(!g_str_has_suffix(_name, ".desktop"))
         continue;
         
-      // TODO: Don't want caribou on right now. Not sure how to stop it without just getting rid of the .desktop file.
-      if(g_strcmp0(_name, "caribou-autostart.desktop") == 0)
-        continue;
-      
-      gchar *name = g_strdup(_name); // Not sure if g_file_info_get_name's return value is new memory or belongs to the object. This might be a memory leak.
+      gchar *name = g_strdup(_name);
       
       gchar *desktopInfoPath = g_strconcat(searchPath, "/", name, NULL);
       GDesktopAppInfo *desktopInfo = g_desktop_app_info_new_from_filename(desktopInfoPath);
