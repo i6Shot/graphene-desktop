@@ -24,7 +24,7 @@
 
 /**
  * SECTION:vos-system-volume-control
- * @short_description: Provides a simple interface for controlling system volume and mute (mostly a VERY simple Python interface for PortAudio).
+ * @short_description: Provides a simple interface for controlling system volume and mute (mostly a VERY simple Python interface for PulseAudio).
  **/
 
 struct _VosSystemVolumeControl
@@ -77,7 +77,7 @@ static void vos_system_volume_control_class_init(VosSystemVolumeControlClass *kl
   
   properties[PROP_STATE] = g_param_spec_int("state",
     "state",
-    "The state of the connection to PortAudio. Can be 0 (not ready), 1 (ready), or -1 (fail).",
+    "The state of the connection to PulseAudio. Can be 0 (not ready), 1 (ready), or -1 (fail).",
     -10, 10, 0,
     G_PARAM_READWRITE|G_PARAM_CONSTRUCT_ONLY); // TODO: G_PARAM_READONLY throws critical error for not having G_PARAM_WRITABLE... ??
   

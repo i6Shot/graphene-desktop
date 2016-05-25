@@ -15,7 +15,7 @@
  * limitations under the License.
  *
  * system-volume-control.h/.c
- * Provides a simple interface for controlling system volume and mute (mostly a VERY simple interface for PortAudio).
+ * Provides a simple interface for controlling system volume and mute (mostly a VERY simple interface for PulseAudio).
  */
 
 #ifndef __VOS_SYSTEM_VOLUME_CONTROL_H__
