@@ -73,6 +73,8 @@ typedef struct
   gboolean forcedExit;
   gboolean startupHoldActive;
   
+  GDBusProxy *wmProxy;
+  
   GList *clients;
   GList *phaseTaskList; // Contains a list of clients that still need to respond for that phase (if applicable)
   gboolean phaseHasTasks; // If true, the next phase will be started when phaseTaskList becomes NULL (0 elements)
@@ -90,6 +92,8 @@ static void shutdown(GApplication *application, gpointer userdata);
 static void on_sigterm_or_sigint(gpointer userdata);
 static gboolean run_phase(guint phase);
 static void run_autostart_phase(const gchar *phase);
+static void logout();
+static void wm_proxy_signal_cb(GDBusProxy *proxy, const gchar *sender, const gchar *signal, GVariant *parameters, gpointer userdata);
 static void begin_end_session(gboolean force);
 static void end_session();
 static void try_release_startup_hold();
@@ -164,7 +168,7 @@ static void activate(GApplication *app, gpointer userdata)
   self->inhibitCookieCounter = 1;
   self->phase = SESSION_PHASE_STARTUP;
   
-  // Register Session Banager DBus path 
+  // Register Session Manager DBus path 
   GDBusConnection *connection = g_application_get_dbus_connection(app);
   const gchar *objectPath = g_application_get_dbus_object_path(app);
   static const GDBusInterfaceVTable interfaceCallbacks = {on_dbus_method_call, NULL, NULL};
@@ -197,10 +201,8 @@ static void on_sigterm_or_sigint(gpointer userdata)
 {
   if(self && self->app && self->phase <= SESSION_PHASE_RUNNING)
   {
-    // TODO: Exit cleanly
     g_message("handling sigterm/sigint cleanly");
-    begin_end_session(FALSE);
-    
+    begin_end_session(TRUE);
   }
   else
   {
@@ -343,22 +345,76 @@ static void run_autostart_phase(const gchar *phase)
 }
 
 /*
+ * Initiates the logout by asking the window manager to show the logout dialog.
+ * If that fails, it does a forced logout.
+ */
+static void logout()
+{
+  GDBusConnection *connection = g_application_get_dbus_connection(G_APPLICATION(self->app));
+  if(!self->wmProxy)
+    self->wmProxy = g_dbus_proxy_new_sync(connection, 0, NULL, "io.velt.GrapheneWM", "/io/velt/GrapheneWM", "io.velt.GrapheneWM", NULL, NULL);
+
+  if(!self->wmProxy)
+  {
+    g_critical("Could not connect to window manager to spawn logout dialog. Ending session now.");
+    begin_end_session(TRUE);
+    return;
+  }
+
+  g_signal_connect(self->wmProxy, "g-signal", G_CALLBACK(wm_proxy_signal_cb), NULL);
+    
+  GVariant *r = g_dbus_proxy_call_sync(self->wmProxy, "ShowLogoutDialog", NULL, G_DBUS_CALL_FLAGS_NONE, G_MAXINT, NULL, NULL);
+  gboolean fail = TRUE;
+  
+  if(r)
+  {
+    g_variant_get(r, "(b)", &fail);
+    g_variant_unref(r);
+  }
+  if(fail)
+  {
+    g_critical("Failed to spawn a logout dialog. Ending session now.");
+    begin_end_session(TRUE);
+    return;
+  }
+}
+
+static void wm_proxy_signal_cb(GDBusProxy *proxy, const gchar *sender, const gchar *signal, GVariant *parameters, gpointer userdata)
+{
+  gchar *wmUniqueName = g_dbus_proxy_get_name_owner(proxy);
+  if(g_strcmp0(signal, "LogoutDialogResponse") == 0 && g_strcmp0(sender, wmUniqueName) == 0)
+  {
+    gchar *response;
+    g_variant_get(parameters, "(s)", &response);
+    
+    if(g_strcmp0(response, "Logout") == 0)
+    {
+      begin_end_session(FALSE);
+    }
+    
+    g_free(response);
+  }
+  
+  g_free(wmUniqueName);
+}
+
+/*
  * Called to begin the process of cleanly ending the session (logout/shutdown).
  * Changes to the QUERY_END_SESSION phase.
  */
 static void begin_end_session(gboolean force)
 {
+  self->forcedExit = force;
+  
+  run_phase(SESSION_PHASE_QUERY_END_SESSION);
+  self->phaseHasTasks = TRUE;
+
   g_debug("clients:");
   for(GList *clients=self->clients;clients!=NULL;clients=clients->next)
   {
     GrapheneSessionClient *client = (GrapheneSessionClient *)clients->data;
     g_debug("  %s", graphene_session_client_get_best_name(client));
   }
-  
-  self->forcedExit = force;
-  
-  run_phase(SESSION_PHASE_QUERY_END_SESSION);
-  self->phaseHasTasks = TRUE;
 
   for(GList *clients=self->clients;clients!=NULL;clients=clients->next)
   {
@@ -617,7 +673,7 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
     }
     else if(g_strcmp0(methodName, "Logout") == 0)
     {
-      begin_end_session(FALSE);
+      logout();
     }
     else if(g_strcmp0(methodName, "IsSessionRunning") == 0)
     {

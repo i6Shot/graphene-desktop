@@ -18,6 +18,7 @@
 
 #include "wm.h"
 #include "background.h"
+#include "dialog.h"
 #include <meta/meta-shadow-factory.h>
 
 // VosWM class (private)
@@ -26,10 +27,11 @@ struct _VosWM {
   MetaBackgroundGroup *BackgroundGroup;
   const gchar *clientId;
   guint dbusNameId;
-  GDBusConnection *sessionBus;
+  GDBusConnection *connection;
   GDBusProxy *smProxy;
   gchar *clientPath;
   GDBusProxy *clientProxy;
+  guint interfaceRegistrationId;
 };
 
 // Structs copied from meta-shadow-factory.c (commit a191554 on Jul 6, 2015)
@@ -45,6 +47,8 @@ typedef struct
   MetaShadowParams focused;
   MetaShadowParams unfocused;
 } _MetaShadowClassInfo;
+
+static const gchar *WMInterfaceXML;
 
 
 
@@ -70,6 +74,14 @@ static void quit(MetaPlugin *plugin);
 static void dbus_name_acquired(GDBusConnection *connection, const gchar *name, MetaPlugin *plugin);
 static void dbus_name_lost(GDBusConnection *connection, const gchar *name, MetaPlugin *plugin);
 static void client_proxy_signal(GDBusProxy *proxy, const gchar *sender, const gchar *signal, GVariant *parameters, MetaPlugin *plugin);
+static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender,
+              const gchar           *objectPath,
+              const gchar           *interfaceName,
+              const gchar           *methodName,
+              GVariant              *parameters,
+              GDBusMethodInvocation *invocation,
+              MetaPlugin            *plugin);
+static void show_logout_dialog(MetaPlugin *plugin);
 static void on_monitors_changed(MetaScreen *screen, MetaPlugin *plugin);
 static void minimize(MetaPlugin *wm, MetaWindowActor *actor);
 static void unminimize(MetaPlugin *wm, MetaWindowActor *actor);
@@ -138,7 +150,6 @@ static void start(MetaPlugin *plugin)
   info->focused = dockShadow;
   info->unfocused = dockShadow;
   g_hash_table_insert(factory->shadow_classes, "dock", info);
-  
   
   MetaScreen *screen = meta_plugin_get_screen(plugin);
   ClutterActor *screenGroup = meta_get_window_group_for_screen(screen);
@@ -209,6 +220,7 @@ static void dbus_name_acquired(GDBusConnection *connection, const gchar *name, M
 {
   VosWM *wm = VOS_WM(plugin);
 
+  wm->connection = connection;
   wm->smProxy = g_dbus_proxy_new_sync(connection,
                   G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES | G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS,
                   NULL,
@@ -244,6 +256,11 @@ static void dbus_name_acquired(GDBusConnection *connection, const gchar *name, M
         g_signal_connect(wm->clientProxy, "g-signal", G_CALLBACK(client_proxy_signal), plugin);
       else
         g_critical("Failed to get connection to client object");
+
+      const GDBusNodeInfo *interfaceInfo = g_dbus_node_info_new_for_xml(WMInterfaceXML, NULL);
+      static const GDBusInterfaceVTable interfaceCallbacks = {on_dbus_method_call, NULL, NULL};
+      if(interfaceInfo)
+        wm->interfaceRegistrationId = g_dbus_connection_register_object(connection, "/io/velt/GrapheneWM", interfaceInfo->interfaces[0], &interfaceCallbacks, wm, NULL, NULL);
     }
     else
       g_critical("Failed to register client");
@@ -254,6 +271,7 @@ static void dbus_name_acquired(GDBusConnection *connection, const gchar *name, M
 
 static void dbus_name_lost(GDBusConnection *connection, const gchar *name, MetaPlugin *plugin)
 {
+  VOS_WM(plugin)->connection = NULL;
   quit(plugin);
 }
 
@@ -261,19 +279,98 @@ static void client_proxy_signal(GDBusProxy *proxy, const gchar *sender, const gc
 {
   VosWM *wm = VOS_WM(plugin);
 
-  if(g_str_equal(signal, "QueryEndSession"))
+  gchar *smUniqueName = g_dbus_proxy_get_name_owner(proxy);
+  gboolean sentFromSM = g_strcmp0(sender, smUniqueName) == 0;
+  g_free(smUniqueName);
+  if(!sentFromSM)
+    return;
+  
+  if(g_strcmp0(signal, "QueryEndSession") == 0)
   {
     g_dbus_proxy_call(wm->clientProxy, "EndSessionResponse", g_variant_new ("(bs)", TRUE, ""), G_DBUS_CALL_FLAGS_NONE, G_MAXINT, NULL, NULL, NULL);
   }
-  else if(g_str_equal(signal, "EndSession"))
+  else if(g_strcmp0(signal, "EndSession") == 0)
   {
     g_dbus_proxy_call(wm->clientProxy, "EndSessionResponse", g_variant_new ("(bs)", TRUE, ""), G_DBUS_CALL_FLAGS_NONE, G_MAXINT, NULL, NULL, NULL);
     quit(plugin);
   }
-  else if(g_str_equal(signal, "Stop"))
+  else if(g_strcmp0(signal, "Stop") == 0)
   {
     quit(plugin);
   }
+}
+
+static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender,
+              const gchar           *objectPath,
+              const gchar           *interfaceName,
+              const gchar           *methodName,
+              GVariant              *parameters,
+              GDBusMethodInvocation *invocation,
+              MetaPlugin            *plugin)
+{
+  
+  g_debug("dbus method call: %s, %s.%s", sender, interfaceName, methodName);
+  
+  gchar *smUniqueName = g_dbus_proxy_get_name_owner(VOS_WM(plugin)->smProxy);
+  
+  if(g_strcmp0(interfaceName, "io.velt.GrapheneWM") == 0)
+  {
+    if(g_strcmp0(methodName, "ShowLogoutDialog") == 0 && g_strcmp0(sender, smUniqueName) == 0)
+    {
+      show_logout_dialog(plugin);
+      g_dbus_method_invocation_return_value(invocation, g_variant_new("(b)", FALSE));
+      g_free(smUniqueName);
+      return;
+    }
+    else if(g_strcmp0(methodName, "ShowBlockingClientsDialog") == 0 && g_strcmp0(sender, smUniqueName) == 0)
+    {
+      // g_variant_get(parameters, "(ao)", &appId, &xId, &reason, &flags);
+      
+    }
+  }
+  
+  g_dbus_method_invocation_return_value(invocation, NULL);
+  g_free(smUniqueName);
+}
+
+static const gchar *WMInterfaceXML =
+"<node>"
+"  <interface name='io.velt.GrapheneWM'>"
+"    <method name='ShowLogoutDialog'>"
+// "      <arg type='u' direction='in' name='monitor'/>"
+"      <arg type='b' direction='out' name='fail'/>"
+"    </method>"
+"    <method name='ShowBlockingClientsDialog'> <arg type='ao' direction='in' name='blocking_clients'/> <arg type='b' direction='out' name='fail'/> </method>"
+"    <signal name='LogoutDialogResponse'> <arg type='s' name='response'/> </signal>"
+"    <signal name='BlockingDialogResponse'> <arg type='s' name='response'/> </signal>"
+"  </interface>"
+"</node>";
+
+static void x_done(ClutterActor *actor, MetaPlugin *plugin)
+{
+  g_debug("transition done");
+}
+
+static void on_logout_dialog_close(GrapheneWMDialog *dialog, const gchar *response, MetaPlugin *plugin)
+{
+  meta_plugin_end_modal(plugin, 0);
+
+  VosWM *wm = VOS_WM(plugin);
+  
+  g_dbus_connection_emit_signal(wm->connection, NULL, "/io/velt/GrapheneWM",
+    "io.velt.GrapheneWM", "LogoutDialogResponse", g_variant_new("(s)", response), NULL);
+}
+
+static void show_logout_dialog(MetaPlugin *plugin)
+{
+  g_debug("show_logout_dialog");
+  gchar **buttons = g_strsplit("Logout Sleep Restart Shutdown Cancel", " ", 0);
+  GrapheneWMDialog *dialog = graphene_wm_dialog_new(NULL, buttons);
+  g_strfreev(buttons);
+  g_signal_connect(dialog, "close", on_logout_dialog_close, plugin);
+  graphene_wm_dialog_show(dialog, meta_plugin_get_screen(plugin), 0);
+  
+  meta_plugin_begin_modal(plugin, 0, 0);
 }
 
 // static void launch_rundialog(MetaDisplay *display, MetaScreen *screen,

@@ -24,7 +24,7 @@ PANELOBJS=$(patsubst %.c,%.o,$(PANELSRC))
 
 WMF=wm
 WM=graphene-wm
-WMSRC=$(WMF)/wm.c $(WMF)/background.c
+WMSRC=$(WMF)/wm.c $(WMF)/background.c $(WMF)/dialog.c
 WMINCLUDE=$(patsubst %.c,%.h,$(WMSRC))
 WMOBJS=$(patsubst %.c,%.o,$(WMSRC))
 
