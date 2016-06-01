@@ -16,6 +16,7 @@ Building Manually
 
 graphene-desktop uses the following libraries and packages:
 
+    - cmake (build only)
     - accountsservice
     - glib2
     - gnome-control-center
@@ -44,16 +45,16 @@ Download/clone this repo and
 ```bash
 
     cd graphene-desktop
-    sudo make
-    sudo make install
+    cmake .
+    sudo make all install
 ```
 
 graphene-desktop's data files (including panel applets) are stored in /usr/share/graphene.
 All files here are customizable, however know that **running "sudo make install"
 will overwrite any custom changes made to that directory.**
 
-Eventually, this single-file make will be replaced with Autotools. Once I can
-figure out how to use Autotools.
+Uninstall by running 'sudo make uninstall' in the graphene-desktop directory. This only works
+when install_manifest.txt, a file created after installing, is available.
 
 License
 --------
@@ -62,8 +63,9 @@ Most of Graphene Desktop uses the Apache License 2.0 (ASL). Although we support 
 the Velt team chose ASL because we want to give users the freedom to do anything they want
 with our software.
 
-However, due to the terms of the GNU General Public License, some of Graphene must be licensed
-under GPLv3. The license information for each source file is listed at the top of the file.
+However, not all of Graphene could be licensed under ASL. For example, the window manager and
+all source files in the wm directory must be licensed under the GPLv3 because libmutter is also
+GPLv3. The license information for each applicable file is listed at the top of the file.
 
 Authors
 --------

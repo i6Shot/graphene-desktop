@@ -19,12 +19,12 @@
  * https://wiki.gnome.org/Projects/SessionManagement/NewGnomeSession
  */
 
+#include "config.h"
 #include <gio/gio.h>
 #include <gio/gdesktopappinfo.h>
 #include <glib.h>
 #include <signal.h>
 #include <sys/wait.h>
-#include <gtk/gtk.h>
 #include <stdlib.h>
 #include "client.h"
 #include "util.h"
@@ -828,7 +828,7 @@ static GHashTable * list_autostarts()
 {
   GHashTable *desktopInfoTable = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_object_unref);
   
-  gchar **configDirsSys = strv_append(g_get_system_config_dirs(), VDE_DATA_DIR);
+  gchar **configDirsSys = strv_append(g_get_system_config_dirs(), GRAPHENE_DATA_DIR);
   gchar **configDirs = strv_append((const gchar * const *)configDirsSys, g_get_user_config_dir()); // Important that the user config dir comes last (for overwriting)
   g_strfreev(configDirsSys);
 

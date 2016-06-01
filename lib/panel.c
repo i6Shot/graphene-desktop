@@ -17,6 +17,7 @@
  * This should be compiled into libvos for GIntrospection, and NOT compiled into the panel application binary.
  */
 
+#include "config.h"
 #include "panel.h"
 #include "applet-extension.h"
 #include <libpeas/peas.h>
@@ -91,11 +92,11 @@ static void vos_panel_init(VosPanel *self)
 
   // Set the application theme
   // GtkCssProvider *fallbackProvider = gtk_css_provider_new();
-  // gtk_css_provider_load_from_path(fallbackProvider, VDE_DATA_DIR "/panel-fallback.css", NULL); // TODO: Check for errors
+  // gtk_css_provider_load_from_path(fallbackProvider, GRAPHENE_DATA_DIR "/panel-fallback.css", NULL); // TODO: Check for errors
   // gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), GTK_STYLE_PROVIDER(fallbackProvider), GTK_STYLE_PROVIDER_PRIORITY_FALLBACK);
 
   GtkCssProvider *provider = gtk_css_provider_new();
-  gtk_css_provider_load_from_path(provider, VDE_DATA_DIR "/panel.css", NULL); // TODO: Check for errors
+  gtk_css_provider_load_from_path(provider, GRAPHENE_DATA_DIR "/panel.css", NULL); // TODO: Check for errors
   gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
   // Update the position now and when the size or monitors change
@@ -472,7 +473,7 @@ static void init_plugins(VosPanel *self)
 {
   // Init peas
   PeasEngine *engine = peas_engine_get_default();
-  peas_engine_add_search_path(engine, VDE_DATA_DIR "/applets", VDE_DATA_DIR "/applets");
+  peas_engine_add_search_path(engine, GRAPHENE_DATA_DIR "/applets", GRAPHENE_DATA_DIR "/applets");
   peas_engine_enable_loader(engine, "python3");
   peas_engine_enable_loader(engine, "lua5.1");
   load_girepository("Vos", "1.0");
