@@ -4,23 +4,21 @@ Graphene Desktop
 The desktop environment of VeltOS, an Arch Linux-based operating system
 built entirely upon community input. Check out [velt.io](https://www.velt.io) more info.
 
-Building for Arch
+Installing for Arch
 --------
 
 If you are running Arch Linux, you can install Graphene Desktop by adding
 *vosrepo.velt.io/x86_64* to your list of repositories and installing the
-package *graphene-desktop* via pacman.
-
-More detailed install instructions are available at [velt.io/vosinfo](https://velt.io/vosinfo/).
+package *graphene-desktop* via pacman. [Click here for more detail.](https://velt.io/veltos-installation/)
 
 Building Manually
 --------
 
-graphene-desktop uses the following libraries:
+graphene-desktop uses the following libraries and packages:
 
     - accountsservice
     - glib2
-    - gnome-control-center (optional)
+    - gnome-control-center
     - gnome-menus
     - gobject-introspection
     - gtk3
