@@ -1,4 +1,4 @@
-# graphene-desktop
+# This file is part of graphene-desktop, the desktop environment of VeltOS.
 # Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,22 +14,22 @@
 # limitations under the License.
 #
 # tasklist.py/.plugin
-# Plugin loaded by VosPanel to add a application launcher widget. This is a built-in plugin, and is automatically put on the far
+# Plugin loaded by GraphenePanel to add a application launcher widget. This is a built-in plugin, and is automatically put on the far
 # left side of the panel.
 
 import gi, subprocess, bisect
 gi.require_version('Wnck', '3.0')
-from gi.repository import GObject, Gtk, Wnck, Vos, Gio
+from gi.repository import GObject, Gtk, Wnck, Graphene, Gio
 from gi.repository.GdkPixbuf import InterpType
 
-class VosTaskListExtension(GObject.Object, Vos.AppletExtension):
-    __gtype_name__ = 'VosTaskListExtension'
+class GrapheneTaskListExtension(GObject.Object, Graphene.AppletExtension):
+    __gtype_name__ = 'GrapheneTaskListExtension'
     
     def do_get_widget(self, panel):
-        return VosTaskListApplet(panel)
+        return GrapheneTaskListApplet(panel)
         
-class VosTaskListApplet(Gtk.Box):
-    __gtype_name__ = 'VosTaskListApplet'
+class GrapheneTaskListApplet(Gtk.Box):
+    __gtype_name__ = 'GrapheneTaskListApplet'
 
     def __init__(self, panel):
         super().__init__()

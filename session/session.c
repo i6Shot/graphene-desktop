@@ -1,5 +1,5 @@
 /*
- * graphene-desktop
+ * This file is part of graphene-desktop, the desktop environment of VeltOS.
  * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * session2.c
+ * session.c
  * Session manager for Graphene. Launches the panel, window manager, and other tasks, and exits on logout.
  * https://wiki.gnome.org/Projects/SessionManagement/NewGnomeSession
  */

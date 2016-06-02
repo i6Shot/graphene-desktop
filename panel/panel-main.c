@@ -1,5 +1,5 @@
 /*
- * graphene-desktop
+ * This file is part of graphene-desktop, the desktop environment of VeltOS.
  * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,17 +16,17 @@
  *
  * main.c
  * Main file for the panel application.
- * Initializes a GtkApplication with one window, the VosPanel.
- * Cannot be a part of panel.c since panel.c is compiled into libvos.
+ * Initializes a GtkApplication with one window, the GraphenePanel.
+ * Cannot be a part of panel.c since panel.c is compiled into libgraphene.
  */
 
 #include <lib/panel.h>
 
 static void      activate       (GtkApplication *app, gpointer userdata);
-extern VosPanel* vos_panel_new  (void);
-extern gboolean  vos_panel_is_rebooting(VosPanel *self);
+extern GraphenePanel* graphene_panel_new  (void);
+extern gboolean  graphene_panel_is_rebooting(GraphenePanel *self);
 
-static VosPanel *panel = NULL;
+static GraphenePanel *panel = NULL;
 
 int main(int argc, char **argv)
 {
@@ -35,7 +35,7 @@ int main(int argc, char **argv)
   g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
   int status = g_application_run(G_APPLICATION(app), argc, argv);
   g_object_unref(app);
-  if(VOS_IS_PANEL(panel) && vos_panel_is_rebooting(panel))
+  if(GRAPHENE_IS_PANEL(panel) && graphene_panel_is_rebooting(panel))
     status = 120; // 120 tells the session manager to restart the panel instead of logging out
   g_object_unref(panel);
   return status;
@@ -44,7 +44,7 @@ int main(int argc, char **argv)
 static void activate(GtkApplication *app, gpointer userdata)
 {
   // Create the panel
-  panel = vos_panel_new();
+  panel = graphene_panel_new();
   gtk_application_add_window(app, GTK_WINDOW(panel));
   
   // Show the panel

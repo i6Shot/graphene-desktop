@@ -1,4 +1,4 @@
-# graphene-desktop
+# This file is part of graphene-desktop, the desktop environment of VeltOS.
 # Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,13 +14,13 @@
 # limitations under the License.
 #
 # volume.py
-# Creates a volume icon using SystemVolumeControl from libvos. Used in the settings panel.
+# Creates a volume icon using SystemVolumeControl from libgraphene. Used in the settings panel.
 
-from gi.repository import GLib, GObject, Gio, Gtk, Vos
+from gi.repository import GLib, GObject, Gio, Gtk, Graphene
 import threading, time
 
-class VosVolumeIcon(Gtk.Image):
-	__gtype_name__ = 'VosVolumeIcon'
+class GrapheneVolumeIcon(Gtk.Image):
+	__gtype_name__ = 'GrapheneVolumeIcon'
 	
 	def __init__(self):
 		super().__init__()
@@ -29,7 +29,7 @@ class VosVolumeIcon(Gtk.Image):
 
 		self.set_from_icon_name("audio-volume-high-symbolic", Gtk.IconSize.MENU)
 		
-		self.volumeControl = Vos.SystemVolumeControl.new()
+		self.volumeControl = Graphene.SystemVolumeControl.new()
 		self.volumeControl.connect("notify::volume", self.update)
 		self.volumeControl.connect("notify::muted", self.update)
 
@@ -52,18 +52,18 @@ class VosVolumeIcon(Gtk.Image):
 			self.prevIconName = iconName
 			GLib.idle_add(self.set_from_icon_name, iconName, Gtk.IconSize.MENU)
 			
-class VosVolumeSlider(Gtk.Box):
-	__gtype_name__ = 'VosVolumeSlider'
+class GrapheneVolumeSlider(Gtk.Box):
+	__gtype_name__ = 'GrapheneVolumeSlider'
 
 	def __init__(self):
 		super().__init__(orientation=Gtk.Orientation.HORIZONTAL)
 		
 		self.props.margin = 20
 		
-		self.volumeControl = Vos.SystemVolumeControl.new()
+		self.volumeControl = Graphene.SystemVolumeControl.new()
 		self.volumeControl.connect("notify::volume", self.update)
 		
-		self.volumeIcon = VosVolumeIcon()
+		self.volumeIcon = GrapheneVolumeIcon()
 		self.volumeIcon.set_valign(Gtk.Align.START)
 
 		self.slider = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0.0, 1.5, 0.1)

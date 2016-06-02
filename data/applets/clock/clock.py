@@ -1,4 +1,4 @@
-# graphene-desktop
+# This file is part of graphene-desktop, the desktop environment of VeltOS.
 # Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,20 +14,20 @@
 # limitations under the License.
 #
 # clock.py/.plugin
-# Plugin loaded by VosPanel to add a clock widget. This is a built-in plugin, and is automatically put on the far right side of
+# Plugin loaded by GraphenePanel to add a clock widget. This is a built-in plugin, and is automatically put on the far right side of
 # the panel.
 
-from gi.repository import GLib, GObject, Gtk, Vos
+from gi.repository import GLib, GObject, Gtk, Graphene
 import datetime, threading, time
 
-class VosClockExtension(GObject.Object, Vos.AppletExtension):
-	__gtype_name__ = 'VosClockExtension'
+class GrapheneClockExtension(GObject.Object, Graphene.AppletExtension):
+	__gtype_name__ = 'GrapheneClockExtension'
 	
 	def do_get_widget(self, panel):
-		return VosClockApplet()
+		return GrapheneClockApplet()
 		
-class VosClockApplet(Gtk.Label):
-	__gtype_name__ = 'VosClockApplet'
+class GrapheneClockApplet(Gtk.Label):
+	__gtype_name__ = 'GrapheneClockApplet'
 	
 	def __init__(self):
 		super().__init__()

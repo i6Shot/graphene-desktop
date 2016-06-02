@@ -1,4 +1,4 @@
-# graphene-desktop
+# This file is part of graphene-desktop, the desktop environment of VeltOS.
 # Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,23 +14,23 @@
 # limitations under the License.
 #
 # launcher.py/.plugin
-# Plugin loaded by VosPanel to add a application launcher widget. This is a built-in plugin, and is automatically put on the far
+# Plugin loaded by GraphenePanel to add a application launcher widget. This is a built-in plugin, and is automatically put on the far
 # left side of the panel.
 
 import gi, os, subprocess, time
 gi.require_version('GMenu', '3.0')
 gi.require_version('GdkX11', '3.0')
-from gi.repository import GLib, GObject, Gtk, Gdk, GdkX11, GMenu, Vos
+from gi.repository import GLib, GObject, Gtk, Gdk, GdkX11, GMenu, Graphene
 
-class VosLauncherExtension(GObject.Object, Vos.AppletExtension):
-    __gtype_name__ = 'VosLauncherExtension'
+class GrapheneLauncherExtension(GObject.Object, Graphene.AppletExtension):
+    __gtype_name__ = 'GrapheneLauncherExtension'
 
     def do_get_widget(self, panel):
-        return VosLauncherApplet(panel)
+        return GrapheneLauncherApplet(panel)
 
 
-class VosLauncherApplet(Gtk.Button):
-    __gtype_name__ = 'VosLauncherApplet'
+class GrapheneLauncherApplet(Gtk.Button):
+    __gtype_name__ = 'GrapheneLauncherApplet'
 
     def __init__(self, panel):
         super().__init__()
@@ -47,7 +47,7 @@ class VosLauncherApplet(Gtk.Button):
         self.show_all()
 
         # Create popup
-        self.popup = VosLauncherPopup(panel)
+        self.popup = GrapheneLauncherPopup(panel)
         self.popup.connect("hide", self.on_popup_hide)
 
     def on_applet_button_click(self, button, event):
@@ -60,8 +60,8 @@ class VosLauncherApplet(Gtk.Button):
         self.get_style_context().remove_class("clicked")
 
 
-class VosLauncherPopup(Gtk.Window):
-    __gtype_name__ = 'VosLauncherPopup'
+class GrapheneLauncherPopup(Gtk.Window):
+    __gtype_name__ = 'GrapheneLauncherPopup'
 
     def __init__(self, panel):
         super().__init__()
@@ -90,7 +90,7 @@ class VosLauncherPopup(Gtk.Window):
         self.popupLayout.pack_start(self.searchBar, False, False, 0)
 
         # General applet box
-        self.appListView = VosAppListView()
+        self.appListView = GrapheneAppListView()
         self.appListView.connect("launch_app", self.on_applist_item_clicked)
         self.popupLayout.pack_start(self.appListView, True, True, 0)
         self.popupLayout.show_all()
@@ -144,8 +144,8 @@ class VosLauncherPopup(Gtk.Window):
         return Gdk.EVENT_PROPAGATE
         
 
-class VosAppListView(Gtk.ScrolledWindow):
-    __gtype_name__ = 'VosAppListView'
+class GrapheneAppListView(Gtk.ScrolledWindow):
+    __gtype_name__ = 'GrapheneAppListView'
 
     __gsignals__ = { 'launch_app': (GObject.SIGNAL_RUN_LAST, GObject.TYPE_NONE, (GObject.TYPE_OBJECT, GObject.TYPE_OBJECT)) }
 

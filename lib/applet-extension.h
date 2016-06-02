@@ -1,5 +1,5 @@
 /*
- * graphene-desktop
+ * This file is part of graphene-desktop, the desktop environment of VeltOS.
  * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,8 +18,8 @@
  * Provides an interface for LibPeas plugins to extend for adding widgets into the Panel.
  */
 
-#ifndef __VOS_APPLET_EXTENSION_H__
-#define __VOS_APPLET_EXTENSION_H__
+#ifndef __GRAPHENE_APPLET_EXTENSION_H__
+#define __GRAPHENE_APPLET_EXTENSION_H__
 
 #include <gtk/gtk.h>
 #include "panel.h"
@@ -29,28 +29,28 @@ G_BEGIN_DECLS
 /*
  * Type declaration.
  */
-#define VOS_TYPE_APPLET_EXTENSION  vos_applet_extension_get_type()
-G_DECLARE_INTERFACE(VosAppletExtension, vos_applet_extension, VOS, APPLET_EXTENSION, GObject)
+#define GRAPHENE_TYPE_APPLET_EXTENSION  graphene_applet_extension_get_type()
+G_DECLARE_INTERFACE(GrapheneAppletExtension, graphene_applet_extension, GRAPHENE, APPLET_EXTENSION, GObject)
 
 /**
- * VosAppletExtensionInterface:
+ * GrapheneAppletExtensionInterface:
  * @g_iface: The parent interface.
  * @create_applet: Gets the widget created by the extension.
  *
  * Provides an interface for applet extension plugins.
  */
-struct _VosAppletExtensionInterface {
+struct _GrapheneAppletExtensionInterface {
   GTypeInterface g_iface;
 
   /* Virtual public methods */
-  GtkWidget*  (*get_widget)            (VosAppletExtension *extension, VosPanel *panel);
+  GtkWidget*  (*get_widget)            (GrapheneAppletExtension *extension, GraphenePanel *panel);
 };
 
 /*
  * Public methods
  */
-GtkWidget *         vos_applet_extension_get_widget       (VosAppletExtension *extension, VosPanel *panel);
+GtkWidget *         graphene_applet_extension_get_widget       (GrapheneAppletExtension *extension, GraphenePanel *panel);
 
 G_END_DECLS
 
-#endif /* __VOS_APPLET_EXTENSION_H__ */
+#endif /* __GRAPHENE_APPLET_EXTENSION_H__ */

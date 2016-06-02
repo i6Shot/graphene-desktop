@@ -1,7 +1,7 @@
 [Plugin]
 Module=tasklist
 Loader=python3
-Name=VosTaskList
+Name=GrapheneTaskList
 Description=Shows open applications
 Builtin=true
 Hidden=true

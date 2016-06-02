@@ -1,5 +1,5 @@
 /*
- * graphene-desktop
+ * This file is part of graphene-desktop, the desktop environment of VeltOS.
  * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,8 +18,8 @@
  * Provides a simple interface for controlling system volume and mute (mostly a VERY simple interface for PulseAudio).
  */
 
-#ifndef __VOS_SYSTEM_VOLUME_CONTROL_H__
-#define __VOS_SYSTEM_VOLUME_CONTROL_H__
+#ifndef __GRAPHENE_SYSTEM_VOLUME_CONTROL_H__
+#define __GRAPHENE_SYSTEM_VOLUME_CONTROL_H__
 
 #include <gio/gio.h>
 
@@ -28,17 +28,17 @@ G_BEGIN_DECLS
 /*
  * Type declaration.
  */
-#define VOS_TYPE_SYSTEM_VOLUME_CONTROL vos_system_volume_control_get_type()
-G_DECLARE_FINAL_TYPE(VosSystemVolumeControl, vos_system_volume_control, VOS, SYSTEM_VOLUME_CONTROL, GObject)
+#define GRAPHENE_TYPE_SYSTEM_VOLUME_CONTROL graphene_system_volume_control_get_type()
+G_DECLARE_FINAL_TYPE(GrapheneSystemVolumeControl, graphene_system_volume_control, GRAPHENE, SYSTEM_VOLUME_CONTROL, GObject)
 
 // Public methods
-VosSystemVolumeControl*  vos_system_volume_control_new              (void)  G_GNUC_CONST;
-gfloat                   vos_system_volume_control_get_volume       (VosSystemVolumeControl *self);
-gboolean                 vos_system_volume_control_get_is_muted     (VosSystemVolumeControl *self);
-gint                     vos_system_volume_control_get_state        (VosSystemVolumeControl *self);
-void                     vos_system_volume_control_set_volume       (VosSystemVolumeControl *self, gfloat volume);
-void                     vos_system_volume_control_set_is_muted     (VosSystemVolumeControl *self, gboolean is_muted);
+GrapheneSystemVolumeControl*  graphene_system_volume_control_new              (void)  G_GNUC_CONST;
+gfloat                   graphene_system_volume_control_get_volume       (GrapheneSystemVolumeControl *self);
+gboolean                 graphene_system_volume_control_get_is_muted     (GrapheneSystemVolumeControl *self);
+gint                     graphene_system_volume_control_get_state        (GrapheneSystemVolumeControl *self);
+void                     graphene_system_volume_control_set_volume       (GrapheneSystemVolumeControl *self, gfloat volume);
+void                     graphene_system_volume_control_set_is_muted     (GrapheneSystemVolumeControl *self, gboolean is_muted);
 
 G_END_DECLS
 
-#endif /* __VOS_SYSTEM_VOLUME_CONTROL_H__ */
+#endif /* __GRAPHENE_SYSTEM_VOLUME_CONTROL_H__ */

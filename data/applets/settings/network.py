@@ -1,4 +1,4 @@
-# graphene-desktop
+# This file is part of graphene-desktop, the desktop environment of VeltOS.
 # Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,8 +25,8 @@ DBusGMainLoop(set_as_default=True)
 
 wicdStatuses = {"not_connected": 0, "connecting": 1, "wireless": 2, "wired": 3, "suspended": 4}
 
-class VosNetworkIcon(Gtk.Image):
-    __gtype_name__ = 'VosNetworkIcon'
+class GrapheneNetworkIcon(Gtk.Image):
+    __gtype_name__ = 'GrapheneNetworkIcon'
 
     def __init__(self):
         super().__init__()

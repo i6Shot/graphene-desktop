@@ -1,7 +1,7 @@
 [Plugin]
 Module=settings
 Loader=python3
-Name=VosSettings
+Name=GrapheneSettings
 Description=Shows system/account info such as audio settings, wifi & bluetooth selection, and restart/logout buttons
 Builtin=true
 Hidden=true

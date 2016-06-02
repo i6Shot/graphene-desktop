@@ -1,5 +1,5 @@
 /*
- * graphene-desktop
+ * This file is part of graphene-desktop, the desktop environment of VeltOS.
  * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -21,8 +21,8 @@
 #include "dialog.h"
 #include <meta/meta-shadow-factory.h>
 
-// VosWM class (private)
-struct _VosWM {
+// GrapheneWM class (private)
+struct _GrapheneWM {
   MetaPlugin parent;
   MetaBackgroundGroup *BackgroundGroup;
   const gchar *clientId;
@@ -54,8 +54,8 @@ static const gchar *WMInterfaceXML;
 
 int main(int argc, char **argv)
 {
-  meta_plugin_manager_set_plugin_type(VOS_TYPE_WM);
-  meta_set_wm_name("VOS Desktop");
+  meta_plugin_manager_set_plugin_type(GRAPHENE_TYPE_WM);
+  meta_set_wm_name("GRAPHENE Desktop");
   meta_set_gnome_wm_keybindings("Mutter,GNOME Shell");
   
   g_setenv("NO_GAIL", "1", TRUE);
@@ -67,7 +67,7 @@ int main(int argc, char **argv)
   return meta_run();
 }
 
-static void vos_wm_dispose(GObject *gobject); 
+static void graphene_wm_dispose(GObject *gobject); 
 static void start(MetaPlugin *plugin);
 static void dbus_register(MetaPlugin *plugin);
 static void quit(MetaPlugin *plugin);
@@ -92,9 +92,9 @@ static const MetaPluginInfo * plugin_info(MetaPlugin *plugin);
 //                      MetaWindow *window, ClutterKeyEvent *event,
 //                      MetaKeyBinding *binding);
                      
-G_DEFINE_TYPE (VosWM, vos_wm, META_TYPE_PLUGIN);
+G_DEFINE_TYPE (GrapheneWM, graphene_wm, META_TYPE_PLUGIN);
 
-static void vos_wm_class_init(VosWMClass *klass)
+static void graphene_wm_class_init(GrapheneWMClass *klass)
 {
   MetaPluginClass *object_class = META_PLUGIN_CLASS(klass);
   object_class->start = start;
@@ -105,24 +105,24 @@ static void vos_wm_class_init(VosWMClass *klass)
   object_class->plugin_info = plugin_info;
   
   GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-  gobject_class->dispose = vos_wm_dispose;
+  gobject_class->dispose = graphene_wm_dispose;
 }
 
-VosWM* vos_wm_new(void)
+GrapheneWM* graphene_wm_new(void)
 {
-  return VOS_WM(g_object_new(VOS_TYPE_WM, NULL));
+  return GRAPHENE_WM(g_object_new(GRAPHENE_TYPE_WM, NULL));
 }
 
-static void vos_wm_init(VosWM *wm)
+static void graphene_wm_init(GrapheneWM *wm)
 {
   
 }
 
-static void vos_wm_dispose(GObject *gobject)
+static void graphene_wm_dispose(GObject *gobject)
 {
-  g_signal_handlers_disconnect_by_func(meta_plugin_get_screen(META_PLUGIN(gobject)), on_monitors_changed, VOS_WM(gobject));
-  g_clear_object(&VOS_WM(gobject)->BackgroundGroup);
-  G_OBJECT_CLASS(vos_wm_parent_class)->dispose(gobject);
+  g_signal_handlers_disconnect_by_func(meta_plugin_get_screen(META_PLUGIN(gobject)), on_monitors_changed, GRAPHENE_WM(gobject));
+  g_clear_object(&GRAPHENE_WM(gobject)->BackgroundGroup);
+  G_OBJECT_CLASS(graphene_wm_parent_class)->dispose(gobject);
 }
 
 
@@ -156,7 +156,7 @@ static void start(MetaPlugin *plugin)
   ClutterActor *stage = meta_get_stage_for_screen(screen);
   
   ClutterActor *backgroundGroup = meta_background_group_new();
-  VOS_WM(plugin)->BackgroundGroup = META_BACKGROUND_GROUP(backgroundGroup);
+  GRAPHENE_WM(plugin)->BackgroundGroup = META_BACKGROUND_GROUP(backgroundGroup);
   clutter_actor_set_reactive(backgroundGroup, TRUE);
   clutter_actor_insert_child_below(screenGroup, backgroundGroup, NULL);
   
@@ -179,7 +179,7 @@ static void start(MetaPlugin *plugin)
  */
 static void dbus_register(MetaPlugin *plugin)
 {
-  VosWM *wm = VOS_WM(plugin);
+  GrapheneWM *wm = GRAPHENE_WM(plugin);
   wm->smProxy = NULL;
   wm->clientProxy = NULL;
   
@@ -193,7 +193,7 @@ static void dbus_register(MetaPlugin *plugin)
 
 static void quit(MetaPlugin *plugin)
 {
-  VosWM *wm = VOS_WM(plugin);
+  GrapheneWM *wm = GRAPHENE_WM(plugin);
   
   g_dbus_proxy_call_sync(wm->smProxy,
                   "UnregisterClient",
@@ -218,7 +218,7 @@ static void quit(MetaPlugin *plugin)
 
 static void dbus_name_acquired(GDBusConnection *connection, const gchar *name, MetaPlugin *plugin)
 {
-  VosWM *wm = VOS_WM(plugin);
+  GrapheneWM *wm = GRAPHENE_WM(plugin);
 
   wm->connection = connection;
   wm->smProxy = g_dbus_proxy_new_sync(connection,
@@ -271,13 +271,13 @@ static void dbus_name_acquired(GDBusConnection *connection, const gchar *name, M
 
 static void dbus_name_lost(GDBusConnection *connection, const gchar *name, MetaPlugin *plugin)
 {
-  VOS_WM(plugin)->connection = NULL;
+  GRAPHENE_WM(plugin)->connection = NULL;
   quit(plugin);
 }
 
 static void client_proxy_signal(GDBusProxy *proxy, const gchar *sender, const gchar *signal, GVariant *parameters, MetaPlugin *plugin)
 {
-  VosWM *wm = VOS_WM(plugin);
+  GrapheneWM *wm = GRAPHENE_WM(plugin);
 
   gchar *smUniqueName = g_dbus_proxy_get_name_owner(proxy);
   gboolean sentFromSM = g_strcmp0(sender, smUniqueName) == 0;
@@ -311,7 +311,7 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
   
   g_debug("dbus method call: %s, %s.%s", sender, interfaceName, methodName);
   
-  gchar *smUniqueName = g_dbus_proxy_get_name_owner(VOS_WM(plugin)->smProxy);
+  gchar *smUniqueName = g_dbus_proxy_get_name_owner(GRAPHENE_WM(plugin)->smProxy);
   
   if(g_strcmp0(interfaceName, "io.velt.GrapheneWM") == 0)
   {
@@ -355,7 +355,7 @@ static void on_logout_dialog_close(GrapheneWMDialog *dialog, const gchar *respon
 {
   meta_plugin_end_modal(plugin, 0);
 
-  VosWM *wm = VOS_WM(plugin);
+  GrapheneWM *wm = GRAPHENE_WM(plugin);
   
   g_dbus_connection_emit_signal(wm->connection, NULL, "/io/velt/GrapheneWM",
     "io.velt.GrapheneWM", "LogoutDialogResponse", g_variant_new("(s)", response), NULL);
@@ -382,12 +382,12 @@ static void show_logout_dialog(MetaPlugin *plugin)
 
 static void on_monitors_changed(MetaScreen *screen, MetaPlugin *plugin)
 {
-  ClutterActor *backgroundGroup = CLUTTER_ACTOR(VOS_WM(plugin)->BackgroundGroup);
+  ClutterActor *backgroundGroup = CLUTTER_ACTOR(GRAPHENE_WM(plugin)->BackgroundGroup);
   clutter_actor_destroy_all_children(backgroundGroup);
   
   gint numMonitors = meta_screen_get_n_monitors(screen);
   for(int i=0;i<numMonitors;++i)
-    clutter_actor_add_child(backgroundGroup, CLUTTER_ACTOR(vos_wm_background_new(screen, i)));
+    clutter_actor_add_child(backgroundGroup, CLUTTER_ACTOR(graphene_wm_background_new(screen, i)));
 }
 
 static void minimize_done(ClutterActor *actor, MetaPlugin *plugin)

@@ -1,5 +1,5 @@
 /*
- * graphene-desktop
+ * This file is part of graphene-desktop, the desktop environment of VeltOS.
  * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,28 +18,28 @@
  * The Panel window, which displays itself at a docked position on the screen and automatically loads plugins to provide applets.
  */
 
-#ifndef __VOS_PANEL_H__
-#define __VOS_PANEL_H__
+#ifndef __GRAPHENE_PANEL_H__
+#define __GRAPHENE_PANEL_H__
 
 #include <gtk/gtk.h>
 
 G_BEGIN_DECLS
 
-// Declare the VosPanel class
-#define VOS_TYPE_PANEL  vos_panel_get_type()
-G_DECLARE_FINAL_TYPE(VosPanel, vos_panel, VOS, PANEL, GtkWindow)
+// Declare the GraphenePanel class
+#define GRAPHENE_TYPE_PANEL  graphene_panel_get_type()
+G_DECLARE_FINAL_TYPE(GraphenePanel, graphene_panel, GRAPHENE, PANEL, GtkWindow)
 
-// Public methods for VosPanel
-int             vos_panel_capture_screen    (VosPanel *self);
-int             vos_panel_end_capture       (VosPanel *self);
-void            vos_panel_clear_capture     (VosPanel *self);
+// Public methods for GraphenePanel
+int             graphene_panel_capture_screen    (GraphenePanel *self);
+int             graphene_panel_end_capture       (GraphenePanel *self);
+void            graphene_panel_clear_capture     (GraphenePanel *self);
 
-gint            vos_panel_get_monitor       (VosPanel *self);
-gint            vos_panel_get_height        (VosPanel *self);
+gint            graphene_panel_get_monitor       (GraphenePanel *self);
+gint            graphene_panel_get_height        (GraphenePanel *self);
 
-void            vos_panel_logout            (VosPanel *self);
-void            vos_panel_shutdown          (VosPanel *self, gboolean reboot);
+void            graphene_panel_logout            (GraphenePanel *self);
+void            graphene_panel_shutdown          (GraphenePanel *self, gboolean reboot);
 
 G_END_DECLS
 
-#endif /* __VOS_PANEL_H__ */
+#endif /* __GRAPHENE_PANEL_H__ */

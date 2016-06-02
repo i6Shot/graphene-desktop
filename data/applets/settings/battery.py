@@ -1,4 +1,4 @@
-# graphene-desktop
+# This file is part of graphene-desktop, the desktop environment of VeltOS.
 # Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,11 +16,11 @@
 # battery.py
 # Creates a battery icon and battery status monitoring class for the setting panel.
 
-from gi.repository import GLib, GObject, Gio, Gtk, Vos
+from gi.repository import GLib, GObject, Gio, Gtk, Graphene
 import threading, time
 
-class VosBatteryInfo(GObject.Object):
-	__gtype_name__ = 'VosBatteryInfo'
+class GrapheneBatteryInfo(GObject.Object):
+	__gtype_name__ = 'GrapheneBatteryInfo'
 
 	__gsignals__ = { 'update': (GObject.SIGNAL_RUN_LAST, GObject.TYPE_NONE, (GObject.TYPE_INT, GObject.TYPE_STRING)) }
 
@@ -97,14 +97,14 @@ class VosBatteryInfo(GObject.Object):
 		return {'status':status, 'percentage':percentage}
 
 
-battery_info_default = VosBatteryInfo()
+battery_info_default = GrapheneBatteryInfo()
 def battery_info_get_default():
 	return battery_info_default
 
 
 
-class VosBatteryIcon(Gtk.Image):
-	__gtype_name__ = 'VosBatteryIcon'
+class GrapheneBatteryIcon(Gtk.Image):
+	__gtype_name__ = 'GrapheneBatteryIcon'
 	
 	stopUpdates = False
 	updateThread = None

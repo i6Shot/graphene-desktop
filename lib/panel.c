@@ -1,5 +1,5 @@
 /*
- * graphene-desktop
+ * This file is part of graphene-desktop, the desktop environment of VeltOS.
  * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * This should be compiled into libvos for GIntrospection, and NOT compiled into the panel application binary.
+ * This should be compiled into libgraphene for GIntrospection, and NOT compiled into the panel application binary.
  */
 
 #include "config.h"
@@ -26,8 +26,8 @@
 #include <gio/gio.h>
 #include <glib.h>
 
-// VosPanel class (private)
-struct _VosPanel {
+// GraphenePanel class (private)
+struct _GraphenePanel {
   GtkWindow parent;
   
   GtkBox *AppletLayout;
@@ -58,27 +58,27 @@ struct _VosPanel {
 // Make sure only one panel exists at a time
 static gboolean PanelExists = FALSE;
 
-// Create the VosPanel class
-// No properties or anything special, the VosPanel is only a class because
-// it creates the VosPanel struct for private data
-G_DEFINE_TYPE(VosPanel, vos_panel, GTK_TYPE_WINDOW)
-VosPanel* vos_panel_new(void) { if(PanelExists) return NULL; else return VOS_PANEL(g_object_new(VOS_TYPE_PANEL, NULL)); }
-static void vos_panel_finalize(VosPanel *self);
-static void vos_panel_class_init(VosPanelClass *klass) { GObjectClass *object_class = G_OBJECT_CLASS (klass); object_class->finalize = vos_panel_finalize; }
+// Create the GraphenePanel class
+// No properties or anything special, the GraphenePanel is only a class because
+// it creates the GraphenePanel struct for private data
+G_DEFINE_TYPE(GraphenePanel, graphene_panel, GTK_TYPE_WINDOW)
+GraphenePanel* graphene_panel_new(void) { if(PanelExists) return NULL; else return GRAPHENE_PANEL(g_object_new(GRAPHENE_TYPE_PANEL, NULL)); }
+static void graphene_panel_finalize(GraphenePanel *self);
+static void graphene_panel_class_init(GraphenePanelClass *klass) { GObjectClass *object_class = G_OBJECT_CLASS (klass); object_class->finalize = graphene_panel_finalize; }
 
 // Private event declarations
-static void init_layout(VosPanel *self);
-static void init_capture(VosPanel *self);
-static void init_plugins(VosPanel *self);
-static void init_notifications(VosPanel *self);
-static void update_position(VosPanel *self);
-static void on_monitors_changed(GdkScreen *screen, VosPanel *self);
-static gboolean on_panel_clicked(VosPanel *self, GdkEventButton *event);
-static void on_context_menu_item_activate(VosPanel *self, GtkMenuItem *menuitem);
-static void update_notification_windows(VosPanel *self);
+static void init_layout(GraphenePanel *self);
+static void init_capture(GraphenePanel *self);
+static void init_plugins(GraphenePanel *self);
+static void init_notifications(GraphenePanel *self);
+static void update_position(GraphenePanel *self);
+static void on_monitors_changed(GdkScreen *screen, GraphenePanel *self);
+static gboolean on_panel_clicked(GraphenePanel *self, GdkEventButton *event);
+static void on_context_menu_item_activate(GraphenePanel *self, GtkMenuItem *menuitem);
+static void update_notification_windows(GraphenePanel *self);
 
-// Initializes the panel (declared by G_DEFINE_TYPE; called through vos_panel_new())
-static void vos_panel_init(VosPanel *self)
+// Initializes the panel (declared by G_DEFINE_TYPE; called through graphene_panel_new())
+static void graphene_panel_init(GraphenePanel *self)
 {
   PanelExists = TRUE;
   self->Rebooting = FALSE;
@@ -112,16 +112,16 @@ static void vos_panel_init(VosPanel *self)
   init_notifications(self);
 }
 
-static void vos_panel_finalize(VosPanel *self)
+static void graphene_panel_finalize(GraphenePanel *self)
 {
   if(self->NotificationServerBusNameID)
     g_bus_unown_name(self->NotificationServerBusNameID);
     
   PanelExists = FALSE;
-  G_OBJECT_CLASS(vos_panel_parent_class)->finalize(G_OBJECT(self));
+  G_OBJECT_CLASS(graphene_panel_parent_class)->finalize(G_OBJECT(self));
 }
 
-static void init_layout(VosPanel *self)
+static void init_layout(GraphenePanel *self)
 {
   self->Location = GTK_POS_BOTTOM;
   self->Height = 32;
@@ -156,7 +156,7 @@ static void init_layout(VosPanel *self)
 }
 
 // Positions/sizes the self at the proper location on the window
-static void update_position(VosPanel *self)
+static void update_position(GraphenePanel *self)
 {
   GdkScreen *screen = gtk_window_get_screen(GTK_WINDOW(self));
   
@@ -267,13 +267,13 @@ static void update_position(VosPanel *self)
   }
 }
 
-static void on_monitors_changed(GdkScreen *screen, VosPanel *self)
+static void on_monitors_changed(GdkScreen *screen, GraphenePanel *self)
 {
   update_position(self);
   update_notification_windows(self);
 }
 
-static gboolean on_panel_clicked(VosPanel *self, GdkEventButton *event)
+static gboolean on_panel_clicked(GraphenePanel *self, GdkEventButton *event)
 {
   if(event->type == GDK_BUTTON_PRESS && event->button == GDK_BUTTON_SECONDARY)
   {
@@ -283,7 +283,7 @@ static gboolean on_panel_clicked(VosPanel *self, GdkEventButton *event)
   return GDK_EVENT_PROPAGATE;
 }
 
-static void on_context_menu_item_activate(VosPanel *self, GtkMenuItem *menuitem)
+static void on_context_menu_item_activate(GraphenePanel *self, GtkMenuItem *menuitem)
 {
   const gchar *name = gtk_menu_item_get_label(menuitem);
   
@@ -295,30 +295,30 @@ static void on_context_menu_item_activate(VosPanel *self, GtkMenuItem *menuitem)
   }
 }
 
-gboolean vos_panel_is_rebooting(VosPanel *self)
+gboolean graphene_panel_is_rebooting(GraphenePanel *self)
 {
   return self->Rebooting;
 }
 
 
 /**
- * vos_panel_get_monitor:
- * @self: The #VosPanel affected.
+ * graphene_panel_get_monitor:
+ * @self: The #GraphenePanel affected.
  *
  * Returns: (transfer none): The monitor ID that the panel is docked on (for the panel's current screen; see gtk_widget_get_screen).
  */
-gint vos_panel_get_monitor(VosPanel *self)
+gint graphene_panel_get_monitor(GraphenePanel *self)
 {
   return self->MonitorID;
 }
 
 /**
- * vos_panel_get_height:
- * @self: The #VosPanel affected.
+ * graphene_panel_get_height:
+ * @self: The #GraphenePanel affected.
  *
  * Returns: (transfer none): The height of the panel relative to the docking side of the screen.
  */
-gint vos_panel_get_height(VosPanel *self)
+gint graphene_panel_get_height(GraphenePanel *self)
 {
   return self->Height;
 }
@@ -331,9 +331,9 @@ gint vos_panel_get_height(VosPanel *self)
  *
  */
  
-static void capture_on_map(GtkWindow *capture, VosPanel *self);
+static void capture_on_map(GtkWindow *capture, GraphenePanel *self);
  
-static void init_capture(VosPanel *self)
+static void init_capture(GraphenePanel *self)
 {
   self->Captures = 0;
   self->CaptureWindow = GTK_WINDOW(gtk_window_new(GTK_WINDOW_TOPLEVEL));
@@ -351,23 +351,23 @@ static void init_capture(VosPanel *self)
     g_critical("No compositing! Stuff's not gonna look top.");
 }
 
-static void capture_on_map(GtkWindow *capture, VosPanel *self)
+static void capture_on_map(GtkWindow *capture, GraphenePanel *self)
 {
   update_position(self);
 }
 
 /**
- * vos_panel_capture_screen:
- * @self: The #VosPanel affected.
+ * graphene_panel_capture_screen:
+ * @self: The #GraphenePanel affected.
  *
  * Creates a window which fills the specified amount of the screen.
  * Applets can draw to this window however they please.
  *
  * Returns: (transfer none): The capture count. If this is one, the capture has just been created.
  */
-int vos_panel_capture_screen(VosPanel *self)
+int graphene_panel_capture_screen(GraphenePanel *self)
 {
-  g_return_val_if_fail(VOS_IS_PANEL(self), 0);
+  g_return_val_if_fail(GRAPHENE_IS_PANEL(self), 0);
 
   self->Captures++;
   if(self->Captures > 0)
@@ -376,16 +376,16 @@ int vos_panel_capture_screen(VosPanel *self)
 }
 
 /**
- * vos_panel_end_capture:
- * @self: The #VosPanel affected.
+ * graphene_panel_end_capture:
+ * @self: The #GraphenePanel affected.
  *
  * Decreases the capture count by one. If it reaches zero, the capture is removed.
  *
  * Returns: (transfer none): The capture count. If this is zero, the capture has ended.
  */
-int vos_panel_end_capture(VosPanel *self)
+int graphene_panel_end_capture(GraphenePanel *self)
 {
-  g_return_val_if_fail(VOS_IS_PANEL(self), 0);
+  g_return_val_if_fail(GRAPHENE_IS_PANEL(self), 0);
   
   self->Captures--;
   if(self->Captures <= 0)
@@ -397,25 +397,25 @@ int vos_panel_end_capture(VosPanel *self)
 }
 
 /**
- * vos_panel_clear_capture:
- * @self: The #VosPanel affected.
+ * graphene_panel_clear_capture:
+ * @self: The #GraphenePanel affected.
  *
  * Sets the capture count to 0 (removing the capture)
  */
-void vos_panel_clear_capture(VosPanel *self)
+void graphene_panel_clear_capture(GraphenePanel *self)
 {
-  g_return_if_fail(VOS_IS_PANEL(self));
+  g_return_if_fail(GRAPHENE_IS_PANEL(self));
   self->Captures = 0;
   update_position(self);
 }
 
 /**
- * vos_panel_logout:
- * @self: The #VosPanel affected.
+ * graphene_panel_logout:
+ * @self: The #GraphenePanel affected.
  *
  * Asks the session manager for a logout dialog. Does not guarantee a logout.
  */
-void vos_panel_logout(VosPanel *self)
+void graphene_panel_logout(GraphenePanel *self)
 {
   GDBusConnection *connection = g_application_get_dbus_connection(g_application_get_default());
   
@@ -434,13 +434,13 @@ void vos_panel_logout(VosPanel *self)
 }
 
 /**
- * vos_panel_shutdown:
- * @self: The #VosPanel affected.
+ * graphene_panel_shutdown:
+ * @self: The #GraphenePanel affected.
  * @reboot: Whether or not to reboot.
  * 
  * Asks the session manager for a shutdown dialog. Does not guarantee a shutdown.
  */
-void vos_panel_shutdown(VosPanel *self, gboolean reboot)
+void graphene_panel_shutdown(GraphenePanel *self, gboolean reboot)
 {
   GDBusConnection *connection = g_application_get_dbus_connection(g_application_get_default());
   
@@ -466,23 +466,23 @@ void vos_panel_shutdown(VosPanel *self, gboolean reboot)
  */
 
 static void load_girepository(char *name, char *version);
-static void on_extension_added(PeasExtensionSet *set, PeasPluginInfo *info, VosAppletExtension *exten, VosPanel *self);
-static void on_extension_removed(PeasExtensionSet *set, PeasPluginInfo *info, VosAppletExtension *exten, VosPanel *self);
+static void on_extension_added(PeasExtensionSet *set, PeasPluginInfo *info, GrapheneAppletExtension *exten, GraphenePanel *self);
+static void on_extension_removed(PeasExtensionSet *set, PeasPluginInfo *info, GrapheneAppletExtension *exten, GraphenePanel *self);
 
-static void init_plugins(VosPanel *self)
+static void init_plugins(GraphenePanel *self)
 {
   // Init peas
   PeasEngine *engine = peas_engine_get_default();
   peas_engine_add_search_path(engine, GRAPHENE_DATA_DIR "/applets", GRAPHENE_DATA_DIR "/applets");
   peas_engine_enable_loader(engine, "python3");
   peas_engine_enable_loader(engine, "lua5.1");
-  load_girepository("Vos", "1.0");
+  load_girepository("Graphene", GRAPHENE_VERSION_STR);
 
-  // Create a hash table between each VosAppletExtension* and its corresponding GtkWidget*
+  // Create a hash table between each GrapheneAppletExtension* and its corresponding GtkWidget*
   self->ExtensionWidgetTable = g_hash_table_new(g_direct_hash, g_direct_equal);
 
   // Create extension set
-  self->ExtensionSet = peas_extension_set_new(engine, VOS_TYPE_APPLET_EXTENSION, NULL);
+  self->ExtensionSet = peas_extension_set_new(engine, GRAPHENE_TYPE_APPLET_EXTENSION, NULL);
   peas_extension_set_foreach(self->ExtensionSet, (PeasExtensionSetForeachFunc)on_extension_added, self);
   g_signal_connect(self->ExtensionSet, "extension-added", G_CALLBACK(on_extension_added), self);
   g_signal_connect(self->ExtensionSet, "extension-removed", G_CALLBACK(on_extension_removed), self);
@@ -508,7 +508,7 @@ static void load_girepository(char *name, char *version)
   }
 }
 
-static void insert_extension(VosPanel *self, const char *name, GtkWidget *applet)
+static void insert_extension(GraphenePanel *self, const char *name, GtkWidget *applet)
 {
   if(g_strcmp0(name, "launcher") == 0) // Special built-in extension
   {
@@ -531,11 +531,11 @@ static void insert_extension(VosPanel *self, const char *name, GtkWidget *applet
   }
 }
 
-static void on_extension_added(PeasExtensionSet *set, PeasPluginInfo *info, VosAppletExtension *exten, VosPanel *self)
+static void on_extension_added(PeasExtensionSet *set, PeasPluginInfo *info, GrapheneAppletExtension *exten, GraphenePanel *self)
 {
   const char *pluginmodule = peas_plugin_info_get_module_name(info);
 
-  GtkWidget *applet = vos_applet_extension_get_widget(VOS_APPLET_EXTENSION(exten), self);
+  GtkWidget *applet = graphene_applet_extension_get_widget(GRAPHENE_APPLET_EXTENSION(exten), self);
   if(!applet)
   {
     g_warning("Failed to initialize plugin '%s'", pluginmodule);
@@ -546,7 +546,7 @@ static void on_extension_added(PeasExtensionSet *set, PeasPluginInfo *info, VosA
 	insert_extension(self, pluginmodule, applet);
 }
 
-static void on_extension_removed(PeasExtensionSet *set, PeasPluginInfo *info, VosAppletExtension *exten, VosPanel *self)
+static void on_extension_removed(PeasExtensionSet *set, PeasPluginInfo *info, GrapheneAppletExtension *exten, GraphenePanel *self)
 {
   GtkWidget *applet = GTK_WIDGET(g_hash_table_lookup(self->ExtensionWidgetTable, exten));
   g_hash_table_remove(self->ExtensionWidgetTable, exten);
@@ -621,7 +621,7 @@ typedef struct {
   // Do not set these when creating a notification
   guint timeoutSourceTag;
   GtkWindow *window; // do not set before calling show_notification
-  VosPanel *panel; // owner; used for signal handling
+  GraphenePanel *panel; // owner; used for signal handling
 } NotificationInfo;
 
 static void notification_info_free(NotificationInfo *info)
@@ -635,16 +635,16 @@ static void notification_info_free(NotificationInfo *info)
   g_free(info);
 }
 
-static void notification_server_name_acquired(GDBusConnection *connection, const gchar *name, VosPanel *self);
-static void notification_server_name_lost(GDBusConnection *connection, const gchar *name, VosPanel *self);
+static void notification_server_name_acquired(GDBusConnection *connection, const gchar *name, GraphenePanel *self);
+static void notification_server_name_lost(GDBusConnection *connection, const gchar *name, GraphenePanel *self);
 static void on_notification_server_method_called(GDBusConnection *connection, const gchar* sender,
               const gchar *objectPath, const gchar *interfaceName, const gchar *methodName, GVariant *parameters,
               GDBusMethodInvocation *invocation, gpointer *user_data);
-static void show_notification(VosPanel *self, NotificationInfo *info);
-static void remove_notification(VosPanel *self, guint32 id);
+static void show_notification(GraphenePanel *self, NotificationInfo *info);
+static void remove_notification(GraphenePanel *self, guint32 id);
 static gboolean on_notification_clicked(GtkWindow *window, GdkEventButton *event, NotificationInfo *notificationInfo);
 
-static void init_notifications(VosPanel *self)
+static void init_notifications(GraphenePanel *self)
 {
   self->Notifications = g_hash_table_new_full(NULL, NULL, NULL, notification_info_free);
   
@@ -654,7 +654,7 @@ static void init_notifications(VosPanel *self)
     self, NULL);
 }
 
-static void notification_server_name_acquired(GDBusConnection *connection, const gchar *name, VosPanel *self)
+static void notification_server_name_acquired(GDBusConnection *connection, const gchar *name, GraphenePanel *self)
 {
   self->NextNotificationID = 1;
   
@@ -664,7 +664,7 @@ static void notification_server_name_acquired(GDBusConnection *connection, const
   g_dbus_connection_register_object(connection, "/org/freedesktop/Notifications", interfaceInfo->interfaces[0], &interfaceCallbacks, self, NULL, NULL);
 }
 
-static void notification_server_name_lost(GDBusConnection *connection, const gchar *name, VosPanel *self)
+static void notification_server_name_lost(GDBusConnection *connection, const gchar *name, GraphenePanel *self)
 {
   NotificationInfo *info = g_new0(NotificationInfo, 1);
   info->icon = g_strdup("dialog-error");
@@ -682,7 +682,7 @@ static void on_notification_server_method_called(GDBusConnection *connection, co
               GDBusMethodInvocation *invocation,
               gpointer              *user_data)
 {
-  VosPanel *self = VOS_PANEL(user_data);
+  GraphenePanel *self = GRAPHENE_PANEL(user_data);
   
   if(g_strcmp0(methodName, "GetCapabilities") == 0)
   {
@@ -734,7 +734,7 @@ static gboolean show_notification_remove_cb(NotificationInfo *info)
  *
  * See https://developer.gnome.org/notification-spec/ for more info.
  */
-static void show_notification(VosPanel *self, NotificationInfo *info)
+static void show_notification(GraphenePanel *self, NotificationInfo *info)
 {
   if(info->id == 0)
   {
@@ -797,7 +797,7 @@ static void show_notification(VosPanel *self, NotificationInfo *info)
   update_notification_windows(self);
 }
 
-static void remove_notification(VosPanel *self, guint32 id)
+static void remove_notification(GraphenePanel *self, guint32 id)
 {
   NotificationInfo *info = g_hash_table_lookup(self->Notifications, GUINT_TO_POINTER(id));
   if(info && info->timeoutSourceTag > 0)
@@ -813,7 +813,7 @@ static gint notification_compare_func(const NotificationInfo *a, const Notificat
   return (a->id < b->id)?1:-1; // Sort newest to the top
 }
 
-static void update_notification_windows(VosPanel *self)
+static void update_notification_windows(GraphenePanel *self)
 {
   GList *notificationList = g_hash_table_get_values(self->Notifications); // NotificationInfo* list
   notificationList = g_list_sort(notificationList, notification_compare_func);

@@ -1,5 +1,5 @@
 /*
- * graphene-desktop
+ * This file is part of graphene-desktop, the desktop environment of VeltOS.
  * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,44 +19,44 @@
  * widgets (containers) that can slide in from each edge and overlay the center.
  */
  
-#ifndef __VOS_MATERIAL_BOX__
-#define __VOS_MATERIAL_BOX__
+#ifndef __GRAPHENE_MATERIAL_BOX__
+#define __GRAPHENE_MATERIAL_BOX__
 
 #include <gtk/gtk.h>
 
 G_BEGIN_DECLS
 
-#define VOS_TYPE_MATERIAL_BOX  vos_material_box_get_type()
-G_DECLARE_FINAL_TYPE(VosMaterialBox, vos_material_box, VOS, MATERIAL_BOX, GtkContainer)
+#define GRAPHENE_TYPE_MATERIAL_BOX  graphene_material_box_get_type()
+G_DECLARE_FINAL_TYPE(GrapheneMaterialBox, graphene_material_box, GRAPHENE, MATERIAL_BOX, GtkContainer)
 
 /**
- * VosMaterialBoxPosition:
- * @VOS_MATERIAL_BOX_POSITION_TOP: The material slides in from the top of the box.
- * @VOS_MATERIAL_BOX_POSITION_BOTTOM: The material slides in from the bottom of the box.
- * @VOS_MATERIAL_BOX_POSITION_LEFT: The material slides in from the left of the box.
- * @VOS_MATERIAL_BOX_POSITION_RIGHT: The material slides in from the right of the box.
- * @VOS_MATERIAL_BOX_POSITION_CENTER: The material is the main background sheet.
+ * GrapheneMaterialBoxPosition:
+ * @GRAPHENE_MATERIAL_BOX_POSITION_TOP: The material slides in from the top of the box.
+ * @GRAPHENE_MATERIAL_BOX_POSITION_BOTTOM: The material slides in from the bottom of the box.
+ * @GRAPHENE_MATERIAL_BOX_POSITION_LEFT: The material slides in from the left of the box.
+ * @GRAPHENE_MATERIAL_BOX_POSITION_RIGHT: The material slides in from the right of the box.
+ * @GRAPHENE_MATERIAL_BOX_POSITION_CENTER: The material is the main background sheet.
  *
  * Material added to this box can use this to adjust their initial position.
  */
 typedef enum
 {
-  VOS_MATERIAL_BOX_LOCATION_TOP,
-  VOS_MATERIAL_BOX_LOCATION_BOTTOM,
-  VOS_MATERIAL_BOX_LOCATION_LEFT,
-  VOS_MATERIAL_BOX_LOCATION_RIGHT,
-  VOS_MATERIAL_BOX_LOCATION_CENTER,
-} VosMaterialBoxSheetLocation;
+  GRAPHENE_MATERIAL_BOX_LOCATION_TOP,
+  GRAPHENE_MATERIAL_BOX_LOCATION_BOTTOM,
+  GRAPHENE_MATERIAL_BOX_LOCATION_LEFT,
+  GRAPHENE_MATERIAL_BOX_LOCATION_RIGHT,
+  GRAPHENE_MATERIAL_BOX_LOCATION_CENTER,
+} GrapheneMaterialBoxSheetLocation;
 
-typedef GtkWidget VosMaterialSheet;
-#define VOS_IS_MATERIAL_SHEET GTK_IS_WIDGET
-#define VOS_MATERIAL_SHEET GTK_WIDGET
+typedef GtkWidget GrapheneMaterialSheet;
+#define GRAPHENE_IS_MATERIAL_SHEET GTK_IS_WIDGET
+#define GRAPHENE_MATERIAL_SHEET GTK_WIDGET
 
-GtkWidget* vos_material_box_new         (void);
-void       vos_material_box_add_sheet   (VosMaterialBox *self, VosMaterialSheet *sheet, VosMaterialBoxSheetLocation location);
-void       vos_material_box_show_sheet  (VosMaterialBox *self, VosMaterialSheet *sheet);
-void       vos_material_box_hide_sheet  (VosMaterialBox *self, VosMaterialSheet *sheet);
+GtkWidget* graphene_material_box_new         (void);
+void       graphene_material_box_add_sheet   (GrapheneMaterialBox *self, GrapheneMaterialSheet *sheet, GrapheneMaterialBoxSheetLocation location);
+void       graphene_material_box_show_sheet  (GrapheneMaterialBox *self, GrapheneMaterialSheet *sheet);
+void       graphene_material_box_hide_sheet  (GrapheneMaterialBox *self, GrapheneMaterialSheet *sheet);
 
 G_END_DECLS
 
-#endif /* __VOS_MATERIAL_BOX__ */
+#endif /* __GRAPHENE_MATERIAL_BOX__ */

@@ -1,4 +1,4 @@
-# graphene-desktop
+# This file is part of graphene-desktop, the desktop environment of VeltOS.
 # Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,40 +14,40 @@
 # limitations under the License.
 #
 # settings.py/.plugin
-# Plugin loaded by VosPanel to add a system settings widget. This is a built-in plugin,
+# Plugin loaded by GraphenePanel to add a system settings widget. This is a built-in plugin,
 # and is automatically put on the far right side of the panel (but before the clock).
 
 import gi, subprocess
 gi.require_version('AccountsService', '1.0')
-from gi.repository import GLib, GObject, Gio, Gtk, Gdk, GdkX11, GdkPixbuf, Vos, AccountsService
+from gi.repository import GLib, GObject, Gio, Gtk, Gdk, GdkX11, GdkPixbuf, Graphene, AccountsService
 import threading, time, subprocess
-from battery import VosBatteryIcon, VosBatteryInfo
-from volume import VosVolumeIcon, VosVolumeSlider
-from network import VosNetworkIcon
+from battery import GrapheneBatteryIcon, GrapheneBatteryInfo
+from volume import GrapheneVolumeIcon, GrapheneVolumeSlider
+from network import GrapheneNetworkIcon
 import users
 
-class VosSettingsExtension(GObject.Object, Vos.AppletExtension):
-    __gtype_name__ = 'VosSettingsExtension'
+class GrapheneSettingsExtension(GObject.Object, Graphene.AppletExtension):
+    __gtype_name__ = 'GrapheneSettingsExtension'
 
     def do_get_widget(self, panel):
-        return VosSettingsApplet(panel)
+        return GrapheneSettingsApplet(panel)
 
 
-class VosSettingsApplet(Gtk.Button):
-    __gtype_name__ = 'VosSettingsApplet'
+class GrapheneSettingsApplet(Gtk.Button):
+    __gtype_name__ = 'GrapheneSettingsApplet'
 
     def __init__(self, panel):
         super().__init__()
         self.panel = panel
-        self.popup = VosSettingsPopup(panel)
+        self.popup = GrapheneSettingsPopup(panel)
         
         # Init applet buttons
         self.box = Gtk.Box.new(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self.box.set_homogeneous(True)
         self.box.set_orientation(Gtk.Orientation.HORIZONTAL)
-        self.box.pack_end(VosBatteryIcon(), False, False, 0)
-        self.box.pack_end(VosNetworkIcon(), False, False, 0)
-        self.box.pack_end(VosVolumeIcon(), False, False, 0)
+        self.box.pack_end(GrapheneBatteryIcon(), False, False, 0)
+        self.box.pack_end(GrapheneNetworkIcon(), False, False, 0)
+        self.box.pack_end(GrapheneVolumeIcon(), False, False, 0)
         self.box.pack_end(Gtk.Image.new_from_icon_name("emblem-system-symbolic", Gtk.IconSize.MENU), False, False, 0)
         
         self.add(self.box)
@@ -65,8 +65,8 @@ class VosSettingsApplet(Gtk.Button):
         self.get_style_context().remove_class("clicked")
 
 
-class VosSettingsPopup(Gtk.Window):
-    __gtype_name__ = 'VosSettingsPopup'
+class GrapheneSettingsPopup(Gtk.Window):
+    __gtype_name__ = 'GrapheneSettingsPopup'
     
     def __init__(self, panel):
         super().__init__()
@@ -110,7 +110,7 @@ class VosSettingsPopup(Gtk.Window):
         self.layout.pack_start(sessionBox, False, False, 0)
         
         # Box for all the system settings (below the session info)
-        self.settingsBox = VosSettingsView(self)
+        self.settingsBox = GrapheneSettingsView(self)
         self.layout.pack_start(self.settingsBox, True, True, 0)
 
         # Add layout to window
@@ -160,8 +160,8 @@ class VosSettingsPopup(Gtk.Window):
         subprocess.Popen("gnome-control-center", stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         
-class VosSettingsView(Vos.MaterialBox):
-    __gtype_name__ = 'VosSettingsView'
+class GrapheneSettingsView(Graphene.MaterialBox):
+    __gtype_name__ = 'GrapheneSettingsView'
 
     def __init__(self, window):
         super().__init__()
@@ -173,7 +173,7 @@ class VosSettingsView(Vos.MaterialBox):
         scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC) # Keeps the popup width from being to small
         scrolled.add(self.centerLayout)
         
-        self.add_sheet(scrolled, Vos.MaterialBoxSheetLocation.CENTER)
+        self.add_sheet(scrolled, Graphene.MaterialBoxSheetLocation.CENTER)
         
         # self.centerLayout.pack_start(Gtk.Label.new(), False, False, 0)
         # self.centerLayout.pack_start(Gtk.Label.new("Eventually, there will be in-line"), False, False, 0)
@@ -213,7 +213,7 @@ class VosSettingsView(Vos.MaterialBox):
         self.centerLayout.pack_start(label, False, False, 0)
 
     def add_setting_widget(self, title, iconName, toggleable, panel, bottomSeparator=False):
-        box = Vos.MaterialBox.new()
+        box = Graphene.MaterialBox.new()
         button = Gtk.Button.new()
         button.materialbox = box
         
@@ -228,7 +228,7 @@ class VosSettingsView(Vos.MaterialBox):
         buttonBox.pack_start(label, True, True, 0)
         buttonBox.set_halign(Gtk.Align.START)
         button.add(buttonBox)
-        box.add_sheet(button, Vos.MaterialBoxSheetLocation.CENTER)
+        box.add_sheet(button, Graphene.MaterialBoxSheetLocation.CENTER)
         box.show_all() # Need to show all now before adding the toggle switch. I'll figure out why eventually, probably.
 
         if toggleable:
@@ -237,7 +237,7 @@ class VosSettingsView(Vos.MaterialBox):
             toggle.get_style_context().add_class("settings-widget-switch")
             toggle.props.margin = 5
             toggle.props.margin_right += 10
-            box.add_sheet(toggle, Vos.MaterialBoxSheetLocation.RIGHT)
+            box.add_sheet(toggle, Graphene.MaterialBoxSheetLocation.RIGHT)
             toggle.show_all()
 
         sep = Gtk.Separator.new(Gtk.Orientation.HORIZONTAL)
@@ -257,7 +257,7 @@ class VosSettingsView(Vos.MaterialBox):
             self.window.hide()
         else:
             panel = button.panel()
-            self.add_sheet(panel, Vos.MaterialBoxSheetLocation.RIGHT)
+            self.add_sheet(panel, Graphene.MaterialBoxSheetLocation.RIGHT)
             self.show_sheet(panel)
         
     def hide(self):

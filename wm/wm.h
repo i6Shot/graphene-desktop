@@ -1,5 +1,5 @@
 /*
- * graphene-desktop
+ * This file is part of graphene-desktop, the desktop environment of VeltOS.
  * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -19,26 +19,26 @@
  * Graphene's window manager (a Mutter plugin)
  */
 
-#ifndef __VOS_WM_H__
-#define __VOS_WM_H__
+#ifndef __GRAPHENE_WM_H__
+#define __GRAPHENE_WM_H__
 
 #include <meta/main.h>
 #include <meta/meta-plugin.h>
 
 G_BEGIN_DECLS
 
-// Declare the VosWM class
-#define VOS_TYPE_WM  vos_wm_get_type()
+// Declare the GrapheneWM class
+#define GRAPHENE_TYPE_WM  graphene_wm_get_type()
 
 #pragma GCC diagnostic ignored "-Wimplicit-function-declaration"
 // G_DECLARE_FINAL_TYPE with MetaPlugin gives a warning for the unknown function 'glib_autoptr_cleanup_MetaPlugin'.
 // I don't know how to fix that, but it doesn't seem to be a problem.
-G_DECLARE_FINAL_TYPE(VosWM, vos_wm, VOS, WM, MetaPlugin)
+G_DECLARE_FINAL_TYPE(GrapheneWM, graphene_wm, GRAPHENE, WM, MetaPlugin)
 #pragma GCC diagnostic warning "-Wimplicit-function-declaration"
 
-// Public methods for VosWM
-VosWM*       vos_wm_new               (void)  G_GNUC_CONST;
+// Public methods for GrapheneWM
+GrapheneWM*       graphene_wm_new               (void)  G_GNUC_CONST;
 
 G_END_DECLS
 
-#endif /* __VOS_WM_H__ */
+#endif /* __GRAPHENE_WM_H__ */

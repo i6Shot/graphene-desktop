@@ -1,5 +1,5 @@
 /*
- * graphene-desktop
+ * This file is part of graphene-desktop, the desktop environment of VeltOS.
  * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * This should be compiled into libvos for GIntrospection, and NOT compiled into the panel application binary.
+ * This should be compiled into libgraphene for GIntrospection, and NOT compiled into the panel application binary.
  */
 
 #include "system-volume-control.h"
@@ -23,11 +23,11 @@
 #include <stdio.h>
 
 /**
- * SECTION:vos-system-volume-control
+ * SECTION:graphene-system-volume-control
  * @short_description: Provides a simple interface for controlling system volume and mute (mostly a VERY simple Python interface for PulseAudio).
  **/
 
-struct _VosSystemVolumeControl
+struct _GrapheneSystemVolumeControl
 {
   GObject parent;
   
@@ -57,23 +57,23 @@ static GParamSpec *properties[PROP_LAST];
 static void on_pa_context_state_change(pa_context *context, void *userdata);
 static void on_pa_context_subscribe(pa_context *context, pa_subscription_event_type_t t, uint32_t index, void *userdata);
 static void on_sink_get_info(pa_context *c, const pa_sink_info *i, int eol, void *userdata);
-static void vos_system_volume_control_set_property (GObject *object, guint prop_id, const GValue  *value, GParamSpec *pspec);
-static void vos_system_volume_control_get_property (GObject *object, guint prop_id, GValue *value, GParamSpec *pspec);
-static void vos_system_volume_control_finalize(GObject *object);
+static void graphene_system_volume_control_set_property (GObject *object, guint prop_id, const GValue  *value, GParamSpec *pspec);
+static void graphene_system_volume_control_get_property (GObject *object, guint prop_id, GValue *value, GParamSpec *pspec);
+static void graphene_system_volume_control_finalize(GObject *object);
 
-// Create the VosSystemVolumeControl class
-G_DEFINE_TYPE(VosSystemVolumeControl, vos_system_volume_control, G_TYPE_OBJECT)
-VosSystemVolumeControl* vos_system_volume_control_new(void)
+// Create the GrapheneSystemVolumeControl class
+G_DEFINE_TYPE(GrapheneSystemVolumeControl, graphene_system_volume_control, G_TYPE_OBJECT)
+GrapheneSystemVolumeControl* graphene_system_volume_control_new(void)
 {
-  return VOS_SYSTEM_VOLUME_CONTROL(g_object_new(VOS_TYPE_SYSTEM_VOLUME_CONTROL, NULL));
+  return GRAPHENE_SYSTEM_VOLUME_CONTROL(g_object_new(GRAPHENE_TYPE_SYSTEM_VOLUME_CONTROL, NULL));
 }
-static void vos_system_volume_control_class_init(VosSystemVolumeControlClass *klass)
+static void graphene_system_volume_control_class_init(GrapheneSystemVolumeControlClass *klass)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
   
-  gobject_class->finalize = vos_system_volume_control_finalize;
-  gobject_class->set_property = vos_system_volume_control_set_property;
-  gobject_class->get_property = vos_system_volume_control_get_property;
+  gobject_class->finalize = graphene_system_volume_control_finalize;
+  gobject_class->set_property = graphene_system_volume_control_set_property;
+  gobject_class->get_property = graphene_system_volume_control_get_property;
   
   properties[PROP_STATE] = g_param_spec_int("state",
     "state",
@@ -99,7 +99,7 @@ static void vos_system_volume_control_class_init(VosSystemVolumeControlClass *kl
 }
 
 
-static void vos_system_volume_control_init(VosSystemVolumeControl *self)
+static void graphene_system_volume_control_init(GrapheneSystemVolumeControl *self)
 {
   self->got_sink_info = FALSE;
   self->mainloop = pa_glib_mainloop_new(g_main_context_default());
@@ -111,7 +111,7 @@ static void vos_system_volume_control_init(VosSystemVolumeControl *self)
   g_return_if_fail(application);
 
   pa_proplist *proplist = pa_proplist_new();
-  pa_proplist_sets(proplist, PA_PROP_APPLICATION_NAME, "vos-system-volume-control");
+  pa_proplist_sets(proplist, PA_PROP_APPLICATION_NAME, "graphene-system-volume-control");
   pa_proplist_sets(proplist, PA_PROP_APPLICATION_ID, g_application_get_application_id(application));
   pa_proplist_sets(proplist, PA_PROP_APPLICATION_ICON_NAME, "multimedia-volume-control-symbolic");
   pa_proplist_sets(proplist, PA_PROP_APPLICATION_VERSION, "1.0");
@@ -127,9 +127,9 @@ static void vos_system_volume_control_init(VosSystemVolumeControl *self)
     g_warning("Failed to connect context: %s", pa_strerror(pa_context_errno(self->context)));
 }
 
-static void vos_system_volume_control_finalize(GObject *object)
+static void graphene_system_volume_control_finalize(GObject *object)
 {
-  VosSystemVolumeControl *self = VOS_SYSTEM_VOLUME_CONTROL(object);
+  GrapheneSystemVolumeControl *self = GRAPHENE_SYSTEM_VOLUME_CONTROL(object);
 
   if (self->context)
   {
@@ -143,17 +143,17 @@ static void vos_system_volume_control_finalize(GObject *object)
     self->mainloop = NULL;
   }
 
-  G_OBJECT_CLASS(vos_system_volume_control_parent_class)->finalize(object);
+  G_OBJECT_CLASS(graphene_system_volume_control_parent_class)->finalize(object);
 }
 
 static void on_pa_context_state_change(pa_context *context, void *userdata)
 {
-  g_return_if_fail(VOS_IS_SYSTEM_VOLUME_CONTROL(userdata));
-  VosSystemVolumeControl *self = VOS_SYSTEM_VOLUME_CONTROL(userdata);
+  g_return_if_fail(GRAPHENE_IS_SYSTEM_VOLUME_CONTROL(userdata));
+  GrapheneSystemVolumeControl *self = GRAPHENE_SYSTEM_VOLUME_CONTROL(userdata);
   
-  gint prevState = vos_system_volume_control_get_state(self);
+  gint prevState = graphene_system_volume_control_get_state(self);
   self->state = pa_context_get_state(context);
-  gint newState = vos_system_volume_control_get_state(self);
+  gint newState = graphene_system_volume_control_get_state(self);
 
   if(self->state == PA_CONTEXT_READY)
   {
@@ -183,8 +183,8 @@ static void on_pa_context_state_change(pa_context *context, void *userdata)
 
 static void on_pa_context_subscribe(pa_context *context, pa_subscription_event_type_t type, uint32_t index, void *userdata)
 {
-  g_return_if_fail(VOS_IS_SYSTEM_VOLUME_CONTROL(userdata));
-  VosSystemVolumeControl *self = VOS_SYSTEM_VOLUME_CONTROL(userdata);
+  g_return_if_fail(GRAPHENE_IS_SYSTEM_VOLUME_CONTROL(userdata));
+  GrapheneSystemVolumeControl *self = GRAPHENE_SYSTEM_VOLUME_CONTROL(userdata);
 
   // Only listen for changes to the default sink. Not sure if this is always the default system output, but it seems to be.
   if(index == DEFAULT_SINK_INDEX && (type & PA_SUBSCRIPTION_EVENT_FACILITY_MASK) == PA_SUBSCRIPTION_EVENT_SINK)
@@ -198,8 +198,8 @@ static void on_pa_context_subscribe(pa_context *context, pa_subscription_event_t
 
 static void on_sink_get_info(pa_context *c, const pa_sink_info *info, int eol, void *userdata)
 {
-  g_return_if_fail(VOS_IS_SYSTEM_VOLUME_CONTROL(userdata));
-  VosSystemVolumeControl *self = VOS_SYSTEM_VOLUME_CONTROL(userdata);
+  g_return_if_fail(GRAPHENE_IS_SYSTEM_VOLUME_CONTROL(userdata));
+  GrapheneSystemVolumeControl *self = GRAPHENE_SYSTEM_VOLUME_CONTROL(userdata);
 
   if(eol == 0 && info)
   {
@@ -225,17 +225,17 @@ static void on_sink_get_info(pa_context *c, const pa_sink_info *info, int eol, v
   }
 }
 
-static void vos_system_volume_control_set_property(GObject *object, guint prop_id, const GValue  *value, GParamSpec *pspec)
+static void graphene_system_volume_control_set_property(GObject *object, guint prop_id, const GValue  *value, GParamSpec *pspec)
 {
-  VosSystemVolumeControl *self = VOS_SYSTEM_VOLUME_CONTROL(object);
+  GrapheneSystemVolumeControl *self = GRAPHENE_SYSTEM_VOLUME_CONTROL(object);
 
   switch (prop_id)
   {
   case PROP_VOLUME:
-    vos_system_volume_control_set_volume(self, g_value_get_float(value));
+    graphene_system_volume_control_set_volume(self, g_value_get_float(value));
     break;
   case PROP_IS_MUTED:
-    vos_system_volume_control_set_is_muted(self, g_value_get_boolean(value));
+    graphene_system_volume_control_set_is_muted(self, g_value_get_boolean(value));
     break;
   case PROP_STATE:
     break;
@@ -245,20 +245,20 @@ static void vos_system_volume_control_set_property(GObject *object, guint prop_i
   }
 }
 
-static void vos_system_volume_control_get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
+static void graphene_system_volume_control_get_property(GObject *object, guint prop_id, GValue *value, GParamSpec *pspec)
 {
-  VosSystemVolumeControl *self = VOS_SYSTEM_VOLUME_CONTROL(object);
+  GrapheneSystemVolumeControl *self = GRAPHENE_SYSTEM_VOLUME_CONTROL(object);
 
   switch (prop_id)
   {
   case PROP_VOLUME:
-    g_value_set_float(value, vos_system_volume_control_get_volume(self));
+    g_value_set_float(value, graphene_system_volume_control_get_volume(self));
     break;
   case PROP_IS_MUTED:
-    g_value_set_boolean(value, vos_system_volume_control_get_is_muted(self));
+    g_value_set_boolean(value, graphene_system_volume_control_get_is_muted(self));
     break;
   case PROP_STATE:
-    g_value_set_int(value, vos_system_volume_control_get_state(self));
+    g_value_set_int(value, graphene_system_volume_control_get_state(self));
     break;
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -266,23 +266,23 @@ static void vos_system_volume_control_get_property(GObject *object, guint prop_i
   }
 }
 
-gfloat vos_system_volume_control_get_volume(VosSystemVolumeControl *self)
+gfloat graphene_system_volume_control_get_volume(GrapheneSystemVolumeControl *self)
 {
   return ((gfloat)(pa_cvolume_max(&self->volume) - PA_VOLUME_MUTED))/(PA_VOLUME_NORM - PA_VOLUME_MUTED);
 }
-gboolean vos_system_volume_control_get_is_muted(VosSystemVolumeControl *self)
+gboolean graphene_system_volume_control_get_is_muted(GrapheneSystemVolumeControl *self)
 {
   return self->is_muted;
 }
-gint vos_system_volume_control_get_state(VosSystemVolumeControl *self)
+gint graphene_system_volume_control_get_state(GrapheneSystemVolumeControl *self)
 {
   if(self->state == PA_CONTEXT_READY && self->got_sink_info) return 1;
   else if(self->state == PA_CONTEXT_FAILED) return -1;
   else return 0;
 }
-void vos_system_volume_control_set_volume(VosSystemVolumeControl *self, gfloat volume)
+void graphene_system_volume_control_set_volume(GrapheneSystemVolumeControl *self, gfloat volume)
 {
-  if(vos_system_volume_control_get_state(self) != 1)
+  if(graphene_system_volume_control_get_state(self) != 1)
     return;
   
   pa_volume_t newVol = (pa_volume_t)(volume * (PA_VOLUME_NORM - PA_VOLUME_MUTED) + PA_VOLUME_MUTED);
@@ -292,9 +292,9 @@ void vos_system_volume_control_set_volume(VosSystemVolumeControl *self, gfloat v
   if (o == NULL) g_warning ("Failed to set volume: %s", pa_strerror(pa_context_errno(self->context)));
   else pa_operation_unref(o);
 }
-void vos_system_volume_control_set_is_muted(VosSystemVolumeControl *self, gboolean is_muted)
+void graphene_system_volume_control_set_is_muted(GrapheneSystemVolumeControl *self, gboolean is_muted)
 {
-  if(vos_system_volume_control_get_state(self) != 1)
+  if(graphene_system_volume_control_get_state(self) != 1)
     return;
   
   pa_operation *o = pa_context_set_sink_mute_by_index(self->context, DEFAULT_SINK_INDEX, is_muted, NULL, NULL);

@@ -1,4 +1,4 @@
-# graphene-desktop
+# This file is part of graphene-desktop, the desktop environment of VeltOS.
 # Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
 # This file is licensed under the Apache License Version 2.0.
 
@@ -6,6 +6,10 @@ cmake_minimum_required(VERSION 3.4)
 project(graphene-desktop)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
+set(GRAPHENE_VERSION 0.2.5)
+
+# Assume the user wants to install Graphene to /usr unless otherwise specified
+# with the -DCMAKE_INSTALL_PREFIX=<path> flag to cmake. http://stackoverflow.com/a/16076855
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set(CMAKE_INSTALL_PREFIX "/usr" CACHE PATH "default install path" FORCE)
 endif()
@@ -37,41 +41,58 @@ pkg_check_modules(GIOUNIX2 REQUIRED gio-unix-2.0>=2.10)
 target_link_libraries(graphene-session ${GIOUNIX2_LIBRARIES})
 target_include_directories(graphene-session PRIVATE ${GIOUNIX2_INCLUDE_DIRS})
 
-# Setup target for libvos
-file(GLOB libvos_SRC "lib/*.c" "lib/*.h")
-add_library(vos SHARED ${libvos_SRC})
-# set_target_properties(vos PROPERTIES SOVERSION 1.0)
+# Setup target for libgraphene
+file(GLOB libgraphene_SRC "lib/*.c" "lib/*.h")
+add_library(graphene SHARED ${libgraphene_SRC})
+# set_target_properties(graphene PROPERTIES SOVERSION ${GRAPHENE_VERSION})
 pkg_check_modules(GTK3 REQUIRED gtk+-3.0>=3.10)
 pkg_check_modules(LIBPEAS REQUIRED libpeas-1.0>=1.16)
 pkg_check_modules(LIBPULSE REQUIRED libpulse>=8.0)
 pkg_check_modules(LIBPULSEGLIB REQUIRED libpulse-mainloop-glib>=8.0)
-target_include_directories(vos PRIVATE ${GTK3_INCLUDE_DIRS} ${LIBPEAS_INCLUDE_DIRS} ${LIBPULSE_INCLUDE_DIRS} ${LIBPULSEGLIB_INCLUDE_DIRS})
+target_include_directories(graphene PRIVATE ${GTK3_INCLUDE_DIRS} ${LIBPEAS_INCLUDE_DIRS} ${LIBPULSE_INCLUDE_DIRS} ${LIBPULSEGLIB_INCLUDE_DIRS})
 
-find_package(GObjectIntrospection REQUIRED)
+find_package(GObjectIntrospection REQUIRED) # https://git.io/vrAxP
 add_custom_command(
-    OUTPUT ${PROJECT_BINARY_DIR}/Vos-1.0.gir
-    DEPENDS vos
-    COMMAND ${INTROSPECTION_SCANNER} --include GObject-2.0 --include Gtk-3.0 --pkg gtk+-3.0 --pkg libpulse --pkg libpulse-mainloop-glib --pkg libpeas-1.0 --pkg-export libvos --library-path ${PROJECT_SOURCE_DIR}/lib --no-libtool --identifier-prefix=Vos --symbol-prefix=vos --namespace Vos --nsversion=1.0 --library vos --warn-all -o ${PROJECT_BINARY_DIR}/Vos-1.0.gir ${libvos_SRC}
+  OUTPUT ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.gir
+  DEPENDS graphene
+  COMMAND ${INTROSPECTION_SCANNER}
+    --include GObject-2.0
+    --include Gtk-3.0
+    --pkg gtk+-3.0
+    --pkg libpulse
+    --pkg libpulse-mainloop-glib
+    --pkg libpeas-1.0
+    --library-path ${PROJECT_SOURCE_DIR}/lib
+    --library graphene
+    --pkg-export libgraphene
+    --identifier-prefix Graphene
+    --symbol-prefix graphene
+    --namespace Graphene
+    --nsversion ${GRAPHENE_VERSION}
+    --no-libtool
+    --warn-all
+    --output ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.gir
+    ${libgraphene_SRC}
 )
 add_custom_command(
-    OUTPUT ${PROJECT_BINARY_DIR}/Vos-1.0.typelib
-    DEPENDS ${PROJECT_BINARY_DIR}/Vos-1.0.gir
-    COMMAND ${INTROSPECTION_COMPILER} ${PROJECT_BINARY_DIR}/Vos-1.0.gir -o ${PROJECT_BINARY_DIR}/Vos-1.0.typelib
+  OUTPUT ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.typelib
+  DEPENDS ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.gir
+  COMMAND ${INTROSPECTION_COMPILER} ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.gir -o ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.typelib
 )
-add_custom_target(Vos-1.0-gir ALL DEPENDS ${PROJECT_BINARY_DIR}/Vos-1.0.typelib)
+add_custom_target(libgraphene-gir ALL DEPENDS ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.typelib)
 
 # Setup target for the panel executable
 add_executable(graphene-panel panel/panel-main.c)
 target_include_directories(graphene-panel PRIVATE ${GTK3_INCLUDE_DIRS})
-target_link_libraries(graphene-panel vos ${GTK3_LIBRARIES} ${LIBPEAS_LIBRARIES} ${LIBPULSE_LIBRARIES} ${LIBPULSEGLIB_LIBRARIES})
+target_link_libraries(graphene-panel graphene ${GTK3_LIBRARIES} ${LIBPEAS_LIBRARIES} ${LIBPULSE_LIBRARIES} ${LIBPULSEGLIB_LIBRARIES})
 
 # Install
 install(TARGETS graphene-wm graphene-panel DESTINATION ${GRAPHENE_DATA_DIR})
 install(TARGETS graphene-session DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-install(TARGETS vos DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
+install(TARGETS graphene DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
 install(DIRECTORY data/ DESTINATION ${GRAPHENE_DATA_DIR}) # Slash after 'data' makes it only install contents of directory
-install(FILES ${PROJECT_BINARY_DIR}/Vos-1.0.gir DESTINATION ${CMAKE_INSTALL_PREFIX}/share/gir-1.0)
-install(FILES ${PROJECT_BINARY_DIR}/Vos-1.0.typelib DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/girepository-1.0)
+install(FILES ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.gir DESTINATION ${CMAKE_INSTALL_PREFIX}/share/gir-1.0)
+install(FILES ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.typelib DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/girepository-1.0)
 install(FILES graphene.desktop DESTINATION ${CMAKE_INSTALL_PREFIX}/share/xsessions)
 
 # Uninstall target (only works after installing with install_manifest.txt)

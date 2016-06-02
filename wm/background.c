@@ -1,5 +1,5 @@
 /*
- * graphene-desktop
+ * This file is part of graphene-desktop, the desktop environment of VeltOS.
  * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -18,8 +18,8 @@
  
 #include "background.h"
 
-// VosWMBackground class (private)
-struct _VosWMBackground {
+// GrapheneWMBackground class (private)
+struct _GrapheneWMBackground {
   MetaBackgroundGroup parent;
   MetaScreen *Screen;
   int ScreenIndex;
@@ -27,33 +27,33 @@ struct _VosWMBackground {
   GSettings *Settings;
 };
 
-static void vow_wm_background_init_after(VosWMBackground *backgroundGroup);
-static void vos_wm_background_dispose(GObject *gobject);
-static void settings_changed(GSettings *settings, guint key, VosWMBackground *backgroundGroup);
-static void update(VosWMBackground *backgroundGroup);
+static void vow_wm_background_init_after(GrapheneWMBackground *backgroundGroup);
+static void graphene_wm_background_dispose(GObject *gobject);
+static void settings_changed(GSettings *settings, guint key, GrapheneWMBackground *backgroundGroup);
+static void update(GrapheneWMBackground *backgroundGroup);
 
-G_DEFINE_TYPE (VosWMBackground, vos_wm_background, META_TYPE_BACKGROUND_GROUP);
+G_DEFINE_TYPE (GrapheneWMBackground, graphene_wm_background, META_TYPE_BACKGROUND_GROUP);
 
-static void vos_wm_background_class_init(VosWMBackgroundClass *klass)
+static void graphene_wm_background_class_init(GrapheneWMBackgroundClass *klass)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
-  gobject_class->dispose = vos_wm_background_dispose;
+  gobject_class->dispose = graphene_wm_background_dispose;
 }
 
-VosWMBackground* vos_wm_background_new(MetaScreen *screen, int screenIndex)
+GrapheneWMBackground* graphene_wm_background_new(MetaScreen *screen, int screenIndex)
 {
-  VosWMBackground *backgroundGroup = VOS_WM_BACKGROUND(g_object_new(VOS_TYPE_WM_BACKGROUND, NULL));
+  GrapheneWMBackground *backgroundGroup = GRAPHENE_WM_BACKGROUND(g_object_new(GRAPHENE_TYPE_WM_BACKGROUND, NULL));
   backgroundGroup->Screen = g_object_ref(screen);
   backgroundGroup->ScreenIndex = screenIndex;
   vow_wm_background_init_after(backgroundGroup);
   return backgroundGroup;
 }
 
-static void vos_wm_background_init(VosWMBackground *backgroundGroup)
+static void graphene_wm_background_init(GrapheneWMBackground *backgroundGroup)
 {
 }
 
-static void vow_wm_background_init_after(VosWMBackground *backgroundGroup)
+static void vow_wm_background_init_after(GrapheneWMBackground *backgroundGroup)
 {
   backgroundGroup->Actor = NULL;
   
@@ -67,21 +67,21 @@ static void vow_wm_background_init_after(VosWMBackground *backgroundGroup)
   update(backgroundGroup);
 }
 
-static void vos_wm_background_dispose(GObject *gobject)
+static void graphene_wm_background_dispose(GObject *gobject)
 {
-  g_clear_object(&VOS_WM_BACKGROUND(gobject)->Screen);
-  g_clear_object(&VOS_WM_BACKGROUND(gobject)->Actor);
-  G_OBJECT_CLASS(vos_wm_background_parent_class)->dispose(gobject);
+  g_clear_object(&GRAPHENE_WM_BACKGROUND(gobject)->Screen);
+  g_clear_object(&GRAPHENE_WM_BACKGROUND(gobject)->Actor);
+  G_OBJECT_CLASS(graphene_wm_background_parent_class)->dispose(gobject);
 }
 
 
 
-static void settings_changed(GSettings *settings, guint key, VosWMBackground *backgroundGroup)
+static void settings_changed(GSettings *settings, guint key, GrapheneWMBackground *backgroundGroup)
 {
   update(backgroundGroup);
 }
 
-static void update_done(MetaBackgroundActor *newActor, VosWMBackground *backgroundGroup)
+static void update_done(MetaBackgroundActor *newActor, GrapheneWMBackground *backgroundGroup)
 {
   clutter_actor_remove_all_transitions(CLUTTER_ACTOR(newActor));
   clutter_actor_set_opacity(CLUTTER_ACTOR(newActor), 255);
@@ -92,7 +92,7 @@ static void update_done(MetaBackgroundActor *newActor, VosWMBackground *backgrou
   backgroundGroup->Actor = newActor;
 }
 
-static void update(VosWMBackground *backgroundGroup)
+static void update(GrapheneWMBackground *backgroundGroup)
 {
   MetaBackgroundActor *newActor = META_BACKGROUND_ACTOR(meta_background_actor_new(backgroundGroup->Screen, backgroundGroup->ScreenIndex));
   MetaBackground *newBackground = meta_background_new(backgroundGroup->Screen);

@@ -1,5 +1,5 @@
 /*
- * graphene-desktop
+ * This file is part of graphene-desktop, the desktop environment of VeltOS.
  * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,11 +25,9 @@
 
 G_BEGIN_DECLS
 
-// Declare the VosPanel class
 #define GRAPHENE_TYPE_SESSION_CLIENT  graphene_session_client_get_type()
 G_DECLARE_FINAL_TYPE(GrapheneSessionClient, graphene_session_client, GRAPHENE, SESSION_CLIENT, GObject)
 
-// Public methods for VosPanel
 GrapheneSessionClient * graphene_session_client_new(GDBusConnection *connection, const gchar *clientId);
 
 void          graphene_session_client_spawn(GrapheneSessionClient *self, guint delay);
@@ -49,4 +47,4 @@ gboolean      graphene_session_client_get_is_active(GrapheneSessionClient *self)
 
 G_END_DECLS
 
-#endif /* __VOS_PANEL_H__ */
+#endif /* __GRAPHENE_SESSION_CLIENT_H__ */
