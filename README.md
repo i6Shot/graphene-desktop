@@ -31,6 +31,7 @@ graphene-desktop uses the following libraries and packages:
     - paper-gtk-theme-git (AUR or vosrepo.velt.io/x86_64)
     - paper-icon-theme-git (AUR or vosrepo.velt.io/x86_64)
     - python-cairo
+    - python-dbus
     - python-gobject
 
 All of these are available from Arch's official repositories, the AUR,
