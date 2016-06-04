@@ -99,3 +99,6 @@ install(FILES graphene.desktop DESTINATION ${CMAKE_INSTALL_PREFIX}/share/xsessio
 # Removes all files listed in install_manifest.txt, and then removes install_manifest.txt
 # If install_manifest.txt is not available, an error message is printed.
 add_custom_target(uninstall COMMAND { [ -f install_manifest.txt ] && xargs --verbose -d '\\n' rm < install_manifest.txt && rm install_manifest.txt\; } || echo ' *** ERROR: Missing install_manifest.txt: you must install first!' )
+
+# Force install - kills running process, runs install
+add_custom_target(finstall COMMAND killall graphene-wm graphene-panel graphene-session nautilus gnome-settings-daemon\; make install )
