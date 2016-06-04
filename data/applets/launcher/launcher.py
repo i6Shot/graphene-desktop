@@ -35,6 +35,7 @@ class GrapheneLauncherApplet(Gtk.Button):
     def __init__(self, panel):
         super().__init__()
         self.panel = panel
+        self.get_style_context().add_class("graphene-launcher-applet")
 
         # Init button
         self.set_label("")
@@ -74,6 +75,7 @@ class GrapheneLauncherPopup(Gtk.Window):
         self.connect("key_release_event", self.on_key_event)
         self.get_screen().connect("monitors-changed", self.on_monitors_changed)
         self.set_role("GraphenePopup") # Tells graphene-wm this is a popup
+        self.get_style_context().add_class("graphene-launcher-popup")
 
         # Layout
         self.popupLayout = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -87,14 +89,19 @@ class GrapheneLauncherPopup(Gtk.Window):
         self.filter = ""
         self.searchBar.connect("changed", self.on_search_changed)
         self.searchBar.connect("activate", self.on_search_enter)
-        self.popupLayout.pack_start(self.searchBar, False, False, 0)
+        self.searchBar.set_name("graphene-launcher-searchbar")
+        self.searchBarContainer = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=0) # It seems the shadow-box property can't be animated on a searchentry, so wrap it in a container
+        self.searchBarContainer.pack_start(self.searchBar, False, False, 0)
+        self.searchBarContainer.set_name("graphene-launcher-searchbar-container")
+        self.popupLayout.pack_start(self.searchBarContainer, False, False, 0)
 
         # General applet box
         self.appListView = GrapheneAppListView()
         self.appListView.connect("launch_app", self.on_applist_item_clicked)
+        self.appListView.get_vadjustment().connect("value-changed", self.on_scrolled)
         self.popupLayout.pack_start(self.appListView, True, True, 0)
         self.popupLayout.show_all()
-    
+
     def show(self):
         self.appListView.refresh_applist(self.filter)
         self.panel.capture_screen()
@@ -143,7 +150,12 @@ class GrapheneLauncherPopup(Gtk.Window):
             return self.searchBar.handle_event(event)
         return Gdk.EVENT_PROPAGATE
         
-
+    def on_scrolled(self, adj):
+        if adj.get_value() > 5:
+            self.searchBarContainer.get_style_context().add_class("shadow")
+        else:
+            self.searchBarContainer.get_style_context().remove_class("shadow")
+        
 class GrapheneAppListView(Gtk.ScrolledWindow):
     __gtype_name__ = 'GrapheneAppListView'
 
@@ -151,9 +163,9 @@ class GrapheneAppListView(Gtk.ScrolledWindow):
 
     def __init__(self):
         super().__init__()
-        
-        self.appListBox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-        self.appListBox.props.margin = 5
+        self.get_style_context().add_class("graphene-applist-view")
+
+        self.appListBox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         
         self.add(self.appListBox)
         self.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC) # Keeps the popup width from being to small
@@ -184,16 +196,27 @@ class GrapheneAppListView(Gtk.ScrolledWindow):
             if type == GMenu.TreeItemType.ENTRY:
                 appInfo = it.get_entry().get_app_info()
 
-                if not filter in appInfo.get_display_name().lower():
+                if appInfo.get_nodisplay() or (not filter in appInfo.get_display_name().lower()):
                     continue
 
-                button = Gtk.Button.new_with_label(appInfo.get_display_name())
-                button.set_image(Gtk.Image.new_from_gicon(appInfo.get_icon(), Gtk.IconSize.LARGE_TOOLBAR))
-                button.set_always_show_image(True)
-                button.get_child().set_halign(Gtk.Align.START)
+                buttonBox = Gtk.Box.new(Gtk.Orientation.HORIZONTAL, 7)
+                buttonBox.pack_start(Gtk.Image.new_from_gicon(appInfo.get_icon(), Gtk.IconSize.DND), True, True, 7)
+                label = Gtk.Label.new(appInfo.get_display_name())
+                label.set_yalign(0.5)
+                buttonBox.pack_start(label, True, True, 0)
+                buttonBox.set_halign(Gtk.Align.START)
+                
+                button = Gtk.Button.new()
+                button.get_style_context().add_class("launcher-app-button")
                 button.connect("clicked", self.on_applist_item_clicked, appInfo)
-                button.show()
+                button.add(buttonBox)
+                button.show_all()
                 self.appListBox.pack_start(button, False, False, 0)
+
+                sep = Gtk.Separator.new(Gtk.Orientation.HORIZONTAL)
+                sep.get_style_context().add_class("list-item-separator")
+                sep.show()
+                self.appListBox.pack_start(sep, False, False, 0)
 
                 count += 1
 
@@ -202,16 +225,22 @@ class GrapheneAppListView(Gtk.ScrolledWindow):
 
                 label = Gtk.Label.new(directory.get_name())
                 label.set_halign(Gtk.Align.START)
-                label.get_style_context().add_class("directory-label")
+                label.get_style_context().add_class("group-label")
                 self.appListBox.pack_start(label, False, False, 0)
+
+                sep = Gtk.Separator.new(Gtk.Orientation.HORIZONTAL)
+                sep.get_style_context().add_class("list-item-separator")
+                self.appListBox.pack_start(sep, False, False, 0)
 
                 subcount = self.populate_applist_directory(directory, filter)
                 if subcount > 0:
                     label.show()
+                    sep.show()
                     count += subcount
                 else:
                     label.destroy()
-
+                    sep.destroy()
+            
         return count
         
     def on_applist_item_clicked(self, button, appInfo):

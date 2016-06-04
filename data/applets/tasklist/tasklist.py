@@ -34,7 +34,8 @@ class GrapheneTaskListApplet(Gtk.Box):
     def __init__(self, panel):
         super().__init__()
         self.panel = panel
-        
+        self.get_style_context().add_class("graphene-tasklist-applet")
+
         self.buttons = {}
             
         self.set_homogeneous(False)

@@ -22,14 +22,14 @@ graphene-desktop uses the following libraries and packages:
     - gnome-control-center
     - gnome-menus
     - gobject-introspection
-    - gtk3
+    - gtk+-3.0 >= 3.20
     - libpeas
     - libpulse
     - libwnck3
-    - mutter
+    - mutter >= 3.20
     - nautilus (optional)
-    - paper-gtk-theme-git (AUR or vosrepo.velt.io/x86_64)
-    - paper-icon-theme-git (AUR or vosrepo.velt.io/x86_64)
+    - paper-gtk-theme-git >= 297 (AUR or vosrepo.velt.io/x86_64)
+    - paper-icon-theme-git >= 552 (AUR or vosrepo.velt.io/x86_64)
     - python-cairo
     - python-dbus
     - python-gobject

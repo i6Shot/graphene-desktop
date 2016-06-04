@@ -91,10 +91,6 @@ static void graphene_panel_init(GraphenePanel *self)
   gtk_window_set_role(GTK_WINDOW(self), "GrapheneDock"); // Tells graphene-wm this is the panel
 
   // Set the application theme
-  // GtkCssProvider *fallbackProvider = gtk_css_provider_new();
-  // gtk_css_provider_load_from_path(fallbackProvider, GRAPHENE_DATA_DIR "/panel-fallback.css", NULL); // TODO: Check for errors
-  // gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), GTK_STYLE_PROVIDER(fallbackProvider), GTK_STYLE_PROVIDER_PRIORITY_FALLBACK);
-
   GtkCssProvider *provider = gtk_css_provider_new();
   gtk_css_provider_load_from_path(provider, GRAPHENE_DATA_DIR "/panel.css", NULL); // TODO: Check for errors
   gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
@@ -129,11 +125,7 @@ static void init_layout(GraphenePanel *self)
   // Main layout
   self->AppletLayout = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0));
   gtk_container_add(GTK_CONTAINER(self), GTK_WIDGET(self->AppletLayout));
-
-  GtkStyleContext *layoutStyle = gtk_widget_get_style_context(GTK_WIDGET(self->AppletLayout));
-  gtk_style_context_add_class(layoutStyle, "panel");
-  gtk_widget_set_name(GTK_WIDGET(self->AppletLayout), "panel-bar");
-  
+    
   // A box for the left-side applets
   self->LauncherBox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0));
   gtk_box_pack_start(self->AppletLayout, GTK_WIDGET(self->LauncherBox), FALSE, FALSE, 0);
@@ -144,6 +136,10 @@ static void init_layout(GraphenePanel *self)
   gtk_box_pack_end(self->AppletLayout, GTK_WIDGET(self->SystemTray), FALSE, FALSE, 0);
   gtk_box_set_homogeneous(self->SystemTray, FALSE);
   
+  GtkStyleContext *layoutStyle = gtk_widget_get_style_context(GTK_WIDGET(self));
+  gtk_style_context_add_class(layoutStyle, "panel");
+  gtk_widget_set_name(GTK_WIDGET(self), "panel-bar");
+
   // Context menu
   self->ContextMenu = GTK_MENU(gtk_menu_new());
   GtkWidget *reloadapplets = gtk_menu_item_new_with_label("Reload Applets");
@@ -541,6 +537,9 @@ static void on_extension_added(PeasExtensionSet *set, PeasPluginInfo *info, Grap
     g_warning("Failed to initialize plugin '%s'", pluginmodule);
     return;
   }
+  
+  GtkStyleContext *style = gtk_widget_get_style_context(GTK_WIDGET(applet));
+  gtk_style_context_add_class(style, "graphene-applet");
   
   g_hash_table_insert(self->ExtensionWidgetTable, exten, applet);
 	insert_extension(self, pluginmodule, applet);

@@ -31,7 +31,8 @@ class GrapheneClockApplet(Gtk.Label):
 	
 	def __init__(self):
 		super().__init__()
-		
+		self.get_style_context().add_class("graphene-clock-applet")
+
 		self.stopUpdates = False
 		self.prevTimeString = None
 		

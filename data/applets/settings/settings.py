@@ -40,7 +40,8 @@ class GrapheneSettingsApplet(Gtk.Button):
         super().__init__()
         self.panel = panel
         self.popup = GrapheneSettingsPopup(panel)
-        
+        self.get_style_context().add_class("graphene-settings-applet")
+
         # Init applet buttons
         self.box = Gtk.Box.new(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         self.box.set_homogeneous(True)
@@ -77,6 +78,7 @@ class GrapheneSettingsPopup(Gtk.Window):
         self.connect("button_press_event", self.on_mouse_event)
         self.get_screen().connect("monitors-changed", self.on_monitors_changed)
         self.set_role("GraphenePopup") # Tells graphene-wm this is a popup
+        self.get_style_context().add_class("graphene-settings-popup")
 
         # Layout
         self.layout = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=0)
@@ -103,18 +105,19 @@ class GrapheneSettingsPopup(Gtk.Window):
         sessionControlBox.pack_start(logoutButton, False, False, 0)
         
         # Create top box for session info and control
-        sessionBox = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-        sessionBox.pack_start(profileNameLabel, False, False, 0)
-        sessionBox.pack_start(sessionControlBox, False, False, 0)
-        sessionBox.set_name("session-box")
-        self.layout.pack_start(sessionBox, False, False, 0)
+        global sessionbox
+        self.sessionBox = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=5)
+        self.sessionBox.pack_start(profileNameLabel, False, False, 0)
+        self.sessionBox.pack_start(sessionControlBox, False, False, 0)
+        self.sessionBox.set_name("session-box")
+        self.layout.pack_start(self.sessionBox, False, False, 0)
         
         # Box for all the system settings (below the session info)
-        self.settingsBox = GrapheneSettingsView(self)
+        self.settingsBox = GrapheneSettingsView(self, self.on_scrolled)
         self.layout.pack_start(self.settingsBox, True, True, 0)
 
         # Add layout to window
-        sessionBox.show_all()
+        self.sessionBox.show_all()
         self.layout.show()
         self.add(self.layout)
     
@@ -159,19 +162,26 @@ class GrapheneSettingsPopup(Gtk.Window):
         self.hide()
         subprocess.Popen("gnome-control-center", stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
-        
+    def on_scrolled(self, adj):
+        if adj.get_value() > 5:
+            self.sessionBox.get_style_context().add_class("shadow")
+        else:
+            self.sessionBox.get_style_context().remove_class("shadow")
+            
 class GrapheneSettingsView(Graphene.MaterialBox):
     __gtype_name__ = 'GrapheneSettingsView'
 
-    def __init__(self, window):
+    def __init__(self, window, on_scrolled_cb):
         super().__init__()
-        
+        self.get_style_context().add_class("graphene-settings-view")
+
         self.centerLayout = Gtk.Box.new(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.window = window
         
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC) # Keeps the popup width from being to small
         scrolled.add(self.centerLayout)
+        scrolled.get_vadjustment().connect("value-changed", on_scrolled_cb)
         
         self.add_sheet(scrolled, Graphene.MaterialBoxSheetLocation.CENTER)
         
@@ -241,14 +251,14 @@ class GrapheneSettingsView(Graphene.MaterialBox):
             toggle.show_all()
 
         sep = Gtk.Separator.new(Gtk.Orientation.HORIZONTAL)
-        sep.get_style_context().add_class("settings-widget-separator")
+        sep.get_style_context().add_class("list-item-separator")
         self.centerLayout.pack_start(sep, False, False, 0)
 
         self.centerLayout.pack_start(box, False, False, 0)
         
         if bottomSeparator:
             sep = Gtk.Separator.new(Gtk.Orientation.HORIZONTAL)
-            sep.get_style_context().add_class("settings-widget-separator")
+            sep.get_style_context().add_class("list-item-separator")
             self.centerLayout.pack_start(sep, False, False, 0)
     
     def on_settings_widget_clicked(self, button):
