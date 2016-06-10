@@ -1,7 +1,0 @@
-[Plugin]
-Module=launcher
-Loader=python3
-Name=GrapheneLauncher
-Description=Launches applications
-Builtin=true
-Hidden=true

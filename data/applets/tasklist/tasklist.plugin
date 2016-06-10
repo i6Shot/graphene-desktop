@@ -1,7 +1,0 @@
-[Plugin]
-Module=tasklist
-Loader=python3
-Name=GrapheneTaskList
-Description=Shows open applications
-Builtin=true
-Hidden=true
