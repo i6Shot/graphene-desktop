@@ -21,18 +21,13 @@ graphene-desktop uses the following libraries and packages:
     - glib2
     - gnome-control-center
     - gnome-menus
-    - gobject-introspection
     - gtk+-3.0 >= 3.20
-    - libpeas
     - libpulse
     - libwnck3
     - mutter >= 3.20
     - nautilus (optional)
     - paper-gtk-theme-git >= 297 (AUR or vosrepo.velt.io/x86_64)
     - paper-icon-theme-git >= 552 (AUR or vosrepo.velt.io/x86_64)
-    - python-cairo
-    - python-dbus
-    - python-gobject
 
 All of these are available from Arch's official repositories, the AUR,
 or the vos repository. For any other Linux distros, you're on your own.
