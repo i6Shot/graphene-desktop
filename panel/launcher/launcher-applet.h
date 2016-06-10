@@ -21,7 +21,7 @@
 #define __GRAPHENE_LAUNCHER_APPLET_H__
 
 #include <gtk/gtk.h>
-#include "panel.h"
+#include "../panel.h"
 
 G_BEGIN_DECLS
 

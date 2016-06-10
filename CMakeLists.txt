@@ -42,15 +42,16 @@ target_link_libraries(graphene-session ${GIOUNIX2_LIBRARIES})
 target_include_directories(graphene-session PRIVATE ${GIOUNIX2_INCLUDE_DIRS})
 
 # Setup target for the panel executable
-file(GLOB panel_SRC "panel/*.c" "panel/*.h")
+file(GLOB panel_SRC "panel/*.c" "panel/*.h" "panel/*/*.c" "panel/*/*.h")
 add_executable(graphene-panel ${panel_SRC})
 pkg_check_modules(GTK3 REQUIRED gtk+-3.0>=3.10)
 pkg_check_modules(LIBPEAS REQUIRED libpeas-1.0>=1.16)
 pkg_check_modules(LIBPULSE REQUIRED libpulse>=8.0)
 pkg_check_modules(LIBPULSEGLIB REQUIRED libpulse-mainloop-glib>=8.0)
 pkg_check_modules(LIBGNOMEMENU REQUIRED libgnome-menu-3.0>=3.13)
-target_include_directories(graphene-panel PRIVATE ${GTK3_INCLUDE_DIRS} ${LIBPULSE_INCLUDE_DIRS} ${LIBPULSEGLIB_INCLUDE_DIRS} ${LIBGNOMEMENU_INCLUDE_DIRS})
-target_link_libraries(graphene-panel ${GTK3_LIBRARIES} ${LIBPULSE_LIBRARIES} ${LIBPULSEGLIB_LIBRARIES} ${LIBGNOMEMENU_LIBRARIES})
+pkg_check_modules(LIBWNCK REQUIRED libwnck-3.0>=3.14)
+target_include_directories(graphene-panel PRIVATE ${GTK3_INCLUDE_DIRS} ${LIBPULSE_INCLUDE_DIRS} ${LIBPULSEGLIB_INCLUDE_DIRS} ${LIBGNOMEMENU_INCLUDE_DIRS} ${LIBWNCK_INCLUDE_DIRS})
+target_link_libraries(graphene-panel ${GTK3_LIBRARIES} ${LIBPULSE_LIBRARIES} ${LIBPULSEGLIB_LIBRARIES} ${LIBGNOMEMENU_LIBRARIES} ${LIBWNCK_LIBRARIES})
 
 # Install
 install(TARGETS graphene-wm graphene-panel DESTINATION ${GRAPHENE_DATA_DIR})

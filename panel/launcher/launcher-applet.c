@@ -30,7 +30,6 @@ struct _GrapheneLauncherApplet
   
   GraphenePanel *panel;
   GtkStyleContext *style;
-  GtkImage *image;
   GrapheneLauncherPopup *popup;
 };
 
@@ -64,9 +63,9 @@ static void graphene_launcher_applet_init(GrapheneLauncherApplet *self)
   gtk_button_set_label(GTK_BUTTON(self), "");
   g_signal_connect(self, "button_press_event", G_CALLBACK(applet_on_click), NULL);
   
-  self->image = GTK_IMAGE(gtk_image_new_from_icon_name("open-menu-symbolic", GTK_ICON_SIZE_INVALID));
-  gtk_image_set_pixel_size(self->image, 32);
-  gtk_button_set_image(GTK_BUTTON(self), GTK_WIDGET(self->image));
+  GtkImage *image = GTK_IMAGE(gtk_image_new_from_icon_name("open-menu-symbolic", GTK_ICON_SIZE_INVALID));
+  gtk_image_set_pixel_size(image, 32);
+  gtk_button_set_image(GTK_BUTTON(self), GTK_WIDGET(image));
   gtk_button_set_always_show_image(GTK_BUTTON(self), TRUE);
   gtk_widget_show_all(GTK_WIDGET(self));
   
@@ -78,8 +77,6 @@ static void graphene_launcher_applet_init(GrapheneLauncherApplet *self)
 static void graphene_launcher_applet_finalize(GrapheneLauncherApplet *self)
 {
   g_clear_object(&self->popup);
-  gtk_button_set_image(GTK_BUTTON(self), NULL);
-  g_clear_object(&self->image);
 }
 
 void graphene_launcher_applet_set_panel(GrapheneLauncherApplet *self, GraphenePanel *panel)

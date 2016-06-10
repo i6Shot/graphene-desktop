@@ -23,7 +23,9 @@
 #include <cairo.h>
 #include <gio/gio.h>
 #include <glib.h>
-#include "launcher-applet.h"
+#include "launcher/launcher-applet.h"
+#include "tasklist/tasklist-applet.h"
+#include "clock/clock-applet.h"
 
 // GraphenePanel class (private)
 struct _GraphenePanel {
@@ -118,16 +120,6 @@ static void init_layout(GraphenePanel *self)
   // Main layout
   self->AppletLayout = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0));
   gtk_container_add(GTK_CONTAINER(self), GTK_WIDGET(self->AppletLayout));
-    
-  // A box for the left-side applets
-  self->LauncherBox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0));
-  gtk_box_pack_start(self->AppletLayout, GTK_WIDGET(self->LauncherBox), FALSE, FALSE, 0);
-  gtk_box_set_homogeneous(self->LauncherBox, FALSE);
-  
-  // A box for the right-side applets
-  self->SystemTray = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0));
-  gtk_box_pack_end(self->AppletLayout, GTK_WIDGET(self->SystemTray), FALSE, FALSE, 0);
-  gtk_box_set_homogeneous(self->SystemTray, FALSE);
   
   GtkStyleContext *layoutStyle = gtk_widget_get_style_context(GTK_WIDGET(self));
   gtk_style_context_add_class(layoutStyle, "panel");
@@ -135,10 +127,14 @@ static void init_layout(GraphenePanel *self)
 
   GrapheneLauncherApplet *launcher = graphene_launcher_applet_new();
   graphene_launcher_applet_set_panel(launcher, self);
-  gtk_box_pack_end(self->SystemTray, GTK_WIDGET(launcher), FALSE, FALSE, 0);
+  gtk_box_pack_start(self->AppletLayout, GTK_WIDGET(launcher), FALSE, FALSE, 0);
 
+  GrapheneTasklistApplet *tasklist = graphene_tasklist_applet_new();
+  gtk_box_pack_start(self->AppletLayout, GTK_WIDGET(tasklist), TRUE, TRUE, 0);
   
-
+  GrapheneClockApplet *clock = graphene_clock_applet_new();
+  gtk_box_pack_end(self->AppletLayout, GTK_WIDGET(clock), FALSE, FALSE, 0);
+  
   // Context menu
   self->ContextMenu = GTK_MENU(gtk_menu_new());
   GtkWidget *reloadapplets = gtk_menu_item_new_with_label("Reload Applets");
