@@ -20,7 +20,7 @@
  * Cannot be a part of panel.c since panel.c is compiled into libgraphene.
  */
 
-#include <lib/panel.h>
+#include "panel.h"
 
 static void      activate       (GtkApplication *app, gpointer userdata);
 extern GraphenePanel* graphene_panel_new  (void);

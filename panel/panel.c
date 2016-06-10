@@ -19,12 +19,11 @@
 
 #include "config.h"
 #include "panel.h"
-#include "applet-extension.h"
-#include <libpeas/peas.h>
 #include <gdk/gdkscreen.h>
 #include <cairo.h>
 #include <gio/gio.h>
 #include <glib.h>
+#include "launcher-applet.h"
 
 // GraphenePanel class (private)
 struct _GraphenePanel {
@@ -34,14 +33,10 @@ struct _GraphenePanel {
   GtkBox *LauncherBox;
   GtkBox *SystemTray;
   
-  GHashTable *ExtensionWidgetTable;
-  PeasEngine *Engine;
-  
   GtkPositionType Location;
   gint Height;
   gint MonitorID;
   GdkRectangle PanelRect;
-  PeasExtensionSet *ExtensionSet;
   
   GtkMenu *ContextMenu;
   
@@ -69,7 +64,6 @@ static void graphene_panel_class_init(GraphenePanelClass *klass) { GObjectClass 
 // Private event declarations
 static void init_layout(GraphenePanel *self);
 static void init_capture(GraphenePanel *self);
-static void init_plugins(GraphenePanel *self);
 static void init_notifications(GraphenePanel *self);
 static void update_position(GraphenePanel *self);
 static void on_monitors_changed(GdkScreen *screen, GraphenePanel *self);
@@ -104,7 +98,6 @@ static void graphene_panel_init(GraphenePanel *self)
   // Load things
   init_layout(self);
   init_capture(self);
-  init_plugins(self);
   init_notifications(self);
 }
 
@@ -139,6 +132,12 @@ static void init_layout(GraphenePanel *self)
   GtkStyleContext *layoutStyle = gtk_widget_get_style_context(GTK_WIDGET(self));
   gtk_style_context_add_class(layoutStyle, "panel");
   gtk_widget_set_name(GTK_WIDGET(self), "panel-bar");
+
+  GrapheneLauncherApplet *launcher = graphene_launcher_applet_new();
+  graphene_launcher_applet_set_panel(launcher, self);
+  gtk_box_pack_end(self->SystemTray, GTK_WIDGET(launcher), FALSE, FALSE, 0);
+
+  
 
   // Context menu
   self->ContextMenu = GTK_MENU(gtk_menu_new());
@@ -285,7 +284,7 @@ static void on_context_menu_item_activate(GraphenePanel *self, GtkMenuItem *menu
   
   if(g_strcmp0(name, "Reload Applets") == 0)
   {
-    // Reboot the panel. There is apparently no way to reload a plugin using Peas without completely exiting the process.
+    // Reboot the panel.
     self->Rebooting = TRUE;
     g_application_quit(g_application_get_default());
   }
@@ -455,105 +454,6 @@ void graphene_panel_shutdown(GraphenePanel *self, gboolean reboot)
 }
 
 
-/*
- *
- * PLUGINS
- *
- */
-
-static void load_girepository(char *name, char *version);
-static void on_extension_added(PeasExtensionSet *set, PeasPluginInfo *info, GrapheneAppletExtension *exten, GraphenePanel *self);
-static void on_extension_removed(PeasExtensionSet *set, PeasPluginInfo *info, GrapheneAppletExtension *exten, GraphenePanel *self);
-
-static void init_plugins(GraphenePanel *self)
-{
-  // Init peas
-  PeasEngine *engine = peas_engine_get_default();
-  peas_engine_add_search_path(engine, GRAPHENE_DATA_DIR "/applets", GRAPHENE_DATA_DIR "/applets");
-  peas_engine_enable_loader(engine, "python3");
-  peas_engine_enable_loader(engine, "lua5.1");
-  load_girepository("Graphene", GRAPHENE_VERSION_STR);
-
-  // Create a hash table between each GrapheneAppletExtension* and its corresponding GtkWidget*
-  self->ExtensionWidgetTable = g_hash_table_new(g_direct_hash, g_direct_equal);
-
-  // Create extension set
-  self->ExtensionSet = peas_extension_set_new(engine, GRAPHENE_TYPE_APPLET_EXTENSION, NULL);
-  peas_extension_set_foreach(self->ExtensionSet, (PeasExtensionSetForeachFunc)on_extension_added, self);
-  g_signal_connect(self->ExtensionSet, "extension-added", G_CALLBACK(on_extension_added), self);
-  g_signal_connect(self->ExtensionSet, "extension-removed", G_CALLBACK(on_extension_removed), self);
-  
-  peas_engine_rescan_plugins(engine);
-  const GList *plugins = peas_engine_get_plugin_list(engine);
-  for (; plugins != NULL; plugins = plugins->next)
-  {
-    PeasPluginInfo *info = (PeasPluginInfo *)plugins->data;
-    if(peas_plugin_info_is_builtin(info))
-      peas_engine_load_plugin(engine, info);
-  }
-}
-
-static void load_girepository(char *name, char *version)
-{
-  GError *error = NULL;
-  g_irepository_require(g_irepository_get_default(), name, version, (GIRepositoryLoadFlags)0, &error);
-  if(error)
-  {
-    g_critical("Failed to load girepository '%s' version %s: %s\n", name, version, error->message);
-    g_error_free(error);
-  }
-}
-
-static void insert_extension(GraphenePanel *self, const char *name, GtkWidget *applet)
-{
-  if(g_strcmp0(name, "launcher") == 0) // Special built-in extension
-  {
-    gtk_box_pack_start(GTK_BOX(self->LauncherBox), applet, FALSE, FALSE, 0);
-    gtk_box_reorder_child(GTK_BOX(self->LauncherBox), applet, 0);
-  }
-  else if(g_strcmp0(name, "tasklist") == 0) // Special built-in extension
-  {
-    gtk_box_pack_start(GTK_BOX(self->LauncherBox), applet, FALSE, FALSE, 0);
-    gtk_box_reorder_child(GTK_BOX(self->LauncherBox), applet, 1);
-  }
-  else if(g_strcmp0(name, "clock") == 0)
-  {
-    gtk_box_pack_end(GTK_BOX(self->SystemTray), applet, FALSE, FALSE, 0);
- 		gtk_box_reorder_child(GTK_BOX(self->SystemTray), applet, 0);
-  }
-  else
-  {
-    gtk_box_pack_end(GTK_BOX(self->SystemTray), applet, FALSE, FALSE, 0);
-  }
-}
-
-static void on_extension_added(PeasExtensionSet *set, PeasPluginInfo *info, GrapheneAppletExtension *exten, GraphenePanel *self)
-{
-  const char *pluginmodule = peas_plugin_info_get_module_name(info);
-
-  GtkWidget *applet = graphene_applet_extension_get_widget(GRAPHENE_APPLET_EXTENSION(exten), self);
-  if(!applet)
-  {
-    g_warning("Failed to initialize plugin '%s'", pluginmodule);
-    return;
-  }
-  
-  GtkStyleContext *style = gtk_widget_get_style_context(GTK_WIDGET(applet));
-  gtk_style_context_add_class(style, "graphene-applet");
-  
-  g_hash_table_insert(self->ExtensionWidgetTable, exten, applet);
-	insert_extension(self, pluginmodule, applet);
-}
-
-static void on_extension_removed(PeasExtensionSet *set, PeasPluginInfo *info, GrapheneAppletExtension *exten, GraphenePanel *self)
-{
-  GtkWidget *applet = GTK_WIDGET(g_hash_table_lookup(self->ExtensionWidgetTable, exten));
-  g_hash_table_remove(self->ExtensionWidgetTable, exten);
-  if(applet == NULL)
-    return;
-  
-  gtk_widget_destroy(applet);
-}
 
 
 

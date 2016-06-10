@@ -41,58 +41,24 @@ pkg_check_modules(GIOUNIX2 REQUIRED gio-unix-2.0>=2.10)
 target_link_libraries(graphene-session ${GIOUNIX2_LIBRARIES})
 target_include_directories(graphene-session PRIVATE ${GIOUNIX2_INCLUDE_DIRS})
 
-# Setup target for libgraphene
-file(GLOB libgraphene_SRC "lib/*.c" "lib/*.h")
-add_library(graphene SHARED ${libgraphene_SRC})
-# set_target_properties(graphene PROPERTIES SOVERSION ${GRAPHENE_VERSION})
+# Setup target for the panel executable
+file(GLOB panel_SRC "panel/*.c" "panel/*.h")
+add_executable(graphene-panel ${panel_SRC})
 pkg_check_modules(GTK3 REQUIRED gtk+-3.0>=3.10)
 pkg_check_modules(LIBPEAS REQUIRED libpeas-1.0>=1.16)
 pkg_check_modules(LIBPULSE REQUIRED libpulse>=8.0)
 pkg_check_modules(LIBPULSEGLIB REQUIRED libpulse-mainloop-glib>=8.0)
-target_include_directories(graphene PRIVATE ${GTK3_INCLUDE_DIRS} ${LIBPEAS_INCLUDE_DIRS} ${LIBPULSE_INCLUDE_DIRS} ${LIBPULSEGLIB_INCLUDE_DIRS})
-
-find_package(GObjectIntrospection REQUIRED) # https://git.io/vrAxP
-add_custom_command(
-  OUTPUT ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.gir
-  DEPENDS graphene
-  COMMAND ${INTROSPECTION_SCANNER}
-    --include GObject-2.0
-    --include Gtk-3.0
-    --pkg gtk+-3.0
-    --pkg libpulse
-    --pkg libpulse-mainloop-glib
-    --pkg libpeas-1.0
-    --library-path ${PROJECT_SOURCE_DIR}/lib
-    --library graphene
-    --pkg-export libgraphene
-    --identifier-prefix Graphene
-    --symbol-prefix graphene
-    --namespace Graphene
-    --nsversion ${GRAPHENE_VERSION}
-    --no-libtool
-    --warn-all
-    --output ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.gir
-    ${libgraphene_SRC}
-)
-add_custom_command(
-  OUTPUT ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.typelib
-  DEPENDS ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.gir
-  COMMAND ${INTROSPECTION_COMPILER} ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.gir -o ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.typelib
-)
-add_custom_target(libgraphene-gir ALL DEPENDS ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.typelib)
-
-# Setup target for the panel executable
-add_executable(graphene-panel panel/panel-main.c)
-target_include_directories(graphene-panel PRIVATE ${GTK3_INCLUDE_DIRS})
-target_link_libraries(graphene-panel graphene ${GTK3_LIBRARIES} ${LIBPEAS_LIBRARIES} ${LIBPULSE_LIBRARIES} ${LIBPULSEGLIB_LIBRARIES})
+pkg_check_modules(LIBGNOMEMENU REQUIRED libgnome-menu-3.0>=3.13)
+target_include_directories(graphene-panel PRIVATE ${GTK3_INCLUDE_DIRS} ${LIBPULSE_INCLUDE_DIRS} ${LIBPULSEGLIB_INCLUDE_DIRS} ${LIBGNOMEMENU_INCLUDE_DIRS})
+target_link_libraries(graphene-panel ${GTK3_LIBRARIES} ${LIBPULSE_LIBRARIES} ${LIBPULSEGLIB_LIBRARIES} ${LIBGNOMEMENU_LIBRARIES})
 
 # Install
 install(TARGETS graphene-wm graphene-panel DESTINATION ${GRAPHENE_DATA_DIR})
 install(TARGETS graphene-session DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
-install(TARGETS graphene DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
+# install(TARGETS graphene DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
 install(DIRECTORY data/ DESTINATION ${GRAPHENE_DATA_DIR}) # Slash after 'data' makes it only install contents of directory
-install(FILES ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.gir DESTINATION ${CMAKE_INSTALL_PREFIX}/share/gir-1.0)
-install(FILES ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.typelib DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/girepository-1.0)
+# install(FILES ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.gir DESTINATION ${CMAKE_INSTALL_PREFIX}/share/gir-1.0)
+# install(FILES ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.typelib DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/girepository-1.0)
 install(FILES graphene.desktop DESTINATION ${CMAKE_INSTALL_PREFIX}/share/xsessions)
 
 # Uninstall target (only works after installing with install_manifest.txt)
