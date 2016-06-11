@@ -26,6 +26,7 @@
 #include "launcher/launcher-applet.h"
 #include "tasklist/tasklist-applet.h"
 #include "clock/clock-applet.h"
+#include "settings/settings-applet.h"
 
 // GraphenePanel class (private)
 struct _GraphenePanel {
@@ -126,14 +127,22 @@ static void init_layout(GraphenePanel *self)
   gtk_widget_set_name(GTK_WIDGET(self), "panel-bar");
 
   GrapheneLauncherApplet *launcher = graphene_launcher_applet_new();
+  gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(launcher)), "graphene-applet");
   graphene_launcher_applet_set_panel(launcher, self);
   gtk_box_pack_start(self->AppletLayout, GTK_WIDGET(launcher), FALSE, FALSE, 0);
-
+  
   GrapheneTasklistApplet *tasklist = graphene_tasklist_applet_new();
+  gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(tasklist)), "graphene-applet");
   gtk_box_pack_start(self->AppletLayout, GTK_WIDGET(tasklist), TRUE, TRUE, 0);
   
   GrapheneClockApplet *clock = graphene_clock_applet_new();
+  gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(clock)), "graphene-applet");
   gtk_box_pack_end(self->AppletLayout, GTK_WIDGET(clock), FALSE, FALSE, 0);
+  
+  GrapheneSettingsApplet *settings = graphene_settings_applet_new();
+  gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(settings)), "graphene-applet");
+  graphene_settings_applet_set_panel(settings, self);
+  gtk_box_pack_end(self->AppletLayout, GTK_WIDGET(settings), FALSE, FALSE, 0);
   
   // Context menu
   self->ContextMenu = GTK_MENU(gtk_menu_new());

@@ -36,7 +36,6 @@ struct _GrapheneLauncherApplet
 
 static void graphene_launcher_applet_finalize(GrapheneLauncherApplet *self);
 static gboolean applet_on_click(GrapheneLauncherApplet *self, GdkEvent *event);
-static void applet_on_popup_show(GrapheneLauncherApplet *self, GrapheneLauncherPopup *popup);
 static void applet_on_popup_hide(GrapheneLauncherApplet *self, GrapheneLauncherPopup *popup);
 
 
@@ -72,6 +71,7 @@ static void graphene_launcher_applet_init(GrapheneLauncherApplet *self)
   // Create popup
   self->popup = graphene_launcher_popup_new();
   graphene_launcher_popup_set_panel(self->popup, self->panel);
+  g_signal_connect_swapped(self->popup, "hide", G_CALLBACK(applet_on_popup_hide), self);
 }
 
 static void graphene_launcher_applet_finalize(GrapheneLauncherApplet *self)
@@ -91,6 +91,11 @@ static gboolean applet_on_click(GrapheneLauncherApplet *self, GdkEvent *event)
   gtk_style_context_add_class(self->style, "clicked");
   gtk_widget_show(GTK_WIDGET(self->popup));
   return GDK_EVENT_STOP; // Required to keep the button from staying highlighted permanently 
+}
+
+static void applet_on_popup_hide(GrapheneLauncherApplet *self, GrapheneLauncherPopup *popup)
+{
+  gtk_style_context_remove_class(self->style, "clicked");
 }
 
 
