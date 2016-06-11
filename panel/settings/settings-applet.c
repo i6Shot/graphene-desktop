@@ -17,9 +17,9 @@
 
 #include "settings-applet.h"
 #include "materialbox.h"
+#include "battery.h"
 #include <glib.h>
 #include <gdk/gdkx.h>
-
 
 #define GRAPHENE_TYPE_SETTINGS_POPUP  graphene_settings_popup_get_type()
 G_DECLARE_FINAL_TYPE(GrapheneSettingsPopup, graphene_settings_popup, GRAPHENE, SETTINGS_POPUP, GtkWindow)
@@ -65,7 +65,8 @@ static void graphene_settings_applet_init(GrapheneSettingsApplet *self)
   // Init applet buttons
   GtkBox *box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0));
   gtk_box_set_homogeneous(box, TRUE);
-  gtk_box_pack_end(box, gtk_image_new_from_icon_name("emblem-system-symbolic", GTK_ICON_SIZE_MENU), FALSE, FALSE, 0);
+  gtk_box_pack_end(box, GTK_WIDGET(graphene_battery_icon_new()), FALSE, FALSE, 0);
+  gtk_box_pack_end(box, GTK_WIDGET(gtk_image_new_from_icon_name("emblem-system-symbolic", GTK_ICON_SIZE_MENU)), FALSE, FALSE, 0);
   
   gtk_container_add(GTK_CONTAINER(self), GTK_WIDGET(box));
   gtk_widget_show_all(GTK_WIDGET(self));
