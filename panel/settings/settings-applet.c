@@ -24,14 +24,12 @@
 #define GRAPHENE_TYPE_SETTINGS_POPUP  graphene_settings_popup_get_type()
 G_DECLARE_FINAL_TYPE(GrapheneSettingsPopup, graphene_settings_popup, GRAPHENE, SETTINGS_POPUP, GtkWindow)
 GrapheneSettingsPopup * graphene_settings_popup_new();
-void graphene_settings_popup_set_panel(GrapheneSettingsPopup *self, GraphenePanel *panel);
 
 
 struct _GrapheneSettingsApplet
 {
   GtkButton parent;
   
-  GraphenePanel *panel;
   GtkStyleContext *style;
   GrapheneSettingsPopup *popup;
 };
@@ -62,7 +60,6 @@ static void graphene_settings_applet_init(GrapheneSettingsApplet *self)
   gtk_style_context_add_class(self->style, "graphene-settings-applet");
 
   self->popup = graphene_settings_popup_new();
-  graphene_settings_popup_set_panel(self->popup, self->panel);
   g_signal_connect_swapped(self->popup, "hide", G_CALLBACK(applet_on_popup_hide), self);
 
   // Init applet buttons
@@ -81,15 +78,8 @@ static void graphene_settings_applet_finalize(GrapheneSettingsApplet *self)
   g_clear_object(&self->popup);
 }
 
-void graphene_settings_applet_set_panel(GrapheneSettingsApplet *self, GraphenePanel *panel)
-{
-  self->panel = panel;
-  graphene_settings_popup_set_panel(self->popup, self->panel);
-}
-
 static gboolean applet_on_click(GrapheneSettingsApplet *self, GdkEvent *event)
 {
-  g_return_val_if_fail(GRAPHENE_IS_PANEL(self->panel), GDK_EVENT_STOP);
   gtk_style_context_add_class(self->style, "clicked");
   gtk_widget_show(GTK_WIDGET(self->popup));
   return GDK_EVENT_STOP; // Required to keep the button from staying highlighted permanently 
@@ -112,7 +102,6 @@ struct _GrapheneSettingsPopup
 {
   GtkWindow parent;
   
-  GraphenePanel *panel;
   GtkBox *sessionBox;
   GrapheneMaterialBox *settingsView;
   GtkBox *settingWidgetBox;
@@ -220,21 +209,16 @@ static void graphene_settings_popup_finalize(GrapheneSettingsPopup *self)
 {
 }
 
-void graphene_settings_popup_set_panel(GrapheneSettingsPopup *self, GraphenePanel *panel)
-{
-  self->panel = panel;
-}
-
 static void popup_on_show(GrapheneSettingsPopup *self)
 {
-  graphene_panel_capture_screen(self->panel);
+  graphene_panel_capture_screen(graphene_panel_get_default());
   gtk_grab_add(GTK_WIDGET(self));
 }
 
 static void popup_on_hide(GrapheneSettingsPopup *self)
 {
   gtk_grab_remove(GTK_WIDGET(self));
-  graphene_panel_end_capture(self->panel);
+  graphene_panel_end_capture(graphene_panel_get_default());
 }
 
 static void popup_on_mapped(GrapheneSettingsPopup *self)
@@ -259,16 +243,16 @@ static gboolean popup_on_mouse_event(GrapheneSettingsPopup *self, GdkEventButton
 static void popup_update_size(GrapheneSettingsPopup *self)
 {
   GdkRectangle rect;
-  gdk_screen_get_monitor_geometry(gtk_widget_get_screen(GTK_WIDGET(self)), graphene_panel_get_monitor(self->panel), &rect);
+  gdk_screen_get_monitor_geometry(gtk_widget_get_screen(GTK_WIDGET(self)), graphene_panel_get_monitor(graphene_panel_get_default()), &rect);
   GdkWindow *window = gtk_widget_get_window(GTK_WIDGET(self));
   if(window)
-    gdk_window_move_resize(window, rect.x + rect.width - (rect.width/6), rect.y, rect.width/6, rect.height-graphene_panel_get_height(self->panel));
+    gdk_window_move_resize(window, rect.x + rect.width - (rect.width/6), rect.y, rect.width/6, rect.height-graphene_panel_get_height(graphene_panel_get_default()));
 }
 
 static void popup_on_logout_button_clicked(GrapheneSettingsPopup *self, GtkButton *button)
 {
   gtk_widget_hide(GTK_WIDGET(self));
-  graphene_panel_logout(self->panel);
+  graphene_panel_logout(graphene_panel_get_default());
 }
 
 static void popup_on_vertical_scrolled(GrapheneSettingsPopup *self, GtkAdjustment *vadj)

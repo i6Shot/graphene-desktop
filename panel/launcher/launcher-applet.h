@@ -29,14 +29,12 @@ G_BEGIN_DECLS
 G_DECLARE_FINAL_TYPE(GrapheneLauncherApplet, graphene_launcher_applet, GRAPHENE, LAUNCHER_APPLET, GtkButton)
 
 GrapheneLauncherApplet * graphene_launcher_applet_new();
-void graphene_launcher_applet_set_panel(GrapheneLauncherApplet *self, GraphenePanel *panel);
 
 
 #define GRAPHENE_TYPE_LAUNCHER_POPUP  graphene_launcher_popup_get_type()
 G_DECLARE_FINAL_TYPE(GrapheneLauncherPopup, graphene_launcher_popup, GRAPHENE, LAUNCHER_POPUP, GtkWindow)
 
 GrapheneLauncherPopup * graphene_launcher_popup_new();
-void graphene_launcher_popup_set_panel(GrapheneLauncherPopup *self, GraphenePanel *panel);
 
 G_END_DECLS
 

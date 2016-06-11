@@ -30,6 +30,8 @@ G_BEGIN_DECLS
 G_DECLARE_FINAL_TYPE(GraphenePanel, graphene_panel, GRAPHENE, PANEL, GtkWindow)
 
 // Public methods for GraphenePanel
+GraphenePanel * graphene_panel_get_default       (void);
+
 int             graphene_panel_capture_screen    (GraphenePanel *self);
 int             graphene_panel_end_capture       (GraphenePanel *self);
 void            graphene_panel_clear_capture     (GraphenePanel *self);

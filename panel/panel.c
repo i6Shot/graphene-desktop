@@ -53,14 +53,11 @@ struct _GraphenePanel {
   guint32 NextNotificationID;
 };
 
-// Make sure only one panel exists at a time
-static gboolean PanelExists = FALSE;
-
 // Create the GraphenePanel class
 // No properties or anything special, the GraphenePanel is only a class because
 // it creates the GraphenePanel struct for private data
 G_DEFINE_TYPE(GraphenePanel, graphene_panel, GTK_TYPE_WINDOW)
-GraphenePanel* graphene_panel_new(void) { if(PanelExists) return NULL; else return GRAPHENE_PANEL(g_object_new(GRAPHENE_TYPE_PANEL, NULL)); }
+GraphenePanel* graphene_panel_new(void) { return GRAPHENE_PANEL(g_object_new(GRAPHENE_TYPE_PANEL, NULL)); }
 static void graphene_panel_finalize(GraphenePanel *self);
 static void graphene_panel_class_init(GraphenePanelClass *klass) { GObjectClass *object_class = G_OBJECT_CLASS (klass); object_class->finalize = graphene_panel_finalize; }
 
@@ -74,10 +71,17 @@ static gboolean on_panel_clicked(GraphenePanel *self, GdkEventButton *event);
 static void on_context_menu_item_activate(GraphenePanel *self, GtkMenuItem *menuitem);
 static void update_notification_windows(GraphenePanel *self);
 
+GraphenePanel * graphene_panel_get_default(void)
+{
+  static GraphenePanel *panel = NULL;
+  if(!GRAPHENE_IS_PANEL(panel))
+    panel = graphene_panel_new();
+  return panel;
+}
+
 // Initializes the panel (declared by G_DEFINE_TYPE; called through graphene_panel_new())
 static void graphene_panel_init(GraphenePanel *self)
 {
-  PanelExists = TRUE;
   self->Rebooting = FALSE;
   
   // Set properties
@@ -108,8 +112,7 @@ static void graphene_panel_finalize(GraphenePanel *self)
 {
   if(self->NotificationServerBusNameID)
     g_bus_unown_name(self->NotificationServerBusNameID);
-    
-  PanelExists = FALSE;
+  
   G_OBJECT_CLASS(graphene_panel_parent_class)->finalize(G_OBJECT(self));
 }
 
@@ -128,7 +131,6 @@ static void init_layout(GraphenePanel *self)
 
   GrapheneLauncherApplet *launcher = graphene_launcher_applet_new();
   gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(launcher)), "graphene-applet");
-  graphene_launcher_applet_set_panel(launcher, self);
   gtk_box_pack_start(self->AppletLayout, GTK_WIDGET(launcher), FALSE, FALSE, 0);
   
   GrapheneTasklistApplet *tasklist = graphene_tasklist_applet_new();
@@ -141,7 +143,6 @@ static void init_layout(GraphenePanel *self)
   
   GrapheneSettingsApplet *settings = graphene_settings_applet_new();
   gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(settings)), "graphene-applet");
-  graphene_settings_applet_set_panel(settings, self);
   gtk_box_pack_end(self->AppletLayout, GTK_WIDGET(settings), FALSE, FALSE, 0);
   
   // Context menu

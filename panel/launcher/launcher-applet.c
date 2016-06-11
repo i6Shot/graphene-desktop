@@ -28,7 +28,6 @@ struct _GrapheneLauncherApplet
 {
   GtkButton parent;
   
-  GraphenePanel *panel;
   GtkStyleContext *style;
   GrapheneLauncherPopup *popup;
 };
@@ -70,7 +69,6 @@ static void graphene_launcher_applet_init(GrapheneLauncherApplet *self)
   
   // Create popup
   self->popup = graphene_launcher_popup_new();
-  graphene_launcher_popup_set_panel(self->popup, self->panel);
   g_signal_connect_swapped(self->popup, "hide", G_CALLBACK(applet_on_popup_hide), self);
 }
 
@@ -79,15 +77,8 @@ static void graphene_launcher_applet_finalize(GrapheneLauncherApplet *self)
   g_clear_object(&self->popup);
 }
 
-void graphene_launcher_applet_set_panel(GrapheneLauncherApplet *self, GraphenePanel *panel)
-{
-  self->panel = panel;
-  graphene_launcher_popup_set_panel(self->popup, self->panel);
-}
-
 static gboolean applet_on_click(GrapheneLauncherApplet *self, GdkEvent *event)
 {
-  g_return_val_if_fail(GRAPHENE_IS_PANEL(self->panel), GDK_EVENT_STOP);
   gtk_style_context_add_class(self->style, "clicked");
   gtk_widget_show(GTK_WIDGET(self->popup));
   return GDK_EVENT_STOP; // Required to keep the button from staying highlighted permanently 
@@ -109,7 +100,6 @@ struct _GrapheneLauncherPopup
 {
   GtkWindow parent;
   
-  GraphenePanel *panel;
   GtkBox *popupLayout;
   GtkBox *searchBarContainer;
   GtkSearchEntry *searchBar;
@@ -214,22 +204,17 @@ static void graphene_launcher_popup_finalize(GrapheneLauncherPopup *self)
   g_clear_object(&self->popupLayout);
 }
 
-void graphene_launcher_popup_set_panel(GrapheneLauncherPopup *self, GraphenePanel *panel)
-{
-  self->panel = panel;
-}
-
 static void popup_on_show(GrapheneLauncherPopup *self)
 {
   popup_applist_refresh(self);
-  graphene_panel_capture_screen(self->panel);
+  graphene_panel_capture_screen(graphene_panel_get_default());
   gtk_grab_add(GTK_WIDGET(self));
 }
 
 static void popup_on_hide(GrapheneLauncherPopup *self)
 {
   gtk_grab_remove(GTK_WIDGET(self));
-  graphene_panel_end_capture(self->panel);
+  graphene_panel_end_capture(graphene_panel_get_default());
 }
 
 static void popup_on_mapped(GrapheneLauncherPopup *self)
@@ -254,10 +239,10 @@ static gboolean popup_on_mouse_event(GrapheneLauncherPopup *self, GdkEventButton
 static void popup_update_size(GrapheneLauncherPopup *self)
 {
   GdkRectangle rect;
-  gdk_screen_get_monitor_geometry(gtk_widget_get_screen(GTK_WIDGET(self)), graphene_panel_get_monitor(self->panel), &rect);
+  gdk_screen_get_monitor_geometry(gtk_widget_get_screen(GTK_WIDGET(self)), graphene_panel_get_monitor(graphene_panel_get_default()), &rect);
   GdkWindow *window = gtk_widget_get_window(GTK_WIDGET(self));
   if(window)
-    gdk_window_move_resize(window, rect.x, rect.y, rect.width/6, rect.height-graphene_panel_get_height(self->panel));
+    gdk_window_move_resize(window, rect.x, rect.y, rect.width/6, rect.height-graphene_panel_get_height(graphene_panel_get_default()));
 }
 
 static void popup_on_search_changed(GrapheneLauncherPopup *self, GtkSearchEntry *searchBar)

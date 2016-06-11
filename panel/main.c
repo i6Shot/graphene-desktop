@@ -23,10 +23,7 @@
 #include "panel.h"
 
 static void      activate       (GtkApplication *app, gpointer userdata);
-extern GraphenePanel* graphene_panel_new  (void);
 extern gboolean  graphene_panel_is_rebooting(GraphenePanel *self);
-
-static GraphenePanel *panel = NULL;
 
 int main(int argc, char **argv)
 {
@@ -35,6 +32,7 @@ int main(int argc, char **argv)
   g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
   int status = g_application_run(G_APPLICATION(app), argc, argv);
   g_object_unref(app);
+  GraphenePanel *panel = graphene_panel_get_default();
   if(GRAPHENE_IS_PANEL(panel) && graphene_panel_is_rebooting(panel))
     status = 120; // 120 tells the session manager to restart the panel instead of logging out
   g_object_unref(panel);
@@ -44,7 +42,7 @@ int main(int argc, char **argv)
 static void activate(GtkApplication *app, gpointer userdata)
 {
   // Create the panel
-  panel = graphene_panel_new();
+  GraphenePanel *panel = graphene_panel_get_default(); // First call will create it
   gtk_application_add_window(app, GTK_WINDOW(panel));
   
   // Show the panel

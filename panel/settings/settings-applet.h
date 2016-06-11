@@ -28,7 +28,6 @@ G_BEGIN_DECLS
 #define GRAPHENE_TYPE_SETTINGS_APPLET  graphene_settings_applet_get_type()
 G_DECLARE_FINAL_TYPE(GrapheneSettingsApplet, graphene_settings_applet, GRAPHENE, SETTINGS_APPLET, GtkButton)
 GrapheneSettingsApplet * graphene_settings_applet_new();
-void graphene_settings_applet_set_panel(GrapheneSettingsApplet *self, GraphenePanel *panel);
 
 G_END_DECLS
 
