@@ -67,6 +67,7 @@ Authors
 --------
 
 Aidan Shafran <zelbrium@gmail.com>
+Conner Novicki <connernovicki@gmail.com>
 
 Thanks
 --------
