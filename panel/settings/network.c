@@ -120,6 +120,9 @@ static void graphene_network_control_init(GrapheneNetworkControl *self)
 static void graphene_network_control_finalize(GrapheneNetworkControl *self)
 {
   g_clear_object(&self->wicdDaemonProxy);
+  g_clear_pointer(&self->essid, g_free);
+  g_clear_pointer(&self->ip, g_free);
+  g_clear_pointer(&self->iconName, g_free);
 }
 
 guint32 graphene_network_control_get_status(GrapheneNetworkControl *self)
