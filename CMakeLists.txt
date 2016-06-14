@@ -49,8 +49,9 @@ pkg_check_modules(LIBPULSE REQUIRED libpulse>=8.0)
 pkg_check_modules(LIBPULSEGLIB REQUIRED libpulse-mainloop-glib>=8.0)
 pkg_check_modules(LIBGNOMEMENU REQUIRED libgnome-menu-3.0>=3.13)
 pkg_check_modules(LIBWNCK REQUIRED libwnck-3.0>=3.14)
-target_include_directories(graphene-panel PRIVATE panel/ ${GTK3_INCLUDE_DIRS} ${LIBPULSE_INCLUDE_DIRS} ${LIBPULSEGLIB_INCLUDE_DIRS} ${LIBGNOMEMENU_INCLUDE_DIRS} ${LIBWNCK_INCLUDE_DIRS})
-target_link_libraries(graphene-panel ${GTK3_LIBRARIES} ${LIBPULSE_LIBRARIES} ${LIBPULSEGLIB_LIBRARIES} ${LIBGNOMEMENU_LIBRARIES} ${LIBWNCK_LIBRARIES})
+pkg_check_modules(LIBACT REQUIRED accountsservice>=0.6)
+target_include_directories(graphene-panel PRIVATE panel/ ${GTK3_INCLUDE_DIRS} ${LIBPULSE_INCLUDE_DIRS} ${LIBPULSEGLIB_INCLUDE_DIRS} ${LIBGNOMEMENU_INCLUDE_DIRS} ${LIBWNCK_INCLUDE_DIRS} ${LIBACT_INCLUDE_DIRS})
+target_link_libraries(graphene-panel ${GTK3_LIBRARIES} ${LIBPULSE_LIBRARIES} ${LIBPULSEGLIB_LIBRARIES} ${LIBGNOMEMENU_LIBRARIES} ${LIBWNCK_LIBRARIES} ${LIBACT_LIBRARIES})
 
 # Install
 install(TARGETS graphene-wm graphene-panel DESTINATION ${GRAPHENE_DATA_DIR})

@@ -20,6 +20,7 @@
 #include "battery.h"
 #include "volume.h"
 #include "network.h"
+#include "users.h"
 #include <glib.h>
 #include <gdk/gdkx.h>
 
@@ -166,7 +167,8 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
   gtk_widget_set_valign(GTK_WIDGET(layout), GTK_ALIGN_FILL);
   
   // Current session info (profile name, profile icon)
-  GtkLabel *profileNameLabel = GTK_LABEL(gtk_label_new("[name]"));
+  GrapheneProfileNameLabel *profileNameLabel = graphene_profile_name_label_new();
+  graphene_profile_name_label_set_user(profileNameLabel, NULL); // Sets to current user
   gtk_widget_set_name(GTK_WIDGET(profileNameLabel), "profile-name-label");
   gtk_widget_set_halign(GTK_WIDGET(profileNameLabel), GTK_ALIGN_CENTER);
   gtk_widget_set_valign(GTK_WIDGET(profileNameLabel), GTK_ALIGN_CENTER);
