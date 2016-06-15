@@ -332,12 +332,14 @@ static void add_setting_widget(GrapheneSettingsPopup *self, const gchar *title, 
   gtk_widget_set_halign(GTK_WIDGET(buttonBox), GTK_ALIGN_START);
   gtk_container_add(GTK_CONTAINER(button), GTK_WIDGET(buttonBox));
   graphene_material_box_add_sheet(box, GRAPHENE_MATERIAL_SHEET(button), GRAPHENE_MATERIAL_BOX_LOCATION_CENTER);
-
+  gtk_widget_show_all(GTK_WIDGET(box));
+  
   if(toggleable)
   {
     GtkSwitch *toggle = gtk_switch_new();
     gtk_widget_set_valign(GTK_WIDGET(toggle), GTK_ALIGN_CENTER);
     gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(toggle)), "settings-widget-switch");
+    // Margin in CSS
     graphene_material_box_add_sheet(box, GRAPHENE_MATERIAL_SHEET(toggle), GRAPHENE_MATERIAL_BOX_LOCATION_RIGHT);
     gtk_widget_show_all(GTK_WIDGET(toggle));
   }

@@ -118,3 +118,12 @@ scrollbar {
 .graphene-clock-applet {
   padding-right: 20px;
 }
+
+.settings-widget-switch {
+  margin: 5px;
+  margin-right: 10px;
+}
+
+.graphene-volume-slider {
+  margin: 20px;
+}

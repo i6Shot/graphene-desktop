@@ -113,6 +113,10 @@ static void graphene_volume_slider_class_init(GrapheneVolumeSliderClass *klass)
 
 static void graphene_volume_slider_init(GrapheneVolumeSlider *self)
 {
+  gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(self)), "graphene-volume-slider");
+  
+  // Margin in CSS
+  
   self->volumeControl = graphene_system_volume_control_new();
   g_signal_connect_swapped(self->volumeControl, "notify::volume", G_CALLBACK(slider_on_update), self);
 
