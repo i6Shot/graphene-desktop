@@ -66,7 +66,7 @@ GPLv3. The license information for each applicable file is listed at the top of 
 Authors
 --------
 
-Aidan Shafran <zelbrium@gmail.com>
+Aidan Shafran <zelbrium@gmail.com>  
 Conner Novicki <connernovicki@gmail.com>
 
 Thanks
