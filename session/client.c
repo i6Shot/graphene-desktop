@@ -54,6 +54,7 @@ struct _GrapheneSessionClient
   guint restartCount; // Number of times the process has crashed and been restarted
   
   GObject *conditionMonitor; // Set if monitoring the condition (free and NULL this to stop monitoring)
+  gboolean forceNextRestart;
 };
 
 enum
@@ -528,13 +529,14 @@ static void on_client_exit(GrapheneSessionClient *self, guint status)
   self->processId = 0;
   
   // Restart it
-  g_debug("should restart? auto: %i, args: %s, status: %i", self->autoRestart, self->args, status);
-  if(self->autoRestart && self->args && status != 0)
+  g_debug("should restart? auto: %i, args: %s, status: %i, force: %i", self->autoRestart, self->args, status, self->forceNextRestart);
+  if(self->args && (self->forceNextRestart || (self->autoRestart && status != 0)))
   {
     g_debug("restarting client with args %s", self->args);
     if(self->restartCount < MAX_RESTARTS)
     {
-      self->restartCount++;
+      if(!self->forceNextRestart)
+        self->restartCount++;
       graphene_session_client_spawn(self, 0);
     }
     else
@@ -552,6 +554,8 @@ static void on_client_exit(GrapheneSessionClient *self, guint status)
     if(self->condition == NULL)
       g_signal_emit_by_name(self, "complete");
   }
+  
+  self->forceNextRestart = FALSE;
 }
 
 static gboolean test_condition(GrapheneSessionClient *self)
@@ -658,6 +662,7 @@ void graphene_session_client_end_session(GrapheneSessionClient *self, gboolean f
 {
   g_debug("end session on %s", graphene_session_client_get_best_name(self));
   g_clear_pointer(&self->condition, g_free); // Clear condition to ensure 'complete' will be sent
+  self->forceNextRestart = FALSE;
   
   if(self->objectPath)
     g_dbus_connection_emit_signal(self->connection, self->dbusName, self->objectPath,
@@ -678,6 +683,8 @@ void graphene_session_client_stop(GrapheneSessionClient *self)
   }
   else if(self->processId)
   {
+    // TODO: Probably won't work right if forceNextRestart is TRUE
+    // Maybe maybe an instance enum such as [0: never restart, 1: auto restart, 2: always restart]
     g_debug(" - Client '%s' is not registered. Sending SIGKILL to %i signal to stop client.", graphene_session_client_get_best_name(self), self->processId);
     GPid pid = self->processId;
     on_client_exit(self, 0);
@@ -687,6 +694,16 @@ void graphene_session_client_stop(GrapheneSessionClient *self)
   {
     g_debug("Process id nor dbus object not available. Cannot stop client '%s'.", graphene_session_client_get_best_name(self));
   }
+}
+
+/*
+ * Forces the client to restart when it next closes, regardless if exit status or .desktop autoRestart flags.
+ * (Except for on EndSession)
+ * Only applies until the next exit of the program.
+ */
+void graphene_session_client_force_next_restart(GrapheneSessionClient *self)
+{
+  self->forceNextRestart = TRUE;
 }
 
 
@@ -763,6 +780,13 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
       g_dbus_method_invocation_return_value(invocation, NULL);
       return;
     }
+    else if(g_strcmp0(methodName, "Restart") == 0) {
+      graphene_session_client_force_next_restart(client);
+      g_dbus_connection_emit_signal(connection, sender, objectPath,
+        "org.gnome.SessionManager.ClientPrivate", "Stop", NULL, NULL);
+      g_dbus_method_invocation_return_value(invocation, NULL);
+      return;
+    }
   }
   else if(g_strcmp0(interfaceName, "org.gnome.SessionManager.ClientPrivate") == 0)
           // && sender == client->dbusName)
@@ -790,6 +814,7 @@ static const gchar *ClientInterfaceXML =
 "    <method name='GetUnixProcessId'>    <arg type='u' direction='out' name='pid'/>        </method>"
 "    <method name='GetStatus'>           <arg type='u' direction='out' name='status'/>     </method>"
 "    <method name='Stop'> </method>"
+"    <method name='Restart'> </method>"
 "  </interface>"
 "  <interface name='org.gnome.SessionManager.ClientPrivate'>"
 "    <method name='EndSessionResponse'>"

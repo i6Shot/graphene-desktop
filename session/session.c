@@ -662,6 +662,12 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
       g_dbus_method_invocation_return_value(invocation, NULL);
       return;
     }
+    else if(g_strcmp0(methodName, "GetCurrentClient") == 0)
+    {
+      GrapheneSessionClient *client = find_client_from_given_info(NULL, NULL, NULL, sender);
+      g_dbus_method_invocation_return_value(invocation, g_variant_new("(o)", graphene_session_client_get_object_path(client)));
+      return;
+    }
     else if(g_strcmp0(methodName, "Shutdown") == 0)
     {
     }
@@ -761,6 +767,9 @@ static const gchar *SessionManagerInterfaceXML =
 "    <method name='IsInhibited'>"
 "      <arg type='u' direction='in' name='flags'/>"
 "      <arg type='u' direction='out' name='is_inhibited'/>"
+"    </method>"
+"    <method name='GetCurrentClient'>"
+"      <arg type='o' direction='out' name='client'/>"
 "    </method>"
 "    <method name='GetClients'>"
 "      <arg type='ao' direction='out' name='clients'/>"
