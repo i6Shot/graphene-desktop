@@ -32,6 +32,9 @@
 struct _GraphenePanel {
   GtkWindow parent;
   
+  GDBusProxy *SMProxy;
+  GDBusProxy *ClientProxy;
+
   GtkBox *AppletLayout;
   GtkBox *LauncherBox;
   GtkBox *SystemTray;
@@ -46,8 +49,6 @@ struct _GraphenePanel {
   GtkWindow *CaptureWindow;
   int Captures; // Each time capture is called, this ++es, and when someone ends the capture this --es. When it hits 0, the capture actually ends.
 
-  gboolean Rebooting;
-  
   guint NotificationServerBusNameID;
   GHashTable *Notifications;
   guint32 NextNotificationID;
@@ -82,8 +83,6 @@ GraphenePanel * graphene_panel_get_default(void)
 // Initializes the panel (declared by G_DEFINE_TYPE; called through graphene_panel_new())
 static void graphene_panel_init(GraphenePanel *self)
 {
-  self->Rebooting = FALSE;
-  
   // Set properties
   gtk_window_set_type_hint(GTK_WINDOW(self), GDK_WINDOW_TYPE_HINT_DOCK);
   gtk_window_set_position(GTK_WINDOW(self), GTK_WIN_POS_NONE);
@@ -96,6 +95,25 @@ static void graphene_panel_init(GraphenePanel *self)
   gtk_css_provider_load_from_path(provider, GRAPHENE_DATA_DIR "/panel.css", NULL); // TODO: Check for errors
   gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
+  // Get SM proxy
+  GDBusConnection *connection = g_application_get_dbus_connection(g_application_get_default());
+  self->SMProxy = g_dbus_proxy_new_sync(connection, 0, NULL, "org.gnome.SessionManager", "/org/gnome/SessionManager", "org.gnome.SessionManager", NULL, NULL);
+  if(self->SMProxy)
+  {
+    GVariant *clientObjectPathVariant = g_dbus_proxy_call_sync(self->SMProxy, "GetCurrentClient", NULL, G_DBUS_CALL_FLAGS_NONE, 500, NULL, NULL);
+    if(clientObjectPathVariant)
+    {
+      gchar *clientObjectPath = NULL;
+      g_variant_get(clientObjectPathVariant, "(o)", &clientObjectPath);
+      g_variant_unref(clientObjectPathVariant);
+      if(clientObjectPath)
+      {
+        self->ClientProxy = g_dbus_proxy_new_sync(connection, 0, NULL, "org.gnome.SessionManager", clientObjectPath, "org.gnome.SessionManager.Client", NULL, NULL);
+        g_free(clientObjectPath);
+      }
+    }
+  }
+  
   // Update the position now and when the size or monitors change
   g_signal_connect(gtk_window_get_screen(GTK_WINDOW(self)), "monitors-changed", G_CALLBACK(on_monitors_changed), self);
   g_signal_connect(self, "map", G_CALLBACK(update_position), NULL);
@@ -110,6 +128,9 @@ static void graphene_panel_init(GraphenePanel *self)
 
 static void graphene_panel_finalize(GraphenePanel *self)
 {
+  g_object_unref(self->ClientProxy);
+  g_object_unref(self->SMProxy);
+
   if(self->NotificationServerBusNameID)
     g_bus_unown_name(self->NotificationServerBusNameID);
   
@@ -290,15 +311,9 @@ static void on_context_menu_item_activate(GraphenePanel *self, GtkMenuItem *menu
   
   if(g_strcmp0(name, "Reload Applets") == 0)
   {
-    // Reboot the panel.
-    self->Rebooting = TRUE;
-    g_application_quit(g_application_get_default());
+    if(self->ClientProxy)
+      g_dbus_proxy_call_sync(self->ClientProxy, "Restart", NULL, G_DBUS_CALL_FLAGS_NONE, 500, NULL, NULL);
   }
-}
-
-gboolean graphene_panel_is_rebooting(GraphenePanel *self)
-{
-  return self->Rebooting;
 }
 
 
@@ -418,20 +433,8 @@ void graphene_panel_clear_capture(GraphenePanel *self)
  */
 void graphene_panel_logout(GraphenePanel *self)
 {
-  GDBusConnection *connection = g_application_get_dbus_connection(g_application_get_default());
-  
-  GDBusProxy *smProxy = g_dbus_proxy_new_sync(connection,
-                  G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES | G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS,
-                  NULL,
-                  "org.gnome.SessionManager",
-                  "/org/gnome/SessionManager",
-                  "org.gnome.SessionManager",
-                  NULL,
-                  NULL);
-                  
-  g_dbus_proxy_call_sync(smProxy, "Logout", g_variant_new("(u)", 0), G_DBUS_CALL_FLAGS_NONE, G_MAXINT, NULL, NULL);
-  
-  g_object_unref(smProxy);
+  if(self->SMProxy)
+    g_dbus_proxy_call_sync(self->SMProxy, "Logout", g_variant_new("(u)", 0), G_DBUS_CALL_FLAGS_NONE, 500, NULL, NULL);
 }
 
 /**
@@ -443,20 +446,8 @@ void graphene_panel_logout(GraphenePanel *self)
  */
 void graphene_panel_shutdown(GraphenePanel *self, gboolean reboot)
 {
-  GDBusConnection *connection = g_application_get_dbus_connection(g_application_get_default());
-  
-  GDBusProxy *smProxy = g_dbus_proxy_new_sync(connection,
-                  G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES | G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS,
-                  NULL,
-                  "org.gnome.SessionManager",
-                  "/org/gnome/SessionManager",
-                  "org.gnome.SessionManager",
-                  NULL,
-                  NULL);
-                  
-  g_dbus_proxy_call_sync(smProxy, reboot ? "Reboot" : "Shutdown", g_variant_new("(u)", 0), G_DBUS_CALL_FLAGS_NONE, G_MAXINT, NULL, NULL);
-  
-  g_object_unref(smProxy);
+  if(self->SMProxy)      
+    g_dbus_proxy_call_sync(self->SMProxy, reboot ? "Reboot" : "Shutdown", g_variant_new("(u)", 0), G_DBUS_CALL_FLAGS_NONE, 500, NULL, NULL);
 }
 
 
