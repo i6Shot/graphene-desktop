@@ -19,6 +19,7 @@
 #include <sys/wait.h>
 #include "client.h"
 #include "util.h"
+#include "config.h"
 
 struct _GrapheneSessionClient
 {
@@ -455,20 +456,12 @@ static gboolean graphene_session_client_spawn_delay_cb(GrapheneSessionClient *se
   GPid pid = 0;
   GError *e = NULL;
   
-  // #if DEBUG
-    g_unsetenv("G_MESSAGES_DEBUG"); // Don't let the child process get the DEBUG setting
-  // #endif
-  
   // TODO: Use g_shell_parse_argv
   gchar **argsSplit = g_strsplit(self->args, " ", -1);
   gchar *startupIdVar = g_strdup_printf("DESKTOP_AUTOSTART_ID=%s", self->id);
   gchar **env = strv_append((const char * const *)g_get_environ(), startupIdVar);
   
   g_spawn_async(NULL, argsSplit, env, flags, NULL, NULL, &pid, &e);
-  
-  // #if DEBUG
-    g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
-  // #endif
   
   g_strfreev(env);
   g_free(startupIdVar);

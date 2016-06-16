@@ -32,7 +32,6 @@
 #define SESSION_MANAGER_APP_ID "org.gnome.SessionManager"
 #define INHIBITOR_OBJECT_PATH "/org/gnome/SessionManager/Inhibitor"
 #define SHOW_ALL_OUTPUT TRUE // Set to TRUE for release; FALSE only shows output from .desktop files with 'Graphene-ShowOutput=true'
-#define DEBUG TRUE
 
 typedef enum
 {
@@ -136,7 +135,7 @@ int main(int argc, char **argv)
     return 1;
   }
 
-#if DEBUG
+#if GRAPHENE_DEBUG
   g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
 #endif
 

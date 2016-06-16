@@ -7,6 +7,7 @@ project(graphene-desktop)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 set(GRAPHENE_VERSION 0.2.5)
+set(GRAPHENE_DEBUG FALSE)
 
 # Assume the user wants to install Graphene to /usr unless otherwise specified
 # with the -DCMAKE_INSTALL_PREFIX=<path> flag to cmake. http://stackoverflow.com/a/16076855

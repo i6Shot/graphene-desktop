@@ -250,7 +250,7 @@ static void update_position(GraphenePanel *self)
   
   if(wx != panelRect.x || wy != panelRect.y || wwidth != panelRect.width || wheight != panelRect.height)
   {
-    g_message("Updating position: [%i, %i, %i, %i, %i]\n",
+    g_debug("Updating position: [%i, %i, %i, %i, %i]\n",
       self->Location,
       panelRect.x, panelRect.y,
       panelRect.width, panelRect.height);
@@ -279,7 +279,7 @@ static void update_position(GraphenePanel *self)
   
   if(self->CaptureWindow && (cx != captureRect.x || cy != captureRect.y || cwidth != captureRect.width || cheight != captureRect.height))
   {
-    g_message("Updating capture position: [%i, %i, %i, %i, %i]\n",
+    g_debug("Updating capture position: [%i, %i, %i, %i, %i]\n",
       self->Location,
       captureRect.x, captureRect.y,
       captureRect.width, captureRect.height);
