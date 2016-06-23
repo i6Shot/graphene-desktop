@@ -58,6 +58,15 @@ int main(int argc, char **argv)
   meta_set_wm_name("GRAPHENE Desktop");
   meta_set_gnome_wm_keybindings("Mutter,GNOME Shell");
   
+  GError *error = NULL;
+  GOptionContext *opt = meta_get_option_context();
+  if(!g_option_context_parse(opt, &argc, &argv, &error))
+  {
+    g_critical("Bad arguments to graphene-wm: %s", error->message);
+    return 1;
+  }
+  g_option_context_free(opt);
+  
   g_setenv("NO_GAIL", "1", TRUE);
   g_setenv("NO_AT_BRIDGE", "1", TRUE);
   meta_init();
