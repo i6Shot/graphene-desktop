@@ -30,9 +30,9 @@ G_BEGIN_DECLS
 #define GRAPHENE_TYPE_WM_DIALOG  graphene_wm_dialog_get_type()
 G_DECLARE_FINAL_TYPE(GrapheneWMDialog, graphene_wm_dialog, GRAPHENE, WM_DIALOG, ClutterActor)
 
-GrapheneWMDialog * graphene_wm_dialog_new(ClutterActor *content, const gchar **buttons);
+GrapheneWMDialog * graphene_wm_dialog_new(ClutterActor *content, gchar **buttons);
 void               graphene_wm_dialog_show(GrapheneWMDialog *dialog, MetaScreen *screen, int monitorIndex);
-void               graphene_wm_dialog_set_buttons(GrapheneWMDialog *dialog, const gchar **buttons);
+void               graphene_wm_dialog_set_buttons(GrapheneWMDialog *dialog, gchar **buttons);
 
 G_END_DECLS
 

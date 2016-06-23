@@ -57,16 +57,16 @@ enum
 static GParamSpec *properties[PROP_LAST];
 static guint signals[SIGNAL_LAST];
 
-static void graphene_wm_dialog_dispose(GrapheneWMDialog *dialog);
-static void graphene_wm_dialog_set_property(GrapheneWMDialog *self, guint propertyId, const GValue *value, GParamSpec *pspec);
-static void graphene_wm_dialog_get_property(GrapheneWMDialog *self, guint propertyId, GValue *value, GParamSpec *pspec);
+static void graphene_wm_dialog_dispose(GObject *self_);
+static void graphene_wm_dialog_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec);
+static void graphene_wm_dialog_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec);
 static void generate_background_group(GrapheneWMDialog *self, MetaScreen *screen);
 static void generate_dialog(GrapheneWMDialog *self, MetaScreen *screen, gint monitorIndex);
 
 G_DEFINE_TYPE(GrapheneWMDialog, graphene_wm_dialog, CLUTTER_TYPE_ACTOR);
 
 
-GrapheneWMDialog * graphene_wm_dialog_new(ClutterActor *content, const gchar **buttons)
+GrapheneWMDialog * graphene_wm_dialog_new(ClutterActor *content, gchar **buttons)
 {
   GrapheneWMDialog *dialog = GRAPHENE_WM_DIALOG(g_object_new(GRAPHENE_TYPE_WM_DIALOG, "content", content, NULL));
   graphene_wm_dialog_set_buttons(dialog, buttons);
@@ -118,27 +118,30 @@ static void graphene_wm_dialog_init(GrapheneWMDialog *self)
   clutter_actor_set_y_align(self->frame, CLUTTER_ACTOR_ALIGN_CENTER);
   clutter_actor_add_child(self->frameContainer, self->frame);
   
-  clutter_actor_insert_child_below(self, self->backgroundGroup, NULL);
+  clutter_actor_insert_child_below(CLUTTER_ACTOR(self), self->backgroundGroup, NULL);
   // clutter_actor_insert_child_above(self, self->frameBlurBg, self->backgroundGroup);
-  clutter_actor_insert_child_above(self, self->frameContainer, self->backgroundGroup);
+  clutter_actor_insert_child_above(CLUTTER_ACTOR(self), self->frameContainer, self->backgroundGroup);
   
   // ClutterEffect *blurEffect = clutter_blur_effect_new();
   // clutter_actor_add_effect(self->frameBlurBg, blurEffect);
   // g_object_unref(blurEffect);
 }
 
-static void graphene_wm_dialog_dispose(GrapheneWMDialog *self)
+static void graphene_wm_dialog_dispose(GObject *self_)
 {
+  GrapheneWMDialog *self = GRAPHENE_WM_DIALOG(self_);
+  
   // clutter_actor_free(self->frame);
   // clutter_actor_free(self->frameBlurBg);
   // clutter_actor_free(self->backgroundGroup);
   
-  G_OBJECT_CLASS(graphene_wm_dialog_parent_class)->dispose(self);
+  G_OBJECT_CLASS(graphene_wm_dialog_parent_class)->dispose(self_);
 }
 
-static void graphene_wm_dialog_set_property(GrapheneWMDialog *self, guint propertyId, const GValue *value, GParamSpec *pspec)
+static void graphene_wm_dialog_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec)
 {
-  g_return_if_fail(GRAPHENE_IS_WM_DIALOG(self));
+  g_return_if_fail(GRAPHENE_IS_WM_DIALOG(self_));
+  GrapheneWMDialog *self = GRAPHENE_WM_DIALOG(self_);
   switch(propertyId)
   {
     case PROP_CONTENT:
@@ -158,10 +161,10 @@ static void graphene_wm_dialog_set_property(GrapheneWMDialog *self, guint proper
   }
 }
 
-static void graphene_wm_dialog_get_property(GrapheneWMDialog *self, guint propertyId, GValue *value, GParamSpec *pspec)
+static void graphene_wm_dialog_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec)
 {
-  g_return_if_fail(GRAPHENE_IS_WM_DIALOG(self));
-  
+  g_return_if_fail(GRAPHENE_IS_WM_DIALOG(self_));
+  GrapheneWMDialog *self = GRAPHENE_WM_DIALOG(self_);  
   switch(propertyId)
   {
     case PROP_CONTENT:
@@ -179,14 +182,13 @@ static void graphene_wm_dialog_get_property(GrapheneWMDialog *self, guint proper
   }
 }
 
-void graphene_wm_dialog_set_buttons(GrapheneWMDialog *self, const gchar **buttons)
+void graphene_wm_dialog_set_buttons(GrapheneWMDialog *self, gchar **buttons)
 {
   self->buttons = g_strdupv(buttons);
 }
 
 void graphene_wm_dialog_show(GrapheneWMDialog *self, MetaScreen *screen, gint monitorIndex)
 {
-  g_debug("show dialog");
   self->screen = screen;
   generate_background_group(self, screen);
   generate_dialog(self, screen, monitorIndex);
@@ -309,9 +311,9 @@ static void generate_dialog(GrapheneWMDialog *self, MetaScreen *screen, gint mon
     clutter_actor_set_height(button, 40);
     clutter_actor_set_layout_manager(button, clutter_bin_layout_new(CLUTTER_BIN_ALIGNMENT_FILL, CLUTTER_BIN_ALIGNMENT_FILL));
     clutter_actor_set_reactive(button, TRUE);
-    g_signal_connect(button, "button-press-event", button_clicked, self);
-    g_signal_connect(button, "enter-event", button_enter, self);
-    g_signal_connect(button, "leave-event", button_leave, self);
+    g_signal_connect(button, "button-press-event", G_CALLBACK(button_clicked), self);
+    g_signal_connect(button, "enter-event", G_CALLBACK(button_enter), self);
+    g_signal_connect(button, "leave-event", G_CALLBACK(button_leave), self);
 
     ClutterActor *highlightColor = clutter_actor_new(); // Because animating background-color doesnt work very well
     clutter_actor_set_opacity(highlightColor, 0);
@@ -321,7 +323,7 @@ static void generate_dialog(GrapheneWMDialog *self, MetaScreen *screen, gint mon
     clutter_actor_set_background_color(highlightColor, color);
     clutter_color_free(color);
     
-    ClutterText *text = clutter_text_new_with_text(NULL, self->buttons[i]);
+    ClutterText *text = CLUTTER_TEXT(clutter_text_new_with_text(NULL, self->buttons[i]));
     clutter_text_set_use_markup(text, FALSE);
     clutter_text_set_selectable(text, FALSE);
     clutter_text_set_line_wrap(text, FALSE);
@@ -334,7 +336,7 @@ static void generate_dialog(GrapheneWMDialog *self, MetaScreen *screen, gint mon
     clutter_actor_set_y_align(CLUTTER_ACTOR(text), CLUTTER_ACTOR_ALIGN_CENTER);
     
     clutter_actor_add_child(button, highlightColor); // Must be first child
-    clutter_actor_add_child(button, text);
+    clutter_actor_add_child(button, CLUTTER_ACTOR(text));
     clutter_actor_add_child(self->frame, button);
   }
 }

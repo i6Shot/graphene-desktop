@@ -196,7 +196,7 @@ static void dbus_register(MetaPlugin *plugin)
   g_unsetenv("DESKTOP_AUTOSTART_ID");
   
   wm->dbusNameId = g_bus_own_name(G_BUS_TYPE_SESSION, "io.velt.GrapheneWM", G_BUS_NAME_OWNER_FLAGS_REPLACE,
-    NULL, dbus_name_acquired, dbus_name_lost,
+    NULL, (GBusNameAcquiredCallback)dbus_name_acquired, (GBusNameLostCallback)dbus_name_lost,
     plugin, NULL);
 }
 
@@ -267,7 +267,7 @@ static void dbus_name_acquired(GDBusConnection *connection, const gchar *name, M
         g_critical("Failed to get connection to client object");
 
       const GDBusNodeInfo *interfaceInfo = g_dbus_node_info_new_for_xml(WMInterfaceXML, NULL);
-      static const GDBusInterfaceVTable interfaceCallbacks = {on_dbus_method_call, NULL, NULL};
+      static const GDBusInterfaceVTable interfaceCallbacks = {(GDBusInterfaceMethodCallFunc)on_dbus_method_call, NULL, NULL};
       if(interfaceInfo)
         wm->interfaceRegistrationId = g_dbus_connection_register_object(connection, "/io/velt/GrapheneWM", interfaceInfo->interfaces[0], &interfaceCallbacks, wm, NULL, NULL);
     }
@@ -376,7 +376,7 @@ static void show_logout_dialog(MetaPlugin *plugin)
   gchar **buttons = g_strsplit("Logout Sleep Restart Shutdown Cancel", " ", 0);
   GrapheneWMDialog *dialog = graphene_wm_dialog_new(NULL, buttons);
   g_strfreev(buttons);
-  g_signal_connect(dialog, "close", on_logout_dialog_close, plugin);
+  g_signal_connect(dialog, "close", G_CALLBACK(on_logout_dialog_close), plugin);
   graphene_wm_dialog_show(dialog, meta_plugin_get_screen(plugin), 0);
   
   meta_plugin_begin_modal(plugin, 0, 0);
