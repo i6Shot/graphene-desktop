@@ -25,3 +25,4 @@ gchar * str_trim(const gchar *str);
 gint str_indexof(const gchar *str, const gchar c);
 
 GVariant * get_gsettings_value(const gchar *schemaId, const gchar *key);
+GObject * monitor_gsettings_key(const gchar *schemaId, const gchar *key, GCallback callback, gpointer userdata);

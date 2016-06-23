@@ -89,9 +89,9 @@ static GParamSpec *properties[PROP_LAST];
 static guint signals[SIGNAL_LAST];
 
 static const gchar *ClientInterfaceXML;
-static void graphene_session_client_dispose(GrapheneSessionClient *self);
-static void graphene_session_client_set_property(GrapheneSessionClient *self, guint propertyId, const GValue *value, GParamSpec *pspec);
-static void graphene_session_client_get_property(GrapheneSessionClient *self, guint propertyId, GValue *value, GParamSpec *pspec);
+static void graphene_session_client_dispose(GObject *self_);
+static void graphene_session_client_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec);
+static void graphene_session_client_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec);
 static gchar * generate_client_id();
 void graphene_session_client_register(GrapheneSessionClient *self, const gchar *sender, const gchar *appId);
 
@@ -192,8 +192,9 @@ static void graphene_session_client_init(GrapheneSessionClient *self)
   self->childWatchId = 0;
 }
 
-static void graphene_session_client_dispose(GrapheneSessionClient *self)
+static void graphene_session_client_dispose(GObject *self_)
 {
+  GrapheneSessionClient *self = GRAPHENE_SESSION_CLIENT(self_);
   graphene_session_client_unregister_internal(self);
   
   if(self->childWatchId)
@@ -211,10 +212,11 @@ static void graphene_session_client_dispose(GrapheneSessionClient *self)
   G_OBJECT_CLASS(graphene_session_client_parent_class)->dispose(G_OBJECT(self));
 }
 
-static void graphene_session_client_set_property(GrapheneSessionClient *self, guint propertyId, const GValue *value, GParamSpec *pspec)
+static void graphene_session_client_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec)
 {
-  g_return_if_fail(GRAPHENE_IS_SESSION_CLIENT(self));
-  
+  g_return_if_fail(GRAPHENE_IS_SESSION_CLIENT(self_));
+  GrapheneSessionClient *self = GRAPHENE_SESSION_CLIENT(self_);
+
   switch(propertyId)
   {
   case PROP_ID:
@@ -252,10 +254,11 @@ static void graphene_session_client_set_property(GrapheneSessionClient *self, gu
   }
 }
 
-static void graphene_session_client_get_property(GrapheneSessionClient *self, guint propertyId, GValue *value, GParamSpec *pspec)
+static void graphene_session_client_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec)
 {
-  g_return_if_fail(GRAPHENE_IS_SESSION_CLIENT(self));
-  
+  g_return_if_fail(GRAPHENE_IS_SESSION_CLIENT(self_));
+  GrapheneSessionClient *self = GRAPHENE_SESSION_CLIENT(self_);
+
   switch(propertyId)
   {
   case PROP_ID:
@@ -623,7 +626,7 @@ static void update_condition(GrapheneSessionClient *self)
   
   if(numTokens >= 3 && g_ascii_strcasecmp(tokens[0], "gsettings") == 0)
   {
-    self->conditionMonitor = monitor_gsettings_key(tokens[1], tokens[2], run_condition, self);
+    self->conditionMonitor = monitor_gsettings_key(tokens[1], tokens[2], G_CALLBACK(run_condition), self);
   }
   else if(numTokens >= 2 && g_ascii_strcasecmp(tokens[0], "if-exists") == 0)
   {

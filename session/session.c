@@ -23,6 +23,7 @@
 #include <gio/gio.h>
 #include <gio/gdesktopappinfo.h>
 #include <glib.h>
+#include <glib-unix.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <stdlib.h>
@@ -139,8 +140,8 @@ int main(int argc, char **argv)
   g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
 #endif
 
-  g_unix_signal_add(SIGTERM, on_sigterm_or_sigint, NULL);
-  g_unix_signal_add(SIGINT, on_sigterm_or_sigint, NULL);
+  g_unix_signal_add(SIGTERM, (GSourceFunc)on_sigterm_or_sigint, NULL);
+  g_unix_signal_add(SIGINT, (GSourceFunc)on_sigterm_or_sigint, NULL);
 
   GApplication *app = g_application_new(SESSION_MANAGER_APP_ID, G_APPLICATION_FLAGS_NONE);
   g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
@@ -276,9 +277,9 @@ static gboolean run_phase(guint phase)
   }
   
   if(waitTime >= 0)
-    self->phaseTimerId = g_timeout_add_seconds(waitTime, (GSourceFunc)run_phase, self->phase+1);
+    self->phaseTimerId = g_timeout_add_seconds(waitTime, (GSourceFunc)run_phase, (gpointer)self->phase+1);
     
-  return FALSE; // stops timers
+  return FALSE; // stops timerss
 }
 
 static void run_next_phase_if_ready()
@@ -286,7 +287,7 @@ static void run_next_phase_if_ready()
   if(self->phaseHasTasks && !self->phaseTaskList)
   {
     g_debug("phase %i complete", self->phase);
-    g_idle_add((GSourceFunc)run_phase, self->phase+1);
+    g_idle_add((GSourceFunc)run_phase, (gpointer)self->phase+1);
   }
 }
 
@@ -551,14 +552,14 @@ static guint32 inhibit(const gchar *sender, const gchar *appId, guint32 toplevel
   }
   
   g_free(objectPath);
-  g_hash_table_insert(self->inhibitors, inhibitor->id, inhibitor);
+  g_hash_table_insert(self->inhibitors, GUINT_TO_POINTER(inhibitor->id), inhibitor);
   g_debug("Added inhibitor %i for %s,%s becasue of '%s'", inhibitor->id, sender, appId, inhibitor->reason);
   return inhibitor->id;
 }
 
 static void uninhibit(guint32 id)
 {
-  Inhibitor *inhibitor = g_hash_table_lookup(self->inhibitors, id);
+  Inhibitor *inhibitor = g_hash_table_lookup(self->inhibitors, GUINT_TO_POINTER(id));
   if(!inhibitor)
     return;
     
@@ -567,7 +568,7 @@ static void uninhibit(guint32 id)
     g_dbus_connection_unregister_object(connection, inhibitor->objectRegistrationId);
   inhibitor->objectRegistrationId = 0;
   
-  g_hash_table_remove(self->inhibitors, id);
+  g_hash_table_remove(self->inhibitors, GUINT_TO_POINTER(id));
   g_debug("Removed inhibitor %i", id);
 }
 

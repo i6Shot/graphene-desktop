@@ -88,7 +88,7 @@ gint str_indexof(const gchar *str, const gchar c)
   if(!str)
     return -1;
     
-  for(gint i=0;str[i]!=NULL;++i)
+  for(gint i=0;str[i]!='\0';++i)
     if(str[i] == c)
       return i;
   
