@@ -42,7 +42,7 @@ enum
 
 static guint signals[SIGNAL_LAST];
 
-static void graphene_network_control_finalize(GrapheneNetworkControl *self);
+static void graphene_network_control_finalize(GObject *self_);
 static void on_wicd_proxy_signal(GrapheneNetworkControl *self, const gchar *sender, const gchar *signal, GVariant *parameters, GDBusProxy *proxy);
 static void update_status(GrapheneNetworkControl *self, guint32 status, const gchar **info, gsize infoSize);
 
@@ -69,7 +69,7 @@ GrapheneNetworkControl * graphene_network_control_get_default(void)
 static void graphene_network_control_class_init(GrapheneNetworkControlClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = G_CALLBACK(graphene_network_control_finalize);
+  gobjectClass->finalize = graphene_network_control_finalize;
   
   /*
    * Emitted when the network status changes
@@ -117,8 +117,9 @@ static void graphene_network_control_init(GrapheneNetworkControl *self)
   g_free(info);
 }
 
-static void graphene_network_control_finalize(GrapheneNetworkControl *self)
+static void graphene_network_control_finalize(GObject *self_)
 {
+  GrapheneNetworkControl *self = GRAPHENE_NETWORK_CONTROL(self_);
   g_clear_object(&self->wicdDaemonProxy);
   g_clear_pointer(&self->essid, g_free);
   g_clear_pointer(&self->ip, g_free);
@@ -158,7 +159,7 @@ static void on_wicd_proxy_signal(GrapheneNetworkControl *self, const gchar *send
     // Not sure why it's av, since the v is always a string based on the wicd source code (same as GetConnectionStatus)
     // So this gets a string array out of the av iter
     gsize infoSize = g_variant_iter_n_children(iter);
-    const gchar **info = g_new0(gchar *, infoSize);
+    const gchar **info = g_new0(const gchar *, infoSize);
     GVariant *v;
     gsize i=0;
     while(g_variant_iter_next(iter, "v", &v))
@@ -231,7 +232,7 @@ struct _GrapheneNetworkIcon
   GrapheneNetworkControl *networkControl;
 };
 
-static void graphene_network_icon_finalize(GrapheneNetworkIcon *self);
+static void graphene_network_icon_finalize(GObject *self_);
 static void icon_on_update(GrapheneNetworkIcon *self, GrapheneNetworkControl *networkControl);
 
 
@@ -246,7 +247,7 @@ GrapheneNetworkIcon* graphene_network_icon_new(void)
 static void graphene_network_icon_class_init(GrapheneNetworkIconClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = G_CALLBACK(graphene_network_icon_finalize);
+  gobjectClass->finalize = graphene_network_icon_finalize;
 }
 
 static void graphene_network_icon_init(GrapheneNetworkIcon *self)
@@ -256,8 +257,9 @@ static void graphene_network_icon_init(GrapheneNetworkIcon *self)
   icon_on_update(self, self->networkControl);
 }
 
-static void graphene_network_icon_finalize(GrapheneNetworkIcon *self)
+static void graphene_network_icon_finalize(GObject *self_)
 {
+  GrapheneNetworkIcon *self = GRAPHENE_NETWORK_ICON(self_);
   g_clear_object(&self->networkControl);
 }
 

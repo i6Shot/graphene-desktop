@@ -29,7 +29,7 @@ struct _GrapheneTasklistApplet
 };
 
 
-static void graphene_tasklist_applet_finalize(GrapheneTasklistApplet *self);
+static void graphene_tasklist_applet_finalize(GObject *self_);
 static void on_window_opened(GrapheneTasklistApplet *self, WnckWindow *window, WnckScreen *screen);
 static void on_window_closed(GrapheneTasklistApplet *self, WnckWindow *window, WnckScreen *screen);
 static void on_active_window_changed(GrapheneTasklistApplet *self, WnckWindow *window, WnckScreen *screen);
@@ -48,7 +48,7 @@ GrapheneTasklistApplet* graphene_tasklist_applet_new(void)
 static void graphene_tasklist_applet_class_init(GrapheneTasklistAppletClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = G_CALLBACK(graphene_tasklist_applet_finalize);
+  gobjectClass->finalize = graphene_tasklist_applet_finalize;
 }
 
 static void graphene_tasklist_applet_init(GrapheneTasklistApplet *self)
@@ -75,8 +75,9 @@ static void graphene_tasklist_applet_init(GrapheneTasklistApplet *self)
   gtk_widget_show_all(GTK_WIDGET(self));
 }
 
-static void graphene_tasklist_applet_finalize(GrapheneTasklistApplet *self)
+static void graphene_tasklist_applet_finalize(GObject *self_)
 {
+  GrapheneTasklistApplet *self = GRAPHENE_TASKLIST_APPLET(self);
   g_hash_table_unref(self->buttons);
 }
 
@@ -106,7 +107,7 @@ static void on_window_opened(GrapheneTasklistApplet *self, WnckWindow *window, W
   gtk_box_pack_start(GTK_BOX(self), GTK_WIDGET(button), FALSE, FALSE, 0);
   g_hash_table_insert(self->buttons, window, button);
   
-  g_signal_connect(window, "state_changed", on_window_state_changed, button);
+  g_signal_connect(window, "state_changed", G_CALLBACK(on_window_state_changed), button);
 }
 
 static void on_window_closed(GrapheneTasklistApplet *self, WnckWindow *window, WnckScreen *screen)

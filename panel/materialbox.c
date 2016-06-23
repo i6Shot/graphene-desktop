@@ -44,17 +44,17 @@ enum {
   CHILD_PROP_LOCATION
 };
 
-static GType graphene_material_box_child_type(GrapheneMaterialBox *self);
-static void graphene_material_box_add(GrapheneMaterialBox *self, GrapheneMaterialSheet *sheet);
-static void graphene_material_box_remove(GrapheneMaterialBox *self, GrapheneMaterialSheet *sheet);
-static void graphene_material_box_size_allocate(GrapheneMaterialBox *self, GtkAllocation *allocation);
-static void graphene_material_box_get_preferred_width(GrapheneMaterialBox *self, gint *minimum, gint *natural);
-static void graphene_material_box_get_preferred_height(GrapheneMaterialBox *self, gint *minimum, gint *natural);
-static void graphene_material_box_forall(GrapheneMaterialBox *self, gboolean include_internals, GtkCallback callback, gpointer callback_data);
-static gboolean graphene_material_box_draw(GrapheneMaterialBox *self, cairo_t *cr);
-static void graphene_material_box_set_child_property(GrapheneMaterialBox *self, GrapheneMaterialSheet *sheet, guint property_id, const GValue *value, GParamSpec *pspec);
-static void graphene_material_box_get_child_property(GrapheneMaterialBox *self, GrapheneMaterialSheet *sheet, guint property_id, GValue *value, GParamSpec *pspec);
-static void graphene_material_box_show_all(GrapheneMaterialBox *self);
+static GType graphene_material_box_child_type(GtkContainer *self_);
+static void graphene_material_box_add(GtkContainer *self_, GrapheneMaterialSheet *sheet);
+static void graphene_material_box_remove(GtkContainer *self_, GrapheneMaterialSheet *sheet);
+static void graphene_material_box_size_allocate(GtkWidget *self_, GtkAllocation *allocation);
+static void graphene_material_box_get_preferred_width(GtkWidget *self_, gint *minimum, gint *natural);
+static void graphene_material_box_get_preferred_height(GtkWidget *self_, gint *minimum, gint *natural);
+static void graphene_material_box_forall(GtkContainer *self_, gboolean include_internals, GtkCallback callback, gpointer callback_data);
+static gboolean graphene_material_box_draw(GtkWidget *self_, cairo_t *cr);
+static void graphene_material_box_set_child_property(GtkContainer *self_, GrapheneMaterialSheet *sheet, guint property_id, const GValue *value, GParamSpec *pspec);
+static void graphene_material_box_get_child_property(GtkContainer *self_, GrapheneMaterialSheet *sheet, guint property_id, GValue *value, GParamSpec *pspec);
+static void graphene_material_box_show_all(GtkWidget *self_);
 static GrapheneMaterialBoxSheetInfo * get_primary_sheet_info(GrapheneMaterialBox *self);
 static GrapheneMaterialBoxSheetInfo * get_sheet_info_from_sheet(GrapheneMaterialBox *self, GrapheneMaterialSheet *sheet);
 
@@ -109,7 +109,7 @@ static void graphene_material_box_init(GrapheneMaterialBox *self)
   self->currentCenter = NULL;
 }
 
-static GType graphene_material_box_child_type(GrapheneMaterialBox *self)
+static GType graphene_material_box_child_type(GtkContainer *self_)
 {
   return GTK_TYPE_WIDGET;
 }
@@ -141,19 +141,21 @@ void graphene_material_box_add_sheet(GrapheneMaterialBox *self, GrapheneMaterial
   gtk_widget_set_parent(GTK_WIDGET(sheetInfo->sheet), GTK_WIDGET(self));
 }
 
-static void graphene_material_box_add(GrapheneMaterialBox *self, GrapheneMaterialSheet *sheet)
+static void graphene_material_box_add(GtkContainer *self_, GrapheneMaterialSheet *sheet)
 {
-  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self));
+  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self_));
   g_return_if_fail(GRAPHENE_IS_MATERIAL_SHEET(sheet));
-  
+
+  GrapheneMaterialBox *self = GRAPHENE_MATERIAL_BOX(self_);
   graphene_material_box_add_sheet(self, sheet, GRAPHENE_MATERIAL_BOX_LOCATION_LEFT);
 }
 
-static void graphene_material_box_remove(GrapheneMaterialBox *self, GrapheneMaterialSheet *sheet)
+static void graphene_material_box_remove(GtkContainer *self_, GrapheneMaterialSheet *sheet)
 {
-  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self));
+  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self_));
   g_return_if_fail(GRAPHENE_IS_MATERIAL_SHEET(sheet));
   
+  GrapheneMaterialBox *self = GRAPHENE_MATERIAL_BOX(self_);
   for(GList *children=self->children; children; children=children->next)
   {
     GrapheneMaterialBoxSheetInfo *sheetInfo = (GrapheneMaterialBoxSheetInfo *)children->data;
@@ -178,10 +180,11 @@ gfloat cubic_ease_out(gfloat p)
 	return f * f * f + 1;
 }
 
-static void graphene_material_box_size_allocate(GrapheneMaterialBox *self, GtkAllocation *allocation)
+static void graphene_material_box_size_allocate(GtkWidget *self_, GtkAllocation *allocation)
 {
-  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self));
-
+  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self_));
+  
+  GrapheneMaterialBox *self = GRAPHENE_MATERIAL_BOX(self_);
   gtk_widget_set_allocation(GTK_WIDGET(self), allocation);
 
   for(GList *children=self->children; children; children=children->next)
@@ -244,10 +247,11 @@ static void graphene_material_box_size_allocate(GrapheneMaterialBox *self, GtkAl
   }
 }
 
-static void graphene_material_box_get_preferred_width(GrapheneMaterialBox *self, gint *minimum, gint *natural)
+static void graphene_material_box_get_preferred_width(GtkWidget *self_, gint *minimum, gint *natural)
 {
-  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self));
+  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self_));
 
+  GrapheneMaterialBox *self = GRAPHENE_MATERIAL_BOX(self_);
   GrapheneMaterialBoxSheetInfo *sheetInfo = self->currentCenter;
   if(!sheetInfo)
   {
@@ -263,10 +267,11 @@ static void graphene_material_box_get_preferred_width(GrapheneMaterialBox *self,
   gtk_widget_get_preferred_width(sheetInfo->sheet, minimum, natural);
 }
 
-static void graphene_material_box_get_preferred_height(GrapheneMaterialBox *self, gint *minimum, gint *natural)
+static void graphene_material_box_get_preferred_height(GtkWidget *self_, gint *minimum, gint *natural)
 {
-  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self));
-
+  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self_));
+  
+  GrapheneMaterialBox *self = GRAPHENE_MATERIAL_BOX(self_);
   GrapheneMaterialBoxSheetInfo *sheetInfo = self->currentCenter;
   if(!sheetInfo)
   {
@@ -282,10 +287,11 @@ static void graphene_material_box_get_preferred_height(GrapheneMaterialBox *self
   gtk_widget_get_preferred_height(sheetInfo->sheet, minimum, natural);
 }
 
-static void graphene_material_box_forall(GrapheneMaterialBox *self, gboolean include_internals, GtkCallback callback, gpointer callback_data)
+static void graphene_material_box_forall(GtkContainer *self_, gboolean include_internals, GtkCallback callback, gpointer callback_data)
 {
-  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self));
-
+  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self_));
+  
+  GrapheneMaterialBox *self = GRAPHENE_MATERIAL_BOX(self_);
   GList *children = self->children;
   while(children)
   {
@@ -295,10 +301,12 @@ static void graphene_material_box_forall(GrapheneMaterialBox *self, gboolean inc
   }
 }
 
-static gboolean graphene_material_box_draw(GrapheneMaterialBox *self, cairo_t *cr)
+static gboolean graphene_material_box_draw(GtkWidget *self_, cairo_t *cr)
 {
-  g_return_val_if_fail(GRAPHENE_IS_MATERIAL_BOX(self), FALSE);
+  g_return_val_if_fail(GRAPHENE_IS_MATERIAL_BOX(self_), FALSE);
   
+  GrapheneMaterialBox *self = GRAPHENE_MATERIAL_BOX(self_);
+
   // Draw centers first
   for(GList *children=self->children; children; children=children->next)
   {
@@ -318,11 +326,12 @@ static gboolean graphene_material_box_draw(GrapheneMaterialBox *self, cairo_t *c
   return FALSE;
 }
 
-static void graphene_material_box_set_child_property(GrapheneMaterialBox *self, GrapheneMaterialSheet *sheet, guint property_id, const GValue *value, GParamSpec *pspec)
+static void graphene_material_box_set_child_property(GtkContainer *self_, GrapheneMaterialSheet *sheet, guint property_id, const GValue *value, GParamSpec *pspec)
 {
-  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self));
+  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self_));
   g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(sheet));
   
+  GrapheneMaterialBox *self = GRAPHENE_MATERIAL_BOX(self_);
   GrapheneMaterialBoxSheetInfo *sheetInfo = get_sheet_info_from_sheet(self, sheet);
   g_return_if_fail(GRAPHENE_IS_MATERIAL_SHEET(sheetInfo));
   
@@ -330,7 +339,6 @@ static void graphene_material_box_set_child_property(GrapheneMaterialBox *self, 
   {
   case CHILD_PROP_LOCATION:
     sheetInfo->location = g_value_get_int(value);
-    g_value_set_int(value, (gint)sheetInfo->location);
     break;
   default:
     GTK_CONTAINER_WARN_INVALID_CHILD_PROPERTY_ID(self, property_id, pspec);
@@ -338,11 +346,12 @@ static void graphene_material_box_set_child_property(GrapheneMaterialBox *self, 
   }
 }
 
-static void graphene_material_box_get_child_property(GrapheneMaterialBox *self, GrapheneMaterialSheet *sheet, guint property_id, GValue *value, GParamSpec *pspec)
+static void graphene_material_box_get_child_property(GtkContainer *self_, GrapheneMaterialSheet *sheet, guint property_id, GValue *value, GParamSpec *pspec)
 {
-  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self));
+  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self_));
   g_return_if_fail(GRAPHENE_IS_MATERIAL_SHEET(sheet));
   
+  GrapheneMaterialBox *self = GRAPHENE_MATERIAL_BOX(self_);
   GrapheneMaterialBoxSheetInfo *sheetInfo = get_sheet_info_from_sheet(self, sheet);
   g_return_if_fail(GRAPHENE_IS_MATERIAL_SHEET(sheetInfo));
   
@@ -357,10 +366,11 @@ static void graphene_material_box_get_child_property(GrapheneMaterialBox *self, 
   }
 }
 
-static void graphene_material_box_show_all(GrapheneMaterialBox *self)
+static void graphene_material_box_show_all(GtkWidget *self_)
 {
-  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self));
+  g_return_if_fail(GRAPHENE_IS_MATERIAL_BOX(self_));
 
+  GrapheneMaterialBox *self = GRAPHENE_MATERIAL_BOX(self_);
   gtk_widget_show(GTK_WIDGET(self));
   
   GrapheneMaterialBoxSheetInfo *sheetInfo = get_primary_sheet_info(self);
@@ -442,14 +452,14 @@ void graphene_material_box_show_sheet(GrapheneMaterialBox *self, GrapheneMateria
   }
   
   // Animate
-  if(gtk_widget_is_visible(self))
+  if(gtk_widget_is_visible(GTK_WIDGET(self)))
   {
     GdkFrameClock *frameClock = gtk_widget_get_frame_clock(GTK_WIDGET(sheet));
     sheetInfo->animStartTime = gdk_frame_clock_get_frame_time(frameClock) - sheetInfo->animOffsetTime;
     
     if(sheetInfo->tickCallbackID > 0)
       gtk_widget_remove_tick_callback(GTK_WIDGET(sheet), sheetInfo->tickCallbackID);
-    sheetInfo->tickCallbackID = gtk_widget_add_tick_callback(GTK_WIDGET(sheet), sheet_animate_open, sheetInfo, NULL);
+    sheetInfo->tickCallbackID = gtk_widget_add_tick_callback(GTK_WIDGET(sheet), (GtkTickCallback)sheet_animate_open, sheetInfo, NULL);
   }
   else
   {
@@ -479,14 +489,14 @@ void graphene_material_box_hide_sheet(GrapheneMaterialBox *self, GrapheneMateria
     self->currentCenter = NULL;
     
   // Animate
-  if(gtk_widget_is_visible(self))
+  if(gtk_widget_is_visible(GTK_WIDGET(self)))
   {
     GdkFrameClock *frameClock = gtk_widget_get_frame_clock(GTK_WIDGET(sheet));
     sheetInfo->animStartTime = gdk_frame_clock_get_frame_time(frameClock) - (GRAPHENE_SHEET_TRANSITION_TIME-sheetInfo->animOffsetTime);
     
     if(sheetInfo->tickCallbackID > 0)
       gtk_widget_remove_tick_callback(GTK_WIDGET(sheet), sheetInfo->tickCallbackID);
-    sheetInfo->tickCallbackID = gtk_widget_add_tick_callback(GTK_WIDGET(sheet), sheet_animate_close, sheetInfo, NULL);
+    sheetInfo->tickCallbackID = gtk_widget_add_tick_callback(GTK_WIDGET(sheet), (GtkTickCallback)sheet_animate_close, sheetInfo, NULL);
   }
   else
   {

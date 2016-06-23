@@ -31,9 +31,9 @@ struct _GrapheneClockApplet
 };
 
 
-static void graphene_clock_applet_finalize(GrapheneClockApplet *self);
+static void graphene_clock_applet_finalize(GObject *self_);
 static void on_interface_settings_changed(GrapheneClockApplet *self, gchar *key, GSettings *settings);
-static gboolean update(GSource *source, GSourceFunc callback, GrapheneClockApplet *self);
+static gboolean update(GSource *source, GSourceFunc callback, gpointer userdata);
 
 
 G_DEFINE_TYPE(GrapheneClockApplet, graphene_clock_applet, GTK_TYPE_LABEL)
@@ -47,7 +47,7 @@ GrapheneClockApplet* graphene_clock_applet_new(void)
 static void graphene_clock_applet_class_init(GrapheneClockAppletClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = G_CALLBACK(graphene_clock_applet_finalize);
+  gobjectClass->finalize = graphene_clock_applet_finalize;
 }
 
 static void graphene_clock_applet_init(GrapheneClockApplet *self)
@@ -64,13 +64,14 @@ static void graphene_clock_applet_init(GrapheneClockApplet *self)
   
   static GSourceFuncs funcs = { NULL, NULL, update, NULL };
   self->source = g_source_new(&funcs, sizeof(GSource));
-  g_source_set_callback(self->source, update, self, NULL);
+  g_source_set_callback(self->source, NULL, self, NULL); // Sets the userdata passed to update - the callback itself is ignored
   g_source_set_ready_time(self->source, 0);
   g_source_attach(self->source, NULL);
 }
 
-static void graphene_clock_applet_finalize(GrapheneClockApplet *self)
+static void graphene_clock_applet_finalize(GObject *self_)
 {
+  GrapheneClockApplet *self = GRAPHENE_CLOCK_APPLET(self);
   g_object_unref(self->interfaceSettings);
   g_source_destroy(self->source);
   self->source = NULL;
@@ -99,13 +100,16 @@ static void on_interface_settings_changed(GrapheneClockApplet *self, gchar *key,
       g_strlcat(self->timeFormat, ":%S", TIME_FORMAT_STRING_LENGTH); // :55
     if(format == 1)
       g_strlcat(self->timeFormat, " %p", TIME_FORMAT_STRING_LENGTH); // PM
-      
-    g_source_set_ready_time(self->source, 0); // Update label now
+    
+    if(self->source)
+      g_source_set_ready_time(self->source, 0); // Update label now
   }
 }
 
-static gboolean update(GSource *source, GSourceFunc callback, GrapheneClockApplet *self)
+static gboolean update(GSource *source, GSourceFunc callback, gpointer userdata)
 {
+  GrapheneClockApplet *self = GRAPHENE_CLOCK_APPLET(userdata);
+  
   // Get the time as a formatted string
   GDateTime *dt = g_date_time_new_now_local();
   gchar *formatted = g_date_time_format(dt, self->timeFormat);

@@ -38,7 +38,7 @@ struct _GrapheneSettingsApplet
 };
 
 
-static void graphene_settings_applet_finalize(GrapheneSettingsApplet *self);
+static void graphene_settings_applet_finalize(GObject *self_);
 static gboolean applet_on_click(GrapheneSettingsApplet *self, GdkEvent *event);
 static void applet_on_popup_hide(GrapheneSettingsApplet *self, GrapheneSettingsPopup *popup);
 
@@ -54,7 +54,7 @@ GrapheneSettingsApplet* graphene_settings_applet_new(void)
 static void graphene_settings_applet_class_init(GrapheneSettingsAppletClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = G_CALLBACK(graphene_settings_applet_finalize);
+  gobjectClass->finalize = graphene_settings_applet_finalize;
 }
 
 static void graphene_settings_applet_init(GrapheneSettingsApplet *self)
@@ -79,8 +79,9 @@ static void graphene_settings_applet_init(GrapheneSettingsApplet *self)
   g_signal_connect(self, "button_press_event", G_CALLBACK(applet_on_click), NULL);
 }
 
-static void graphene_settings_applet_finalize(GrapheneSettingsApplet *self)
+static void graphene_settings_applet_finalize(GObject *self_)
 {
+  GrapheneSettingsApplet *self = GRAPHENE_SETTINGS_APPLET(self_);
   g_clear_object(&self->popup);
 }
 
@@ -120,7 +121,6 @@ typedef struct {
   
 } SettingsWidgetData;
 
-static void graphene_settings_popup_finalize(GrapheneSettingsPopup *self);
 static void popup_on_show(GrapheneSettingsPopup *self);
 static void popup_on_hide(GrapheneSettingsPopup *self);
 static void popup_on_mapped(GrapheneSettingsPopup *self);
@@ -145,8 +145,6 @@ GrapheneSettingsPopup* graphene_settings_popup_new(void)
 
 static void graphene_settings_popup_class_init(GrapheneSettingsPopupClass *klass)
 {
-  GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = G_CALLBACK(graphene_settings_popup_finalize);
 }
 
 static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
@@ -178,7 +176,7 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
   gtk_widget_set_halign(GTK_WIDGET(sessionControlBox), GTK_ALIGN_CENTER);
   gtk_widget_set_name(GTK_WIDGET(sessionControlBox), "session-control-box");
 
-  GtkButton *logoutButton = gtk_button_new_from_icon_name("system-shutdown-symbolic", GTK_ICON_SIZE_DND);
+  GtkButton *logoutButton = GTK_BUTTON(gtk_button_new_from_icon_name("system-shutdown-symbolic", GTK_ICON_SIZE_DND));
   g_signal_connect_swapped(logoutButton, "clicked", G_CALLBACK(popup_on_logout_button_clicked), self);
   gtk_box_pack_start(sessionControlBox, GTK_WIDGET(logoutButton), FALSE, FALSE, 0);
 
@@ -190,7 +188,7 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
   gtk_box_pack_start(layout, GTK_WIDGET(self->sessionBox), FALSE, FALSE, 0);
 
   // Box for all the system settings (below the session info)
-  self->settingsView = graphene_material_box_new();
+  self->settingsView = GRAPHENE_MATERIAL_BOX(graphene_material_box_new());
   gtk_box_pack_start(layout, GTK_WIDGET(self->settingsView), TRUE, TRUE, 0);
   gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(self->settingsView)), "graphene-settings-view");
 
@@ -200,7 +198,7 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
   graphene_material_box_add_sheet(self->settingsView, GRAPHENE_MATERIAL_SHEET(settingWidgetScrolled), GRAPHENE_MATERIAL_BOX_LOCATION_CENTER);
 
   self->settingWidgetBox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
-  gtk_container_add(GTK_CONTAINER(settingWidgetScrolled), self->settingWidgetBox);
+  gtk_container_add(GTK_CONTAINER(settingWidgetScrolled), GTK_WIDGET(self->settingWidgetBox));
 
   enum_settings_widgets(self);
 
@@ -210,10 +208,6 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
   gtk_widget_show(GTK_WIDGET(self->settingsView));
   gtk_widget_show(GTK_WIDGET(layout));
   gtk_container_add(GTK_CONTAINER(self), GTK_WIDGET(layout));
-}
-
-static void graphene_settings_popup_finalize(GrapheneSettingsPopup *self)
-{
 }
 
 static void popup_on_show(GrapheneSettingsPopup *self)
@@ -313,7 +307,7 @@ static void free_settings_widget_data_closure_notify(gpointer data, GClosure *cl
 
 static void add_setting_widget(GrapheneSettingsPopup *self, const gchar *title, const gchar *iconName, gboolean toggleable, const gchar *panel, gboolean bottomSeparator)
 {
-  GrapheneMaterialBox *box = graphene_material_box_new();
+  GrapheneMaterialBox *box = GRAPHENE_MATERIAL_BOX(graphene_material_box_new());
   
   GtkButton *button = GTK_BUTTON(gtk_button_new());
   gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(button)), "settings-widget-button");
@@ -336,7 +330,7 @@ static void add_setting_widget(GrapheneSettingsPopup *self, const gchar *title, 
   
   if(toggleable)
   {
-    GtkSwitch *toggle = gtk_switch_new();
+    GtkSwitch *toggle = GTK_SWITCH(gtk_switch_new());
     gtk_widget_set_valign(GTK_WIDGET(toggle), GTK_ALIGN_CENTER);
     gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(toggle)), "settings-widget-switch");
     // Margin in CSS
@@ -344,7 +338,7 @@ static void add_setting_widget(GrapheneSettingsPopup *self, const gchar *title, 
     gtk_widget_show_all(GTK_WIDGET(toggle));
   }
   
-  GtkSeparator *sep = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+  GtkSeparator *sep = GTK_SEPARATOR(gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
   gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(sep)), "list-item-separator");
   gtk_box_pack_start(self->settingWidgetBox, GTK_WIDGET(sep), FALSE, FALSE, 0);
   
@@ -352,7 +346,7 @@ static void add_setting_widget(GrapheneSettingsPopup *self, const gchar *title, 
   
   if(bottomSeparator)
   {
-    GtkSeparator *sep = gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+    GtkSeparator *sep = GTK_SEPARATOR(gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
     gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(sep)), "list-item-separator");
     gtk_box_pack_start(self->settingWidgetBox, GTK_WIDGET(sep), FALSE, FALSE, 0);
   }
@@ -362,6 +356,9 @@ static void popup_on_settings_widget_clicked(GtkButton *button, SettingsWidgetDa
 {
   gtk_widget_hide(GTK_WIDGET(data->popup));
   
-  const gchar *argsSplit[3] = {"gnome-control-center", data->panel, NULL};
+  gchar **argsSplit = g_new0(gchar *, 3);
+  argsSplit[0] = g_strdup("gnome-control-center");
+  argsSplit[1] = g_strdup(data->panel);
   g_spawn_async(NULL, argsSplit, NULL, G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL | G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
+  g_strfreev(argsSplit);
 }

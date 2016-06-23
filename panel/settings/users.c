@@ -29,7 +29,7 @@ struct _GrapheneProfileNameLabel
   gulong notifyIsLoadedID;
 };
 
-static void graphene_profile_name_label_finalize(GrapheneProfileNameLabel *self);
+static void graphene_profile_name_label_finalize(GObject *self_);
 static void label_on_user_manager_notify_is_loaded(GrapheneProfileNameLabel *self);
 static void label_on_user_updated(GrapheneProfileNameLabel *self, ActUser *user);
 
@@ -45,7 +45,7 @@ GrapheneProfileNameLabel * graphene_profile_name_label_new()
 static void graphene_profile_name_label_class_init(GrapheneProfileNameLabelClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = G_CALLBACK(graphene_profile_name_label_finalize);
+  gobjectClass->finalize = graphene_profile_name_label_finalize;
 }
 
 static void graphene_profile_name_label_init(GrapheneProfileNameLabel *self)
@@ -67,8 +67,9 @@ static void graphene_profile_name_label_init(GrapheneProfileNameLabel *self)
   label_on_user_updated(self, self->user);
 }
 
-static void graphene_profile_name_label_finalize(GrapheneProfileNameLabel *self)
+static void graphene_profile_name_label_finalize(GObject *self_)
 {
+  GrapheneProfileNameLabel *self = GRAPHENE_PROFILE_NAME_LABEL(self);
   g_clear_pointer(&self->username, g_free);
   
   if(self->user && self->userChangedHandlerID)
@@ -134,9 +135,9 @@ struct _GrapheneProfilePicture
   gulong notifyIsLoadedID;
 };
 
-static void graphene_profile_picture_finalize(GrapheneProfilePicture *self);
+static void graphene_profile_picture_finalize(GObject *self_);
 static void picture_on_user_manager_notify_is_loaded(GrapheneProfilePicture *self);
-static gboolean picture_on_draw(GrapheneProfilePicture *self, cairo_t *cr);
+static gboolean picture_on_draw(GtkWidget *self_, cairo_t *cr);
 
 
 G_DEFINE_TYPE(GrapheneProfilePicture, graphene_profile_picture, GTK_TYPE_DRAWING_AREA)
@@ -150,7 +151,7 @@ GrapheneProfilePicture * graphene_profile_picture_new()
 static void graphene_profile_picture_class_init(GrapheneProfilePictureClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = G_CALLBACK(graphene_profile_picture_finalize);
+  gobjectClass->finalize = graphene_profile_picture_finalize;
   GTK_WIDGET_CLASS(klass)->draw = picture_on_draw;
 }
 
@@ -172,11 +173,12 @@ static void graphene_profile_picture_init(GrapheneProfilePicture *self)
   else
     self->notifyIsLoadedID = g_signal_connect_swapped(self->manager, "notify::is-loaded", G_CALLBACK(picture_on_user_manager_notify_is_loaded), self);
     
-  gtk_widget_queue_draw(self);
+  gtk_widget_queue_draw(GTK_WIDGET(self));
 }
 
-static void graphene_profile_picture_finalize(GrapheneProfilePicture *self)
+static void graphene_profile_picture_finalize(GObject *self_)
 {
+  GrapheneProfilePicture *self = GRAPHENE_PROFILE_PICTURE(self_);
   g_clear_pointer(&self->username, g_free);
   
   if(self->user && self->userChangedHandlerID)
@@ -217,7 +219,7 @@ static void picture_on_user_manager_notify_is_loaded(GrapheneProfilePicture *sel
     self->userChangedHandlerID = g_signal_connect_swapped(self->user, "changed", G_CALLBACK(gtk_widget_queue_draw), self);
   }
   
-  gtk_widget_queue_draw(self);
+  gtk_widget_queue_draw(GTK_WIDGET(self));
 }
 
 static GdkPixbuf * picture_get_picture_pixmap(GrapheneProfilePicture *self, gboolean *bg)
@@ -263,8 +265,10 @@ static GdkPixbuf * picture_get_picture_pixmap(GrapheneProfilePicture *self, gboo
   return NULL;
 }
 
-static gboolean picture_on_draw(GrapheneProfilePicture *self, cairo_t *cr)
+static gboolean picture_on_draw(GtkWidget *self_, cairo_t *cr)
 {
+  GrapheneProfilePicture *self = GRAPHENE_PROFILE_PICTURE(self_);
+  
   // Render background
   GtkStyleContext *styleContext = gtk_widget_get_style_context(GTK_WIDGET(self));
   double width = gtk_widget_get_allocated_width(GTK_WIDGET(self));

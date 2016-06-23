@@ -59,7 +59,7 @@ struct _GraphenePanel {
 // it creates the GraphenePanel struct for private data
 G_DEFINE_TYPE(GraphenePanel, graphene_panel, GTK_TYPE_WINDOW)
 GraphenePanel* graphene_panel_new(void) { return GRAPHENE_PANEL(g_object_new(GRAPHENE_TYPE_PANEL, NULL)); }
-static void graphene_panel_finalize(GraphenePanel *self);
+static void graphene_panel_finalize(GObject *self_);
 static void graphene_panel_class_init(GraphenePanelClass *klass) { GObjectClass *object_class = G_OBJECT_CLASS (klass); object_class->finalize = graphene_panel_finalize; }
 
 // Private event declarations
@@ -126,8 +126,9 @@ static void graphene_panel_init(GraphenePanel *self)
   init_notifications(self);
 }
 
-static void graphene_panel_finalize(GraphenePanel *self)
+static void graphene_panel_finalize(GObject *self_)
 {
+  GraphenePanel *self = GRAPHENE_PANEL(self_);
   g_object_unref(self->ClientProxy);
   g_object_unref(self->SMProxy);
 
@@ -507,11 +508,11 @@ static const gchar *NotificationServerInterfaceXML =
 
 typedef struct {
   guint32 id;
-  const gchar *appName;
-  const gchar *icon;
-  const gchar *summary;
-  const gchar *body;
-  const gchar *category;
+  gchar *appName;
+  gchar *icon;
+  gchar *summary;
+  gchar *body;
+  gchar *category;
   gint timeout;
   gint urgency;
   // Do not set these when creating a notification
@@ -542,11 +543,11 @@ static gboolean on_notification_clicked(GtkWindow *window, GdkEventButton *event
 
 static void init_notifications(GraphenePanel *self)
 {
-  self->Notifications = g_hash_table_new_full(NULL, NULL, NULL, notification_info_free);
+  self->Notifications = g_hash_table_new_full(NULL, NULL, NULL, (GDestroyNotify)notification_info_free);
   
   // TODO: Notify user on failure?
   self->NotificationServerBusNameID = g_bus_own_name(G_BUS_TYPE_SESSION, "org.freedesktop.Notifications", G_BUS_NAME_OWNER_FLAGS_REPLACE,
-    NULL, notification_server_name_acquired, notification_server_name_lost,
+    NULL, (GBusNameAcquiredCallback)notification_server_name_acquired, (GBusNameLostCallback)notification_server_name_lost,
     self, NULL);
 }
 
@@ -556,7 +557,7 @@ static void notification_server_name_acquired(GDBusConnection *connection, const
   
   // TODO: Notify user on failure?
   const GDBusNodeInfo *interfaceInfo = g_dbus_node_info_new_for_xml(NotificationServerInterfaceXML, NULL);
-  static const GDBusInterfaceVTable interfaceCallbacks = { on_notification_server_method_called, NULL, NULL };
+  static const GDBusInterfaceVTable interfaceCallbacks = { (GDBusInterfaceMethodCallFunc)on_notification_server_method_called, NULL, NULL };
   g_dbus_connection_register_object(connection, "/org/freedesktop/Notifications", interfaceInfo->interfaces[0], &interfaceCallbacks, self, NULL, NULL);
 }
 
@@ -651,7 +652,7 @@ static void show_notification(GraphenePanel *self, NotificationInfo *info)
     GtkStyleContext *style = gtk_widget_get_style_context(GTK_WIDGET(info->window));
     gtk_style_context_add_class(style, "notification");
     
-    g_signal_connect(info->window, "button_press_event", on_notification_clicked, info);
+    g_signal_connect(info->window, "button_press_event", G_CALLBACK(on_notification_clicked), info);
     
     GtkBox *hBox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0));
     gtk_box_set_homogeneous(hBox, FALSE);
@@ -670,7 +671,7 @@ static void show_notification(GraphenePanel *self, NotificationInfo *info)
     gtk_box_pack_start(vBox, GTK_WIDGET(summaryLabel), TRUE, TRUE, 0);
     
     GtkLabel *bodyLabel = GTK_LABEL(gtk_label_new(NULL));
-    const gchar *bodyMarkup = g_strdup_printf("<span size='smaller'>%s</span>", info->body);
+    gchar *bodyMarkup = g_strdup_printf("<span size='smaller'>%s</span>", info->body);
     gtk_label_set_markup(bodyLabel, bodyMarkup);
     g_free(bodyMarkup);
     gtk_widget_set_halign(GTK_WIDGET(bodyLabel), GTK_ALIGN_START);
@@ -688,7 +689,7 @@ static void show_notification(GraphenePanel *self, NotificationInfo *info)
   
   info->timeoutSourceTag = 0;
   if(info->timeout > 0 && info->urgency != NOTIFICATION_URGENCY_CRITICAL)
-    info->timeoutSourceTag = g_timeout_add(info->timeout, show_notification_remove_cb, info);
+    info->timeoutSourceTag = g_timeout_add(info->timeout, (GSourceFunc)show_notification_remove_cb, info);
       
   update_notification_windows(self);
 }
@@ -703,16 +704,16 @@ static void remove_notification(GraphenePanel *self, guint32 id)
   update_notification_windows(self);
 }
 
-static gint notification_compare_func(const NotificationInfo *a, const NotificationInfo *b)
+static gint notification_compare_func(gconstpointer a, gconstpointer b)
 {
   // TODO: Sort "critical" notifications to the top
-  return (a->id < b->id)?1:-1; // Sort newest to the top
+  return (((const NotificationInfo *)a)->id < ((const NotificationInfo *)b)->id) ? 1 : -1; // Sort newest to the top
 }
 
 static void update_notification_windows(GraphenePanel *self)
 {
   GList *notificationList = g_hash_table_get_values(self->Notifications); // NotificationInfo* list
-  notificationList = g_list_sort(notificationList, notification_compare_func);
+  notificationList = g_list_sort(notificationList, (GCompareFunc)notification_compare_func);
   
   guint i=0;
   for(GList *notification=notificationList; notification; notification=notification->next)

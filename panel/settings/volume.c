@@ -26,7 +26,7 @@ struct _GrapheneVolumeIcon
   GrapheneSystemVolumeControl *volumeControl;
 };
 
-static void graphene_volume_icon_finalize(GrapheneVolumeIcon *self);
+static void graphene_volume_icon_finalize(GObject *self_);
 static void icon_on_update(GrapheneVolumeIcon *self, GrapheneSystemVolumeControl *volumeControl);
 
 
@@ -41,7 +41,7 @@ GrapheneVolumeIcon* graphene_volume_icon_new(void)
 static void graphene_volume_icon_class_init(GrapheneVolumeIconClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = G_CALLBACK(graphene_volume_icon_finalize);
+  gobjectClass->finalize = graphene_volume_icon_finalize;
 }
 
 static void graphene_volume_icon_init(GrapheneVolumeIcon *self)
@@ -53,8 +53,9 @@ static void graphene_volume_icon_init(GrapheneVolumeIcon *self)
   g_signal_connect_swapped(self->volumeControl, "notify::muted", G_CALLBACK(icon_on_update), self);
 }
 
-static void graphene_volume_icon_finalize(GrapheneVolumeIcon *self)
+static void graphene_volume_icon_finalize(GObject *self_)
 {
+  GrapheneVolumeIcon *self = GRAPHENE_VOLUME_ICON(self_);
   g_clear_object(&self->volumeControl);
 }
 
@@ -92,7 +93,7 @@ struct _GrapheneVolumeSlider
   GtkScale *slider;
 };
 
-static void graphene_volume_slider_finalize(GrapheneVolumeSlider *self);
+static void graphene_volume_slider_finalize(GObject *self_);
 static void slider_on_value_changed(GrapheneVolumeSlider *self, GtkScale *scale);
 static void slider_on_update(GrapheneVolumeSlider *self, GrapheneSystemVolumeControl *volumeControl);
 
@@ -108,7 +109,7 @@ GrapheneVolumeSlider* graphene_volume_slider_new(void)
 static void graphene_volume_slider_class_init(GrapheneVolumeSliderClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = G_CALLBACK(graphene_volume_slider_finalize);
+  gobjectClass->finalize = graphene_volume_slider_finalize;
 }
 
 static void graphene_volume_slider_init(GrapheneVolumeSlider *self)
@@ -133,8 +134,9 @@ static void graphene_volume_slider_init(GrapheneVolumeSlider *self)
   gtk_box_pack_start(GTK_BOX(self), GTK_WIDGET(self->slider), TRUE, TRUE, 0);
 }
 
-static void graphene_volume_slider_finalize(GrapheneVolumeSlider *self)
+static void graphene_volume_slider_finalize(GObject *self_)
 {
+  GrapheneVolumeSlider *self = GRAPHENE_VOLUME_SLIDER(self_);
   g_clear_object(&self->volumeControl);
 }
 
