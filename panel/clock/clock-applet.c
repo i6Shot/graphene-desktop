@@ -31,7 +31,7 @@ struct _GrapheneClockApplet
 };
 
 
-static void graphene_clock_applet_finalize(GObject *self_);
+static void graphene_clock_applet_dispose(GObject *self_);
 static void on_interface_settings_changed(GrapheneClockApplet *self, gchar *key, GSettings *settings);
 static gboolean update(GSource *source, GSourceFunc callback, gpointer userdata);
 
@@ -47,7 +47,7 @@ GrapheneClockApplet* graphene_clock_applet_new(void)
 static void graphene_clock_applet_class_init(GrapheneClockAppletClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = graphene_clock_applet_finalize;
+  gobjectClass->dispose = graphene_clock_applet_dispose;
 }
 
 static void graphene_clock_applet_init(GrapheneClockApplet *self)
@@ -69,14 +69,14 @@ static void graphene_clock_applet_init(GrapheneClockApplet *self)
   g_source_attach(self->source, NULL);
 }
 
-static void graphene_clock_applet_finalize(GObject *self_)
+static void graphene_clock_applet_dispose(GObject *self_)
 {
-  GrapheneClockApplet *self = GRAPHENE_CLOCK_APPLET(self);
-  g_object_unref(self->interfaceSettings);
-  g_source_destroy(self->source);
-  self->source = NULL;
-  g_free(self->timeFormat);
-  g_free(self->timeString);
+  GrapheneClockApplet *self = GRAPHENE_CLOCK_APPLET(self_);
+  g_clear_object(&self->interfaceSettings);
+  g_clear_pointer(&self->source, g_source_destroy);
+  g_clear_pointer(&self->timeFormat, g_free);
+  g_clear_pointer(&self->timeString, g_free);
+  G_OBJECT_CLASS(graphene_clock_applet_parent_class)->dispose(self_);
 }
 
 static void on_interface_settings_changed(GrapheneClockApplet *self, gchar *key, GSettings *settings)

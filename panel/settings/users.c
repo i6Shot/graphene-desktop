@@ -81,6 +81,8 @@ static void graphene_profile_name_label_finalize(GObject *self_)
   self->manager = NULL;
   self->userChangedHandlerID = 0;
   self->notifyIsLoadedID = 0;
+  
+  G_OBJECT_CLASS(graphene_profile_name_label_parent_class)->finalize(self_);
 }
 
 void graphene_profile_name_label_set_user(GrapheneProfileNameLabel *self, const gchar *username)
@@ -190,6 +192,8 @@ static void graphene_profile_picture_finalize(GObject *self_)
   self->manager = NULL;
   self->userChangedHandlerID = 0;
   self->notifyIsLoadedID = 0;
+  
+  G_OBJECT_CLASS(graphene_profile_picture_parent_class)->finalize(self_);
 }
 
 void graphene_profile_picture_set_user(GrapheneProfilePicture *self, const gchar *username)

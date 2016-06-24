@@ -38,7 +38,6 @@ struct _GrapheneSettingsApplet
 };
 
 
-static void graphene_settings_applet_finalize(GObject *self_);
 static gboolean applet_on_click(GrapheneSettingsApplet *self, GdkEvent *event);
 static void applet_on_popup_hide(GrapheneSettingsApplet *self, GrapheneSettingsPopup *popup);
 
@@ -53,8 +52,6 @@ GrapheneSettingsApplet* graphene_settings_applet_new(void)
 
 static void graphene_settings_applet_class_init(GrapheneSettingsAppletClass *klass)
 {
-  GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = graphene_settings_applet_finalize;
 }
 
 static void graphene_settings_applet_init(GrapheneSettingsApplet *self)
@@ -77,12 +74,6 @@ static void graphene_settings_applet_init(GrapheneSettingsApplet *self)
   gtk_widget_show_all(GTK_WIDGET(self));
   
   g_signal_connect(self, "button_press_event", G_CALLBACK(applet_on_click), NULL);
-}
-
-static void graphene_settings_applet_finalize(GObject *self_)
-{
-  GrapheneSettingsApplet *self = GRAPHENE_SETTINGS_APPLET(self_);
-  g_clear_object(&self->popup);
 }
 
 static gboolean applet_on_click(GrapheneSettingsApplet *self, GdkEvent *event)
@@ -114,12 +105,6 @@ struct _GrapheneSettingsPopup
   GtkBox *settingWidgetBox;
 };
 
-typedef struct {
-  GrapheneSettingsPopup *popup;
-  GtkButton *button;
-  const gchar *panel;
-  
-} SettingsWidgetData;
 
 static void popup_on_show(GrapheneSettingsPopup *self);
 static void popup_on_hide(GrapheneSettingsPopup *self);
@@ -132,7 +117,7 @@ static void popup_on_vertical_scrolled(GrapheneSettingsPopup *self, GtkAdjustmen
 static void enum_settings_widgets(GrapheneSettingsPopup *self);
 static void add_settings_category_label(GrapheneSettingsPopup *self, const gchar *title);
 static void add_setting_widget(GrapheneSettingsPopup *self, const gchar *title, const gchar *iconName, gboolean toggleable, const gchar *panel, gboolean bottomSeparator);
-static void popup_on_settings_widget_clicked(GtkButton *button, SettingsWidgetData* data);
+static void popup_on_settings_widget_clicked(GrapheneSettingsPopup *self, GtkButton *button);
 
 
 G_DEFINE_TYPE(GrapheneSettingsPopup, graphene_settings_popup, GTK_TYPE_WINDOW)
@@ -299,12 +284,6 @@ static void add_settings_category_label(GrapheneSettingsPopup *self, const gchar
   gtk_box_pack_start(self->settingWidgetBox, GTK_WIDGET(label), FALSE, FALSE, 0);
 }
 
-static void free_settings_widget_data_closure_notify(gpointer data, GClosure *closure)
-{
-  // ApplistButtonData *applistData = (ApplistButtonData *)data;
-  g_free(data);
-}
-
 static void add_setting_widget(GrapheneSettingsPopup *self, const gchar *title, const gchar *iconName, gboolean toggleable, const gchar *panel, gboolean bottomSeparator)
 {
   GrapheneMaterialBox *box = GRAPHENE_MATERIAL_BOX(graphene_material_box_new());
@@ -312,11 +291,8 @@ static void add_setting_widget(GrapheneSettingsPopup *self, const gchar *title, 
   GtkButton *button = GTK_BUTTON(gtk_button_new());
   gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(button)), "settings-widget-button");
 
-  SettingsWidgetData *data = g_new0(SettingsWidgetData, 1);
-  data->popup = self;
-  data->button = button;
-  data->panel = panel;
-  g_signal_connect_data(button, "clicked", G_CALLBACK(popup_on_settings_widget_clicked), data, free_settings_widget_data_closure_notify, 0);
+  g_object_set_data(G_OBJECT(button), "panel", (gpointer)panel);
+  g_signal_connect_swapped(button, "clicked", G_CALLBACK(popup_on_settings_widget_clicked), self);
   
   GtkBox *buttonBox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 7));
   gtk_box_pack_start(buttonBox, GTK_WIDGET(gtk_image_new_from_icon_name(iconName, GTK_ICON_SIZE_DND)), TRUE, TRUE, 7);
@@ -352,13 +328,13 @@ static void add_setting_widget(GrapheneSettingsPopup *self, const gchar *title, 
   }
 }
 
-static void popup_on_settings_widget_clicked(GtkButton *button, SettingsWidgetData* data)
+static void popup_on_settings_widget_clicked(GrapheneSettingsPopup *self, GtkButton *button)
 {
-  gtk_widget_hide(GTK_WIDGET(data->popup));
+  gtk_widget_hide(GTK_WIDGET(self));
   
   gchar **argsSplit = g_new0(gchar *, 3);
   argsSplit[0] = g_strdup("gnome-control-center");
-  argsSplit[1] = g_strdup(data->panel);
+  argsSplit[1] = g_strdup(g_object_get_data(G_OBJECT(button), "panel"));
   g_spawn_async(NULL, argsSplit, NULL, G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL | G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
   g_strfreev(argsSplit);
 }

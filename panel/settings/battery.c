@@ -95,6 +95,7 @@ static void graphene_battery_info_finalize(GObject *self_)
 {
   GrapheneBatteryInfo *self = GRAPHENE_BATTERY_INFO(self_);
   g_clear_object(&self->batteryDeviceProxy);
+  G_OBJECT_CLASS(graphene_battery_info_parent_class)->finalize(self_);
 }
 
 gboolean graphene_battery_info_is_available(GrapheneBatteryInfo *self)
@@ -262,6 +263,7 @@ static void graphene_battery_icon_finalize(GObject *self_)
   GrapheneBatteryIcon *self = GRAPHENE_BATTERY_ICON(self_);
   g_signal_handlers_disconnect_by_func(self->batInfo, G_CALLBACK(on_battery_update), self);
   g_clear_object(&self->batInfo);
+  G_OBJECT_CLASS(graphene_battery_icon_parent_class)->finalize(self_);
 }
 
 static void on_battery_update(GrapheneBatteryIcon *self, GrapheneBatteryInfo *info)

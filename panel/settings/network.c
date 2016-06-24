@@ -124,6 +124,7 @@ static void graphene_network_control_finalize(GObject *self_)
   g_clear_pointer(&self->essid, g_free);
   g_clear_pointer(&self->ip, g_free);
   g_clear_pointer(&self->iconName, g_free);
+  G_OBJECT_CLASS(graphene_network_control_parent_class)->finalize(self_);
 }
 
 guint32 graphene_network_control_get_status(GrapheneNetworkControl *self)
@@ -261,6 +262,7 @@ static void graphene_network_icon_finalize(GObject *self_)
 {
   GrapheneNetworkIcon *self = GRAPHENE_NETWORK_ICON(self_);
   g_clear_object(&self->networkControl);
+  G_OBJECT_CLASS(graphene_network_icon_parent_class)->finalize(self_);
 }
 
 static void icon_on_update(GrapheneNetworkIcon *self, GrapheneNetworkControl *networkControl)

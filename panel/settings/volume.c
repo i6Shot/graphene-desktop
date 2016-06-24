@@ -57,6 +57,7 @@ static void graphene_volume_icon_finalize(GObject *self_)
 {
   GrapheneVolumeIcon *self = GRAPHENE_VOLUME_ICON(self_);
   g_clear_object(&self->volumeControl);
+  G_OBJECT_CLASS(graphene_volume_icon_parent_class)->finalize(self_);
 }
 
 static void icon_on_update(GrapheneVolumeIcon *self, GrapheneSystemVolumeControl *volumeControl)
@@ -138,6 +139,7 @@ static void graphene_volume_slider_finalize(GObject *self_)
 {
   GrapheneVolumeSlider *self = GRAPHENE_VOLUME_SLIDER(self_);
   g_clear_object(&self->volumeControl);
+  G_OBJECT_CLASS(graphene_volume_slider_parent_class)->finalize(self_);
 }
 
 static void slider_on_value_changed(GrapheneVolumeSlider *self, GtkScale *scale)

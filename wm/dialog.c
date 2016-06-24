@@ -146,7 +146,9 @@ static void graphene_wm_dialog_set_property(GObject *self_, guint propertyId, co
   {
     case PROP_CONTENT:
       g_clear_object(&self->content);
-      self->content = g_object_ref_sink(g_value_get_object(value));
+      GObject *object = g_value_get_object(value);
+      if(object)
+        self->content = g_object_ref_sink(object);
       break;
     case PROP_HIGHLIGHTED:
       g_clear_pointer(&self->highlighted, g_free);

@@ -33,7 +33,7 @@ struct _GrapheneLauncherApplet
 };
 
 
-static void graphene_launcher_applet_finalize(GObject *self_);
+static void graphene_launcher_applet_dispose(GObject *self_);
 static gboolean applet_on_click(GrapheneLauncherApplet *self, GdkEvent *event);
 static void applet_on_popup_hide(GrapheneLauncherApplet *self, GrapheneLauncherPopup *popup);
 
@@ -49,7 +49,7 @@ GrapheneLauncherApplet* graphene_launcher_applet_new(void)
 static void graphene_launcher_applet_class_init(GrapheneLauncherAppletClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = graphene_launcher_applet_finalize;
+  gobjectClass->dispose = graphene_launcher_applet_dispose;
 }
 
 static void graphene_launcher_applet_init(GrapheneLauncherApplet *self)
@@ -72,10 +72,11 @@ static void graphene_launcher_applet_init(GrapheneLauncherApplet *self)
   g_signal_connect_swapped(self->popup, "hide", G_CALLBACK(applet_on_popup_hide), self);
 }
 
-static void graphene_launcher_applet_finalize(GObject *self_)
+static void graphene_launcher_applet_dispose(GObject *self_)
 {
   GrapheneLauncherApplet *self = GRAPHENE_LAUNCHER_APPLET(self_);
-  g_clear_object(&self->popup);
+  g_clear_pointer(&self->popup, gtk_widget_destroy);
+  G_OBJECT_CLASS(graphene_launcher_applet_parent_class)->dispose(self_);
 }
 
 static gboolean applet_on_click(GrapheneLauncherApplet *self, GdkEvent *event)
@@ -116,14 +117,7 @@ struct _GrapheneLauncherPopup
 G_DEFINE_TYPE(GrapheneLauncherPopup, graphene_launcher_popup, GTK_TYPE_WINDOW)
 
 
-typedef struct {
-  GrapheneLauncherPopup *popup;
-  GDesktopAppInfo *appInfo;
-  GtkButton *button;
-  
-} ApplistButtonData;
-
-static void graphene_launcher_popup_finalize(GObject *self_);
+static void graphene_launcher_popup_dispose(GObject *self_);
 static void popup_on_show(GrapheneLauncherPopup *self);
 static void popup_on_hide(GrapheneLauncherPopup *self);
 static void popup_on_mapped(GrapheneLauncherPopup *self);
@@ -137,7 +131,7 @@ static void popup_on_vertical_scrolled(GrapheneLauncherPopup *self, GtkAdjustmen
 static void popup_applist_refresh(GrapheneLauncherPopup *self);
 static void popup_applist_populate(GrapheneLauncherPopup *self);
 static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenuTreeDirectory *directory);
-static void applist_on_item_clicked(GtkButton *button, ApplistButtonData *data);
+static void applist_on_item_clicked(GrapheneLauncherPopup *self, GtkButton *button);
 static void applist_launch_first(GrapheneLauncherPopup *self);
 
 GrapheneLauncherPopup* graphene_launcher_popup_new(void)
@@ -148,7 +142,7 @@ GrapheneLauncherPopup* graphene_launcher_popup_new(void)
 static void graphene_launcher_popup_class_init(GrapheneLauncherPopupClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = graphene_launcher_popup_finalize;
+  gobjectClass->dispose = graphene_launcher_popup_dispose;
 }
 
 static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
@@ -198,12 +192,12 @@ static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
   gtk_widget_show_all(GTK_WIDGET(self->popupLayout));
 }
 
-static void graphene_launcher_popup_finalize(GObject *self_)
+static void graphene_launcher_popup_dispose(GObject *self_)
 {
   GrapheneLauncherPopup *self = GRAPHENE_LAUNCHER_POPUP(self_);
   g_clear_object(&self->appTree);
   g_clear_pointer(&self->filter, g_free);
-  g_clear_object(&self->popupLayout);
+  G_OBJECT_CLASS(graphene_launcher_popup_parent_class)->dispose(self_);
 }
 
 static void popup_on_show(GrapheneLauncherPopup *self)
@@ -290,13 +284,6 @@ static void popup_applist_populate(GrapheneLauncherPopup *self)
   gmenu_tree_item_unref(directory);
 }
 
-static void free_applist_button_data_closure_notify(gpointer data, GClosure *closure)
-{
-  ApplistButtonData *applistData = (ApplistButtonData *)data;
-  g_object_unref(applistData->appInfo);
-  g_free(data);
-}
-
 static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenuTreeDirectory *directory)
 {
   guint count = 0;
@@ -342,11 +329,8 @@ static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenu
       gtk_widget_show(GTK_WIDGET(sep));
       gtk_box_pack_start(self->appListBox, GTK_WIDGET(sep), FALSE, FALSE, 0);
 
-      ApplistButtonData *data = g_new0(ApplistButtonData, 1);
-      data->appInfo = appInfo;
-      data->button = button;
-      data->popup = self;
-      g_signal_connect_data(button, "clicked", G_CALLBACK(applist_on_item_clicked), data, free_applist_button_data_closure_notify, 0);
+      g_object_set_data_full(G_OBJECT(button), "app-info", appInfo, g_object_unref);
+      g_signal_connect_swapped(button, "clicked", G_CALLBACK(applist_on_item_clicked), self);
 
       count += 1;
     }
@@ -384,14 +368,18 @@ static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenu
   return count;
 }
 
-static void applist_on_item_clicked(GtkButton *button, ApplistButtonData *data)
+static void applist_on_item_clicked(GrapheneLauncherPopup *self, GtkButton *button)
 {
-  gtk_entry_set_text(GTK_ENTRY(data->popup->searchBar), "");
-  gtk_widget_hide(GTK_WIDGET(data->popup));
+  gtk_entry_set_text(GTK_ENTRY(self->searchBar), "");
+  gtk_widget_hide(GTK_WIDGET(self));
   
-  gchar **argsSplit = g_strsplit(g_app_info_get_executable(G_APP_INFO(data->appInfo)), " ", -1);
-  g_spawn_async(NULL, argsSplit, NULL, G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL | G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
-  g_strfreev(argsSplit);
+  GDesktopAppInfo *appInfo = G_DESKTOP_APP_INFO(g_object_get_data(G_OBJECT(button), "app-info"));
+  if(appInfo)
+  {
+    gchar **argsSplit = g_strsplit(g_app_info_get_executable(G_APP_INFO(appInfo)), " ", -1);
+    g_spawn_async(NULL, argsSplit, NULL, G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL | G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
+    g_strfreev(argsSplit);
+  }
 }
 
 static void applist_launch_first(GrapheneLauncherPopup *self)

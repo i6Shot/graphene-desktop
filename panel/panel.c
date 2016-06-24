@@ -55,14 +55,10 @@ struct _GraphenePanel {
 };
 
 // Create the GraphenePanel class
-// No properties or anything special, the GraphenePanel is only a class because
-// it creates the GraphenePanel struct for private data
 G_DEFINE_TYPE(GraphenePanel, graphene_panel, GTK_TYPE_WINDOW)
-GraphenePanel* graphene_panel_new(void) { return GRAPHENE_PANEL(g_object_new(GRAPHENE_TYPE_PANEL, NULL)); }
-static void graphene_panel_finalize(GObject *self_);
-static void graphene_panel_class_init(GraphenePanelClass *klass) { GObjectClass *object_class = G_OBJECT_CLASS (klass); object_class->finalize = graphene_panel_finalize; }
 
 // Private event declarations
+static void graphene_panel_dispose(GObject *self_);
 static void init_layout(GraphenePanel *self);
 static void init_capture(GraphenePanel *self);
 static void init_notifications(GraphenePanel *self);
@@ -72,6 +68,12 @@ static gboolean on_panel_clicked(GraphenePanel *self, GdkEventButton *event);
 static void on_context_menu_item_activate(GraphenePanel *self, GtkMenuItem *menuitem);
 static void update_notification_windows(GraphenePanel *self);
 
+
+GraphenePanel* graphene_panel_new(void)
+{
+  return GRAPHENE_PANEL(g_object_new(GRAPHENE_TYPE_PANEL, NULL));
+}
+
 GraphenePanel * graphene_panel_get_default(void)
 {
   static GraphenePanel *panel = NULL;
@@ -80,7 +82,12 @@ GraphenePanel * graphene_panel_get_default(void)
   return panel;
 }
 
-// Initializes the panel (declared by G_DEFINE_TYPE; called through graphene_panel_new())
+static void graphene_panel_class_init(GraphenePanelClass *klass)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS(klass);
+  object_class->dispose = graphene_panel_dispose;
+}
+
 static void graphene_panel_init(GraphenePanel *self)
 {
   // Set properties
@@ -126,16 +133,17 @@ static void graphene_panel_init(GraphenePanel *self)
   init_notifications(self);
 }
 
-static void graphene_panel_finalize(GObject *self_)
+static void graphene_panel_dispose(GObject *self_)
 {
   GraphenePanel *self = GRAPHENE_PANEL(self_);
-  g_object_unref(self->ClientProxy);
-  g_object_unref(self->SMProxy);
+  g_clear_object(&self->ClientProxy);
+  g_clear_object(&self->SMProxy);
 
   if(self->NotificationServerBusNameID)
     g_bus_unown_name(self->NotificationServerBusNameID);
+  self->NotificationServerBusNameID = 0;
   
-  G_OBJECT_CLASS(graphene_panel_parent_class)->finalize(G_OBJECT(self));
+  G_OBJECT_CLASS(graphene_panel_parent_class)->dispose(self_);
 }
 
 static void init_layout(GraphenePanel *self)

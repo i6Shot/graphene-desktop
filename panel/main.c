@@ -21,16 +21,23 @@
  */
 
 #include "panel.h"
+#include <glib-unix.h>
 
 static void activate(GtkApplication *app, gpointer userdata);
+static void on_exit_signal(gpointer userdata);
 
 int main(int argc, char **argv)
 {
   GtkApplication *app = gtk_application_new("io.velt.graphene-panel", G_APPLICATION_FLAGS_NONE);
   g_object_set(G_OBJECT(app), "register-session", TRUE);
   g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
+  
+  g_unix_signal_add(SIGTERM, (GSourceFunc)on_exit_signal, NULL);
+  g_unix_signal_add(SIGINT, (GSourceFunc)on_exit_signal, NULL);
+  g_unix_signal_add(SIGHUP, (GSourceFunc)on_exit_signal, NULL);
+
   int status = g_application_run(G_APPLICATION(app), argc, argv);
-  g_object_unref(graphene_panel_get_default());
+  gtk_widget_destroy(GTK_WIDGET(graphene_panel_get_default()));
   g_object_unref(app);
   return status;
 }
@@ -40,4 +47,9 @@ static void activate(GtkApplication *app, gpointer userdata)
   GraphenePanel *panel = graphene_panel_get_default(); // First call will create it
   gtk_application_add_window(app, GTK_WINDOW(panel));
   gtk_widget_show(GTK_WIDGET(panel));  
+}
+
+static void on_exit_signal(gpointer userdata)
+{
+  g_application_quit(g_application_get_default());
 }
