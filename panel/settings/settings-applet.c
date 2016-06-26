@@ -69,7 +69,7 @@ static void graphene_settings_applet_init(GrapheneSettingsApplet *self)
     gtk_box_pack_end(box, GTK_WIDGET(graphene_battery_icon_new()), FALSE, FALSE, 0);
   gtk_box_pack_end(box, GTK_WIDGET(graphene_network_icon_new()), FALSE, FALSE, 0);
   gtk_box_pack_end(box, GTK_WIDGET(graphene_volume_icon_new()), FALSE, FALSE, 0);
-  gtk_box_pack_end(box, GTK_WIDGET(gtk_image_new_from_icon_name("emblem-system-symbolic", GTK_ICON_SIZE_MENU)), FALSE, FALSE, 0);
+  gtk_box_pack_end(box, GTK_WIDGET(gtk_image_new_from_icon_name("system-shutdown-symbolic", GTK_ICON_SIZE_MENU)), FALSE, FALSE, 0);
   
   gtk_container_add(GTK_CONTAINER(self), GTK_WIDGET(box));
   gtk_widget_show_all(GTK_WIDGET(self));
