@@ -100,6 +100,7 @@ static void on_window_opened(GrapheneTasklistApplet *self, WnckWindow *window, W
     modClassName = g_new0(gchar, 1);
     
   GtkImage *icon = GTK_IMAGE(gtk_image_new_from_icon_name(modClassName, GTK_ICON_SIZE_LARGE_TOOLBAR));
+  gtk_image_set_pixel_size(icon, 24);
   g_free(modClassName);
   gtk_button_set_image(button, GTK_WIDGET(icon));
   gtk_button_set_always_show_image(button, TRUE);

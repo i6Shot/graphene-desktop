@@ -61,9 +61,17 @@ static void graphene_launcher_applet_init(GrapheneLauncherApplet *self)
   gtk_button_set_label(GTK_BUTTON(self), "");
   g_signal_connect(self, "button_press_event", G_CALLBACK(applet_on_click), NULL);
   
-  GtkImage *image = GTK_IMAGE(gtk_image_new_from_icon_name("open-menu-symbolic", GTK_ICON_SIZE_INVALID));
-  gtk_image_set_pixel_size(image, 32);
-  gtk_button_set_image(GTK_BUTTON(self), GTK_WIDGET(image));
+  // Get the icon for the launcher, force it to be the default Adwaita theme open-menu-symbolic
+  // TODO: Maybe use the default theme's in the future? Paper's open-menu-symbolic looks like Google's material design
+  // but it doesn't fit very well in the space of the panel. Also the color is always gray.
+  GtkIconTheme *theme = gtk_icon_theme_new();
+  gtk_icon_theme_set_custom_theme(theme, "Adwaita");
+  GdkPixbuf *pixbuf = gtk_icon_theme_load_icon(theme, "open-menu-symbolic", 32, GTK_ICON_LOOKUP_FORCE_SIZE, NULL);
+  GtkWidget *image = gtk_image_new_from_pixbuf(pixbuf);
+  g_object_unref(pixbuf);
+  g_object_unref(theme);
+  
+  gtk_button_set_image(GTK_BUTTON(self), image);
   gtk_button_set_always_show_image(GTK_BUTTON(self), TRUE);
   gtk_widget_show_all(GTK_WIDGET(self));
   
@@ -202,7 +210,7 @@ static void graphene_launcher_popup_dispose(GObject *self_)
 
 static void popup_on_show(GrapheneLauncherPopup *self)
 {
-  popup_applist_refresh(self);
+  popup_applist_refresh(self); // TODO: Don't recreate everything every time the popup is shown. Only when things change.
   graphene_panel_capture_screen(graphene_panel_get_default());
   gtk_grab_add(GTK_WIDGET(self));
 }
@@ -311,8 +319,16 @@ static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenu
       if(self->filter && !passedFilter)
         continue;
       
+        // Get icon at correct size. TODO: Update when the icon theme updates
+      GIcon *icon = g_app_info_get_icon(G_APP_INFO(appInfo));
+      GtkIconInfo *iconInfo = gtk_icon_theme_lookup_by_gicon(gtk_icon_theme_get_default(), icon, 32, GTK_ICON_LOOKUP_FORCE_SIZE);
+      GdkPixbuf *pixbuf = gtk_icon_info_load_icon(iconInfo, NULL);
+      GtkWidget *image = gtk_image_new_from_pixbuf(pixbuf);
+      g_object_unref(pixbuf);
+      g_object_unref(iconInfo);
+      
       GtkBox *buttonBox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 7));
-      gtk_box_pack_start(buttonBox, GTK_WIDGET(gtk_image_new_from_gicon(g_app_info_get_icon(G_APP_INFO(appInfo)), GTK_ICON_SIZE_DND)), TRUE, TRUE, 7);
+      gtk_box_pack_start(buttonBox, image, TRUE, TRUE, 7);
       GtkLabel *label = GTK_LABEL(gtk_label_new(g_app_info_get_display_name(G_APP_INFO(appInfo))));
       gtk_label_set_yalign(label, 0.5);
       gtk_box_pack_start(buttonBox, GTK_WIDGET(label), TRUE, TRUE, 0);

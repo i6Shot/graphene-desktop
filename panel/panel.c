@@ -282,6 +282,7 @@ static void update_position(GraphenePanel *self)
   }
 
   // Position capture window
+  // TODO: Fix capture window only convers one monitor
   int cx, cy, cwidth, cheight;
   gtk_window_get_position(GTK_WINDOW(self->CaptureWindow), &cx, &cy);
   gtk_window_get_size(GTK_WINDOW(self->CaptureWindow), &cwidth, &cheight);
