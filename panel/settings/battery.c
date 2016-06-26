@@ -25,6 +25,7 @@ struct _GrapheneBatteryInfo
   GObject parent;
   
   GDBusProxy *batteryDeviceProxy;
+  guint batteryRefreshTimerId;
 };
 
 enum
@@ -36,7 +37,8 @@ enum
 
 static guint signals[SIGNAL_LAST];
 
-static void graphene_battery_info_finalize(GObject *self_);
+static void graphene_battery_info_dispose(GObject *self_);
+static gboolean refresh_battery_info(GrapheneBatteryInfo *self);
 static void on_upproxy_display_device_property_changed(GrapheneBatteryInfo *self, GVariant *changed_properties, GStrv invalidated_properties, GDBusProxy *proxy);
 static gchar * get_icon_name(GrapheneBatteryInfo *self);
 
@@ -63,7 +65,7 @@ GrapheneBatteryInfo * graphene_battery_info_get_default(void)
 static void graphene_battery_info_class_init(GrapheneBatteryInfoClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = graphene_battery_info_finalize;
+  gobjectClass->dispose = graphene_battery_info_dispose;
   
   /*
    * Emitted when the status of the battery changes
@@ -89,19 +91,43 @@ static void graphene_battery_info_init(GrapheneBatteryInfo *self)
   }
   
   g_signal_connect_swapped(self->batteryDeviceProxy, "g-properties-changed", G_CALLBACK(on_upproxy_display_device_property_changed), self);
+  
+  self->batteryRefreshTimerId = g_timeout_add_seconds(10, (GSourceFunc)refresh_battery_info, self);
+  refresh_battery_info(self);
 }
 
-static void graphene_battery_info_finalize(GObject *self_)
+static void graphene_battery_info_dispose(GObject *self_)
 {
   GrapheneBatteryInfo *self = GRAPHENE_BATTERY_INFO(self_);
   g_clear_object(&self->batteryDeviceProxy);
-  G_OBJECT_CLASS(graphene_battery_info_parent_class)->finalize(self_);
+  if(self->batteryRefreshTimerId)
+    g_source_remove(self->batteryRefreshTimerId);
+  self->batteryRefreshTimerId = 0;
+  G_OBJECT_CLASS(graphene_battery_info_parent_class)->dispose(self_);
+}
+
+static gboolean refresh_battery_info(GrapheneBatteryInfo *self)
+{
+  if(self->batteryDeviceProxy)
+    g_dbus_proxy_call(self->batteryDeviceProxy, "Refresh", NULL, G_DBUS_CALL_FLAGS_NONE, 100, NULL, NULL, NULL);
+  return TRUE; // true to continue the timer callback
 }
 
 gboolean graphene_battery_info_is_available(GrapheneBatteryInfo *self)
 {
+  gboolean refSelf = FALSE;
+  if(!self)
+  {
+    self = graphene_battery_info_get_default();
+    refSelf = TRUE;
+  }
+  
   if(!G_IS_DBUS_PROXY(self->batteryDeviceProxy))
+  {
+    if(refSelf)
+      g_object_unref(self);
     return FALSE;
+  }
   
   guint32 deviceType = 0;
   GVariant *typeVariant = g_dbus_proxy_get_cached_property(self->batteryDeviceProxy, "Type");
@@ -110,6 +136,9 @@ gboolean graphene_battery_info_is_available(GrapheneBatteryInfo *self)
     deviceType = g_variant_get_uint32(typeVariant);
     g_variant_unref(typeVariant);
   }
+  
+  if(refSelf)
+    g_object_unref(self);
   
   // 0: Unknown, 1: Line Power, 2: Battery, 3: Ups, 4: Monitor, 5: Mouse, 6: Keyboard, 7: Pda, 8: Phone
   return deviceType == 2;
@@ -162,7 +191,7 @@ gchar * graphene_battery_info_get_icon_name(GrapheneBatteryInfo *self)
 {
   // Returns a newly-allocated string
   
-  g_return_val_if_fail(graphene_battery_info_is_available(self), NULL);
+  g_return_val_if_fail(graphene_battery_info_is_available(self), g_strdup("battery-full-charged-symbolic"));
 
   GVariant *iconNameVariant = g_dbus_proxy_get_cached_property(self->batteryDeviceProxy, "IconName");
   if(iconNameVariant)
@@ -233,7 +262,7 @@ struct _GrapheneBatteryIcon
   GrapheneBatteryInfo *batInfo;
 };
 
-static void graphene_battery_icon_finalize(GObject *self_);
+static void graphene_battery_icon_dispose(GObject *self_);
 static void on_battery_update(GrapheneBatteryIcon *self, GrapheneBatteryInfo *info);
 
 
@@ -248,7 +277,7 @@ GrapheneBatteryIcon * graphene_battery_icon_new(void)
 static void graphene_battery_icon_class_init(GrapheneBatteryIconClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = graphene_battery_icon_finalize;
+  gobjectClass->dispose = graphene_battery_icon_dispose;
 }
 
 static void graphene_battery_icon_init(GrapheneBatteryIcon *self)
@@ -258,12 +287,13 @@ static void graphene_battery_icon_init(GrapheneBatteryIcon *self)
   on_battery_update(self, self->batInfo);
 }
 
-static void graphene_battery_icon_finalize(GObject *self_)
+static void graphene_battery_icon_dispose(GObject *self_)
 {
   GrapheneBatteryIcon *self = GRAPHENE_BATTERY_ICON(self_);
-  g_signal_handlers_disconnect_by_func(self->batInfo, G_CALLBACK(on_battery_update), self);
+  if(self->batInfo)
+    g_signal_handlers_disconnect_by_func(self->batInfo, G_CALLBACK(on_battery_update), self);
   g_clear_object(&self->batInfo);
-  G_OBJECT_CLASS(graphene_battery_icon_parent_class)->finalize(self_);
+  G_OBJECT_CLASS(graphene_battery_icon_parent_class)->dispose(self_);
 }
 
 static void on_battery_update(GrapheneBatteryIcon *self, GrapheneBatteryInfo *info)

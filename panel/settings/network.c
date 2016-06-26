@@ -42,7 +42,7 @@ enum
 
 static guint signals[SIGNAL_LAST];
 
-static void graphene_network_control_finalize(GObject *self_);
+static void graphene_network_control_dispose(GObject *self_);
 static void on_wicd_proxy_signal(GrapheneNetworkControl *self, const gchar *sender, const gchar *signal, GVariant *parameters, GDBusProxy *proxy);
 static void update_status(GrapheneNetworkControl *self, guint32 status, const gchar **info, gsize infoSize);
 
@@ -69,7 +69,7 @@ GrapheneNetworkControl * graphene_network_control_get_default(void)
 static void graphene_network_control_class_init(GrapheneNetworkControlClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = graphene_network_control_finalize;
+  gobjectClass->dispose = graphene_network_control_dispose;
   
   /*
    * Emitted when the network status changes
@@ -117,14 +117,14 @@ static void graphene_network_control_init(GrapheneNetworkControl *self)
   g_free(info);
 }
 
-static void graphene_network_control_finalize(GObject *self_)
+static void graphene_network_control_dispose(GObject *self_)
 {
   GrapheneNetworkControl *self = GRAPHENE_NETWORK_CONTROL(self_);
   g_clear_object(&self->wicdDaemonProxy);
   g_clear_pointer(&self->essid, g_free);
   g_clear_pointer(&self->ip, g_free);
   g_clear_pointer(&self->iconName, g_free);
-  G_OBJECT_CLASS(graphene_network_control_parent_class)->finalize(self_);
+  G_OBJECT_CLASS(graphene_network_control_parent_class)->dispose(self_);
 }
 
 guint32 graphene_network_control_get_status(GrapheneNetworkControl *self)
@@ -233,7 +233,7 @@ struct _GrapheneNetworkIcon
   GrapheneNetworkControl *networkControl;
 };
 
-static void graphene_network_icon_finalize(GObject *self_);
+static void graphene_network_icon_dispose(GObject *self_);
 static void icon_on_update(GrapheneNetworkIcon *self, GrapheneNetworkControl *networkControl);
 
 
@@ -248,7 +248,7 @@ GrapheneNetworkIcon* graphene_network_icon_new(void)
 static void graphene_network_icon_class_init(GrapheneNetworkIconClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = graphene_network_icon_finalize;
+  gobjectClass->dispose = graphene_network_icon_dispose;
 }
 
 static void graphene_network_icon_init(GrapheneNetworkIcon *self)
@@ -258,11 +258,11 @@ static void graphene_network_icon_init(GrapheneNetworkIcon *self)
   icon_on_update(self, self->networkControl);
 }
 
-static void graphene_network_icon_finalize(GObject *self_)
+static void graphene_network_icon_dispose(GObject *self_)
 {
   GrapheneNetworkIcon *self = GRAPHENE_NETWORK_ICON(self_);
   g_clear_object(&self->networkControl);
-  G_OBJECT_CLASS(graphene_network_icon_parent_class)->finalize(self_);
+  G_OBJECT_CLASS(graphene_network_icon_parent_class)->dispose(self_);
 }
 
 static void icon_on_update(GrapheneNetworkIcon *self, GrapheneNetworkControl *networkControl)

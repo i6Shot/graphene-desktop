@@ -65,7 +65,8 @@ static void graphene_settings_applet_init(GrapheneSettingsApplet *self)
   // Init applet buttons
   GtkBox *box = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0));
   gtk_box_set_homogeneous(box, TRUE);
-  gtk_box_pack_end(box, GTK_WIDGET(graphene_battery_icon_new()), FALSE, FALSE, 0);
+  if(graphene_battery_info_is_available(NULL))
+    gtk_box_pack_end(box, GTK_WIDGET(graphene_battery_icon_new()), FALSE, FALSE, 0);
   gtk_box_pack_end(box, GTK_WIDGET(graphene_network_icon_new()), FALSE, FALSE, 0);
   gtk_box_pack_end(box, GTK_WIDGET(graphene_volume_icon_new()), FALSE, FALSE, 0);
   gtk_box_pack_end(box, GTK_WIDGET(gtk_image_new_from_icon_name("emblem-system-symbolic", GTK_ICON_SIZE_MENU)), FALSE, FALSE, 0);

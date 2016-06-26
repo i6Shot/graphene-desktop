@@ -29,7 +29,7 @@ struct _GrapheneProfileNameLabel
   gulong notifyIsLoadedID;
 };
 
-static void graphene_profile_name_label_finalize(GObject *self_);
+static void graphene_profile_name_label_dispose(GObject *self_);
 static void label_on_user_manager_notify_is_loaded(GrapheneProfileNameLabel *self);
 static void label_on_user_updated(GrapheneProfileNameLabel *self, ActUser *user);
 
@@ -45,7 +45,7 @@ GrapheneProfileNameLabel * graphene_profile_name_label_new()
 static void graphene_profile_name_label_class_init(GrapheneProfileNameLabelClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = graphene_profile_name_label_finalize;
+  gobjectClass->dispose = graphene_profile_name_label_dispose;
 }
 
 static void graphene_profile_name_label_init(GrapheneProfileNameLabel *self)
@@ -67,7 +67,7 @@ static void graphene_profile_name_label_init(GrapheneProfileNameLabel *self)
   label_on_user_updated(self, self->user);
 }
 
-static void graphene_profile_name_label_finalize(GObject *self_)
+static void graphene_profile_name_label_dispose(GObject *self_)
 {
   GrapheneProfileNameLabel *self = GRAPHENE_PROFILE_NAME_LABEL(self);
   g_clear_pointer(&self->username, g_free);
@@ -82,7 +82,7 @@ static void graphene_profile_name_label_finalize(GObject *self_)
   self->userChangedHandlerID = 0;
   self->notifyIsLoadedID = 0;
   
-  G_OBJECT_CLASS(graphene_profile_name_label_parent_class)->finalize(self_);
+  G_OBJECT_CLASS(graphene_profile_name_label_parent_class)->dispose(self_);
 }
 
 void graphene_profile_name_label_set_user(GrapheneProfileNameLabel *self, const gchar *username)
@@ -137,7 +137,7 @@ struct _GrapheneProfilePicture
   gulong notifyIsLoadedID;
 };
 
-static void graphene_profile_picture_finalize(GObject *self_);
+static void graphene_profile_picture_dispose(GObject *self_);
 static void picture_on_user_manager_notify_is_loaded(GrapheneProfilePicture *self);
 static gboolean picture_on_draw(GtkWidget *self_, cairo_t *cr);
 
@@ -153,7 +153,7 @@ GrapheneProfilePicture * graphene_profile_picture_new()
 static void graphene_profile_picture_class_init(GrapheneProfilePictureClass *klass)
 {
   GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-  gobjectClass->finalize = graphene_profile_picture_finalize;
+  gobjectClass->dispose = graphene_profile_picture_dispose;
   GTK_WIDGET_CLASS(klass)->draw = picture_on_draw;
 }
 
@@ -178,7 +178,7 @@ static void graphene_profile_picture_init(GrapheneProfilePicture *self)
   gtk_widget_queue_draw(GTK_WIDGET(self));
 }
 
-static void graphene_profile_picture_finalize(GObject *self_)
+static void graphene_profile_picture_dispose(GObject *self_)
 {
   GrapheneProfilePicture *self = GRAPHENE_PROFILE_PICTURE(self_);
   g_clear_pointer(&self->username, g_free);
@@ -193,7 +193,7 @@ static void graphene_profile_picture_finalize(GObject *self_)
   self->userChangedHandlerID = 0;
   self->notifyIsLoadedID = 0;
   
-  G_OBJECT_CLASS(graphene_profile_picture_parent_class)->finalize(self_);
+  G_OBJECT_CLASS(graphene_profile_picture_parent_class)->dispose(self_);
 }
 
 void graphene_profile_picture_set_user(GrapheneProfilePicture *self, const gchar *username)
