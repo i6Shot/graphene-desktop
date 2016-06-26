@@ -89,7 +89,7 @@ typedef struct
 // APPLICATION
 static void activate(GApplication *app, gpointer userdata);
 static void shutdown(GApplication *application, gpointer userdata);
-static void on_sigterm_or_sigint(gpointer userdata);
+static void on_exit_signal(gpointer userdata);
 static gboolean run_phase(guint phase);
 static void run_autostart_phase(const gchar *phase);
 static void logout();
@@ -140,8 +140,9 @@ int main(int argc, char **argv)
   g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
 #endif
 
-  g_unix_signal_add(SIGTERM, (GSourceFunc)on_sigterm_or_sigint, NULL);
-  g_unix_signal_add(SIGINT, (GSourceFunc)on_sigterm_or_sigint, NULL);
+  g_unix_signal_add(SIGTERM, (GSourceFunc)on_exit_signal, NULL);
+  g_unix_signal_add(SIGINT, (GSourceFunc)on_exit_signal, NULL);
+  g_unix_signal_add(SIGHUP, (GSourceFunc)on_exit_signal, NULL);
 
   GApplication *app = g_application_new(SESSION_MANAGER_APP_ID, G_APPLICATION_FLAGS_NONE);
   g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
@@ -197,11 +198,11 @@ static void shutdown(GApplication *application, gpointer userdata)
   g_free(self);
 }
 
-static void on_sigterm_or_sigint(gpointer userdata)
+static void on_exit_signal(gpointer userdata)
 {
   if(self && self->app && self->phase <= SESSION_PHASE_RUNNING)
   {
-    g_message("handling sigterm/sigint cleanly");
+    g_debug("handling sigterm/sigint cleanly");
     begin_end_session(TRUE);
   }
   else
@@ -315,11 +316,22 @@ static void run_autostart_phase(const gchar *phase)
       GrapheneSessionClient *client = graphene_session_client_new(connection, NULL);
       self->clients = g_list_prepend(self->clients, client);
       self->phaseTaskList = g_list_prepend(self->phaseTaskList, client);
-      
+
+      gint autoRestart = g_desktop_app_info_get_boolean(desktopInfo, "X-GNOME-AutoRestart");
+      if(g_desktop_app_info_has_key(desktopInfo, "Graphene-AutoRestart"))
+      {
+        autoRestart = 0;
+        gchar *autoRestartStr = g_desktop_app_info_get_string(desktopInfo, "Graphene-AutoRestart");
+        if(g_strcmp0(autoRestartStr, "fail-only") == 0)
+          autoRestart = 1;
+        else if(g_strcmp0(autoRestartStr, "always") == 0)
+          autoRestart = 2;
+      }
+
       g_object_set(client,
         "name", g_app_info_get_display_name(G_APP_INFO(desktopInfo)),
         "args", g_app_info_get_commandline(G_APP_INFO(desktopInfo)),
-        "auto-restart", g_desktop_app_info_get_boolean(desktopInfo, "X-GNOME-AutoRestart"),
+        "auto-restart", autoRestart,
         "condition", g_desktop_app_info_get_string(desktopInfo, "AutostartCondition"),
         "silent", SHOW_ALL_OUTPUT ? FALSE : !g_desktop_app_info_get_boolean(desktopInfo, "Graphene-ShowOutput"),
         NULL);
@@ -328,11 +340,12 @@ static void run_autostart_phase(const gchar *phase)
         "signal::complete", on_client_complete, NULL,
         "signal::end-session-response", on_client_end_session_response, NULL, NULL);
     
-      const gchar *delayString = g_desktop_app_info_get_string(desktopInfo, "X-GNOME-Autostart-Delay");
+      gchar *delayString = g_desktop_app_info_get_string(desktopInfo, "X-GNOME-Autostart-Delay");
       gint64 delay = 0;
       if(delayString)
-        delay = g_ascii_strtoll(delayString, NULL, 0);
-    
+        delay = g_ascii_strtoll(delayString, NULL, 0) * 1000; // seconds to milliseconds
+      g_free(delayString);
+
       graphene_session_client_spawn(client, (guint)delay);
       
       g_hash_table_iter_remove(&iter);

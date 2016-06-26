@@ -7,6 +7,6 @@ Exec=${GRAPHENE_DATA_DIR}/graphene-wm
 NoDisplay=true
 X-GNOME-Autostart-Phase=WindowManager
 X-GNOME-Autostart-Notify=true
-X-GNOME-AutoRestart=true
+Graphene-AutoRestart=always
 Graphene-ShowOutput=true
 OnlyShowIn=Graphene;

@@ -37,7 +37,7 @@ struct _GrapheneSessionClient
                     // Also supports gnome-session keys (https://github.com/GNOME/gnome-session/blob/865a6da78d23bee85f3c7bd72157974a3a918c86/gnome-session/gsm-autostart-app.c)
   gchar *icon;
   gboolean silent; // If true, redirects stdout and stderr to dev/null
-  gboolean autoRestart;
+  gint autoRestart; // 0: Never restart, 1: Restart only on crash, 2: Always restart
   
   // Registration info (set when registered)
   gchar *objectPath; // Convenience: CLIENT_OBJECT_PATH + id
@@ -144,7 +144,7 @@ static void graphene_session_client_class_init(GrapheneSessionClientClass *klass
   properties[PROP_SILENT] =
     g_param_spec_boolean("silent", "silent", "if all output is redirected to /dev/null", FALSE, G_PARAM_READWRITE);
   properties[PROP_AUTO_RESTART] =
-    g_param_spec_boolean("auto-restart", "auto restart", "if the client should auto restart", FALSE, G_PARAM_READWRITE);
+    g_param_spec_int("auto-restart", "auto restart", "0: never restart, 1: only on crash, 2: always restart", 0, 2, 0, G_PARAM_READWRITE);
   properties[PROP_BUS_CONNECTION] =
     g_param_spec_object("bus", "bus", "bus connection", G_TYPE_DBUS_CONNECTION, G_PARAM_READWRITE|G_PARAM_CONSTRUCT_ONLY);
   properties[PROP_REGISTERED] =
@@ -243,7 +243,7 @@ static void graphene_session_client_set_property(GObject *self_, guint propertyI
     self->silent = g_value_get_boolean(value);
     break;
   case PROP_AUTO_RESTART:
-    self->autoRestart = g_value_get_boolean(value);
+    self->autoRestart = g_value_get_int(value);
     break;
   case PROP_BUS_CONNECTION:
     self->connection = G_DBUS_CONNECTION(g_value_get_object(value));
@@ -280,7 +280,7 @@ static void graphene_session_client_get_property(GObject *self_, guint propertyI
     g_value_set_boolean(value, self->silent);
     break;
   case PROP_AUTO_RESTART:
-    g_value_set_boolean(value, self->autoRestart);
+    g_value_set_int(value, self->autoRestart);
     break;
   case PROP_BUS_CONNECTION:
     g_value_set_object(value, self->connection);
@@ -326,8 +326,7 @@ void graphene_session_client_register(GrapheneSessionClient *self, const gchar *
 {
   GError *error = NULL;
 
-  g_clear_pointer(&self->dbusName, g_free);
-  g_clear_pointer(&self->appId, g_free);
+  graphene_session_client_unregister_internal(self);
   self->dbusName = g_strdup(sender);
   self->appId = g_strdup(appId);
   
@@ -344,6 +343,7 @@ void graphene_session_client_register(GrapheneSessionClient *self, const gchar *
     {
       g_warning("Failed to register client '%s': %s", graphene_session_client_get_best_name(self), error->message);
       g_clear_error(&error);
+      g_clear_pointer(&self->objectPath, g_free);
       return;
     }
   }
@@ -355,6 +355,7 @@ void graphene_session_client_register(GrapheneSessionClient *self, const gchar *
     {
       g_warning("Failed to register client private '%s': %s", graphene_session_client_get_best_name(self), error->message);
       g_clear_error(&error);
+      g_clear_pointer(&self->objectPath, g_free);
       return;
     }
   }
@@ -378,6 +379,7 @@ void graphene_session_client_register(GrapheneSessionClient *self, const gchar *
       g_spawn_command_line_sync(g_strdup_printf("ps --pid %i -o args=", self->processId), &processArgs, NULL, NULL, NULL);
       if(processArgs)
       {
+        g_free(self->args);
         self->args = str_trim(processArgs);
         g_free(processArgs);
         g_object_notify(G_OBJECT(self), "args");
@@ -422,7 +424,7 @@ static void graphene_session_client_unregister_internal(GrapheneSessionClient *s
 void graphene_session_client_spawn(GrapheneSessionClient *self, guint delay)
 {
   if(delay > 0)
-    self->spawnDelaySourceId = g_timeout_add_seconds(delay, (GSourceFunc)graphene_session_client_spawn_delay_cb, self);
+    self->spawnDelaySourceId = g_timeout_add(delay, (GSourceFunc)graphene_session_client_spawn_delay_cb, self);
   else
     graphene_session_client_spawn_delay_cb(self);
 }
@@ -482,6 +484,8 @@ static gboolean graphene_session_client_spawn_delay_cb(GrapheneSessionClient *se
   if(self->processId)
     self->childWatchId = g_child_watch_add(self->processId, (GChildWatchFunc)on_process_exit, self);
   
+  update_condition(self); // Reset condition monitor, in case it was stopped
+
   g_debug(" + Spawned client with args '%s' with id '%s' and pId %i", self->args, self->id, self->processId);
   
   return FALSE;
@@ -510,6 +514,18 @@ static void on_client_vanished(GDBusConnection *connection, const gchar *name, G
 }
 
 /*
+ * Removes all client registration and process info. This should be called to make the client be considered dead.
+ */
+static void destroy_client_info(GrapheneSessionClient *self)
+{
+  graphene_session_client_unregister_internal(self);
+  if(self->childWatchId)
+    g_source_remove(self->childWatchId);
+  self->childWatchId = 0;
+  self->processId = 0;
+}
+ 
+/*
  * Called when an autostarted client process exits, or when a client's DBus connection vanishes.
  * Should auto-restart the client if necessary, or completely abort the session in some severe cases.
  */
@@ -518,15 +534,12 @@ static void on_client_exit(GrapheneSessionClient *self, guint status)
   gboolean wasRegistered = self->objectPath != NULL;
   
   // Make sure on_client_exit can't be called twice (once from dbus, once from child watch)
-  graphene_session_client_unregister_internal(self); // Needs to be unregistered anyways
-  if(self->childWatchId)
-    g_source_remove(self->childWatchId);
-  self->childWatchId = 0;
-  self->processId = 0;
+  // Also unregisters the client
+  destroy_client_info(self);
   
   // Restart it
   g_debug("should restart? auto: %i, args: %s, status: %i, force: %i", self->autoRestart, self->args, status, self->forceNextRestart);
-  if(self->args && (self->forceNextRestart || (self->autoRestart && status != 0)))
+  if(self->forceNextRestart || (self->autoRestart > 0 && status != 0) || self->autoRestart == 2)
   {
     g_debug("restarting client with args %s", self->args);
     if(self->restartCount < MAX_RESTARTS)
@@ -540,14 +553,15 @@ static void on_client_exit(GrapheneSessionClient *self, guint status)
       g_warning("The application with args '%s' has crashed too many times, and will not be automatically restarted.", self->args);
       if(!wasRegistered)
         g_signal_emit_by_name(self, "ready");
-      g_signal_emit_by_name(self, "complete");
+      if(self->conditionMonitor == NULL)
+        g_signal_emit_by_name(self, "complete");
     }
   }
   else
   {
     if(!wasRegistered)
       g_signal_emit_by_name(self, "ready");
-    if(self->condition == NULL)
+    if(self->conditionMonitor == NULL)
       g_signal_emit_by_name(self, "complete");
   }
   
@@ -595,24 +609,16 @@ static gboolean test_condition(GrapheneSessionClient *self)
 
 static void run_condition(GrapheneSessionClient *self)
 {
-  g_debug("xxcondition on %s", graphene_session_client_get_best_name(self));
   if(test_condition(self))
-  {
-    // g_debug("start");
     graphene_session_client_spawn(self, 0);
-  }
   else
-  {
-    // g_debug("stop");
     graphene_session_client_stop(self);
-  }
 }
 
 static void update_condition(GrapheneSessionClient *self)
 {
   gboolean wasMonitoring = self->conditionMonitor != NULL;
-  if(self->conditionMonitor)
-    g_clear_object(&self->conditionMonitor);
+  g_clear_object(&self->conditionMonitor);
   
   if(!self->condition)
   {
@@ -657,16 +663,16 @@ gboolean graphene_session_client_query_end_session(GrapheneSessionClient *self, 
 void graphene_session_client_end_session(GrapheneSessionClient *self, gboolean forced)
 {
   g_debug("end session on %s", graphene_session_client_get_best_name(self));
-  g_clear_pointer(&self->condition, g_free); // Clear condition to ensure 'complete' will be sent
   self->forceNextRestart = FALSE;
   
   if(self->objectPath)
     g_dbus_connection_emit_signal(self->connection, self->dbusName, self->objectPath,
       "org.gnome.SessionManager.ClientPrivate", "EndSession", g_variant_new("(u)", forced == TRUE), NULL);
   else if(self->processId)
-    graphene_session_client_stop(self);
-  else
-    g_signal_emit_by_name(self, "complete");
+    kill(self->processId, SIGKILL);
+  g_clear_object(&self->conditionMonitor);
+  destroy_client_info(self); 
+  g_signal_emit_by_name(self, "complete");
 }
 
 void graphene_session_client_stop(GrapheneSessionClient *self)
@@ -679,17 +685,17 @@ void graphene_session_client_stop(GrapheneSessionClient *self)
   }
   else if(self->processId)
   {
-    // TODO: Probably won't work right if forceNextRestart is TRUE
-    // Maybe maybe an instance enum such as [0: never restart, 1: auto restart, 2: always restart]
     g_debug(" - Client '%s' is not registered. Sending SIGKILL to %i signal to stop client.", graphene_session_client_get_best_name(self), self->processId);
-    GPid pid = self->processId;
-    on_client_exit(self, 0);
-    kill(pid, SIGKILL);
+    kill(self->processId, SIGKILL);
   }
   else
   {
     g_debug("Process id nor dbus object not available. Cannot stop client '%s'.", graphene_session_client_get_best_name(self));
   }
+
+  destroy_client_info(self);
+  if(self->conditionMonitor == NULL)
+    g_signal_emit_by_name(self, "complete");
 }
 
 /*
