@@ -13,8 +13,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * This should be compiled into libgraphene for GIntrospection, and NOT compiled into the panel application binary.
  */
 
 #include "config.h"
@@ -23,12 +21,13 @@
 #include <cairo.h>
 #include <gio/gio.h>
 #include <glib.h>
+#include <glib-unix.h>
 #include "launcher/launcher-applet.h"
 #include "tasklist/tasklist-applet.h"
-#include "clock/clock-applet.h"
 #include "settings/settings-applet.h"
+#include "clock/clock-applet.h"
 
-// GraphenePanel class (private)
+
 struct _GraphenePanel {
   GtkWindow parent;
   
@@ -54,10 +53,12 @@ struct _GraphenePanel {
   guint32 NextNotificationID;
 };
 
-// Create the GraphenePanel class
+
 G_DEFINE_TYPE(GraphenePanel, graphene_panel, GTK_TYPE_WINDOW)
 
-// Private event declarations
+
+static void app_activate(GtkApplication *app, gpointer userdata);
+static void on_exit_signal(gpointer userdata);
 static void graphene_panel_dispose(GObject *self_);
 static void init_layout(GraphenePanel *self);
 static void init_capture(GraphenePanel *self);
@@ -68,6 +69,38 @@ static gboolean on_panel_clicked(GraphenePanel *self, GdkEventButton *event);
 static void on_context_menu_item_activate(GraphenePanel *self, GtkMenuItem *menuitem);
 static void update_notification_windows(GraphenePanel *self);
 
+
+int main(int argc, char **argv)
+{
+  GtkApplication *app = gtk_application_new("io.velt.graphene-panel", G_APPLICATION_FLAGS_NONE);
+  g_object_set(G_OBJECT(app), "register-session", TRUE, NULL);
+  g_signal_connect(app, "activate", G_CALLBACK(app_activate), NULL);
+  
+  g_unix_signal_add(SIGTERM, (GSourceFunc)on_exit_signal, NULL);
+  g_unix_signal_add(SIGINT, (GSourceFunc)on_exit_signal, NULL);
+  g_unix_signal_add(SIGHUP, (GSourceFunc)on_exit_signal, NULL);
+
+  int status = g_application_run(G_APPLICATION(app), argc, argv);
+  gtk_widget_destroy(GTK_WIDGET(graphene_panel_get_default()));
+  g_object_unref(app);
+  return status;
+}
+
+static void app_activate(GtkApplication *app, gpointer userdata)
+{
+  GraphenePanel *panel = graphene_panel_get_default(); // First call will create it
+  gtk_application_add_window(app, GTK_WINDOW(panel));
+  gtk_widget_show(GTK_WIDGET(panel));  
+}
+
+static void on_exit_signal(gpointer userdata)
+{
+  g_application_quit(g_application_get_default());
+}
+
+/*
+ * Panel class
+ */
 
 GraphenePanel* graphene_panel_new(void)
 {
@@ -159,6 +192,7 @@ static void init_layout(GraphenePanel *self)
   gtk_style_context_add_class(layoutStyle, "panel");
   gtk_widget_set_name(GTK_WIDGET(self), "panel-bar");
 
+  // Base applets
   GrapheneLauncherApplet *launcher = graphene_launcher_applet_new();
   gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(launcher)), "graphene-applet");
   gtk_box_pack_start(self->AppletLayout, GTK_WIDGET(launcher), FALSE, FALSE, 0);
@@ -192,8 +226,6 @@ static void update_position(GraphenePanel *self)
   GdkScreen *screen = gtk_window_get_screen(GTK_WINDOW(self));
   
   // Get the monitor for this panel
-  // TODO: Allow user-controlled monitor settings
-  // Currently just default to the primary monitor
   self->MonitorID = gdk_screen_get_primary_monitor(screen);
   
   // Get the size of the monitor the panel is on

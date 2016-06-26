@@ -13,8 +13,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * This should be compiled into libgraphene for GIntrospection, and NOT compiled into the panel application binary.
  */
 
 #include "system-volume-control.h"
