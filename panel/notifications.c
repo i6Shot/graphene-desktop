@@ -110,6 +110,8 @@ static void graphene_notification_manager_init(GrapheneNotificationManager *self
     
   if(!self->dbusNameId)
     post_server_fail_notification(self);
+    
+  g_signal_connect_swapped(gdk_screen_get_default(), "monitors-changed", G_CALLBACK(update_notification_windows), self);
 }
 
 static void graphene_notification_manager_dispose(GObject *self_)
