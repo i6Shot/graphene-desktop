@@ -26,6 +26,8 @@ typedef struct
   gint64 animStartTime; // gdk_frame_clock_get_frame_time for the start of the animation
   gint64 animOffsetTime; // widget offset measured in units of time. 0=fully hidden, GRAPHENE_SHEET_TRANSITION_TIME=fully shown
   guint tickCallbackID;
+  gint animStartWidth;
+  gint animStartHeight;
   
 } GrapheneMaterialBoxSheetInfo;
 
@@ -174,6 +176,7 @@ static void graphene_material_box_remove(GtkContainer *self_, GrapheneMaterialSh
 // https://github.com/warrenm/AHEasing/blob/master/AHEasing/easing.c
 gfloat cubic_ease_out(gfloat p)
 {
+  return p;
 	gfloat f = (p - 1);
 	return f * f * f + 1;
 }
@@ -195,13 +198,8 @@ static void graphene_material_box_size_allocate(GtkWidget *self_, GtkAllocation 
     GtkRequisition childRequisition = {0};
     gtk_widget_get_preferred_size(GTK_WIDGET(sheetInfo->sheet), &childRequisition, NULL);
 
-    gdouble delta = 0;
-    
-    if(sheetInfo->location != GRAPHENE_MATERIAL_BOX_LOCATION_CENTER)
-    {
-      delta = MIN(MAX((gdouble)sheetInfo->animOffsetTime / GRAPHENE_SHEET_TRANSITION_TIME, 0), 1);
-      delta = cubic_ease_out(delta);
-    }
+    gdouble deltaLinear = MIN(MAX((gdouble)sheetInfo->animOffsetTime / GRAPHENE_SHEET_TRANSITION_TIME, 0), 1);
+    gdouble delta = cubic_ease_out(deltaLinear);
 
     GtkAllocation childAllocation = {0};
     if(sheetInfo->location == GRAPHENE_MATERIAL_BOX_LOCATION_LEFT)
@@ -233,6 +231,7 @@ static void graphene_material_box_size_allocate(GtkWidget *self_, GtkAllocation 
       // TODO: Animate center widget (fade in using opacity)
       childAllocation.width = allocation->width;
       childAllocation.height = allocation->height;
+      gtk_widget_set_opacity(GTK_WIDGET(sheetInfo->sheet), deltaLinear);
     }
     
     // if(!gtk_widget_get_has_window(GTK_WIDGET(self)))
@@ -262,7 +261,17 @@ static void graphene_material_box_get_preferred_width(GtkWidget *self_, gint *mi
     }
   }
   
-  gtk_widget_get_preferred_width(sheetInfo->sheet, minimum, natural);
+  gtk_widget_get_preferred_width(GTK_WIDGET(sheetInfo->sheet), minimum, natural);
+  
+  if(sheetInfo->animOffsetTime < GRAPHENE_SHEET_TRANSITION_TIME)
+  {
+    // Transitions the size from whatever it was before to the new minimum
+    gdouble delta = MIN(MAX((gdouble)sheetInfo->animOffsetTime / GRAPHENE_SHEET_TRANSITION_TIME, 0), 1);
+    delta = cubic_ease_out(delta);
+    gdouble diff = (*minimum) - sheetInfo->animStartWidth;
+    *minimum = sheetInfo->animStartWidth + (diff * delta);
+    *natural = sheetInfo->animStartWidth + (diff * delta);
+  }
 }
 
 static void graphene_material_box_get_preferred_height(GtkWidget *self_, gint *minimum, gint *natural)
@@ -282,7 +291,17 @@ static void graphene_material_box_get_preferred_height(GtkWidget *self_, gint *m
     }
   }
   
-  gtk_widget_get_preferred_height(sheetInfo->sheet, minimum, natural);
+  gtk_widget_get_preferred_height(GTK_WIDGET(sheetInfo->sheet), minimum, natural);
+  
+  if(sheetInfo->animOffsetTime < GRAPHENE_SHEET_TRANSITION_TIME)
+  {
+    // Transitions the size from whatever it was before to the new minimum
+    gdouble delta = MIN(MAX((gdouble)sheetInfo->animOffsetTime / GRAPHENE_SHEET_TRANSITION_TIME, 0), 1);
+    delta = cubic_ease_out(delta);
+    gdouble diff = (*minimum) - sheetInfo->animStartHeight;
+    *minimum = sheetInfo->animStartHeight + (diff * delta);
+    *natural = sheetInfo->animStartHeight + (diff * delta);
+  }
 }
 
 static void graphene_material_box_forall(GtkContainer *self_, gboolean include_internals, GtkCallback callback, gpointer callback_data)
@@ -455,6 +474,11 @@ void graphene_material_box_show_sheet(GrapheneMaterialBox *self, GrapheneMateria
     GdkFrameClock *frameClock = gtk_widget_get_frame_clock(GTK_WIDGET(sheet));
     sheetInfo->animStartTime = gdk_frame_clock_get_frame_time(frameClock) - sheetInfo->animOffsetTime;
     
+    GtkAllocation alloc;
+    gtk_widget_get_allocation(GTK_WIDGET(self), &alloc);
+    sheetInfo->animStartWidth = alloc.width;
+    sheetInfo->animStartHeight = alloc.height;
+    
     if(sheetInfo->tickCallbackID > 0)
       gtk_widget_remove_tick_callback(GTK_WIDGET(sheet), sheetInfo->tickCallbackID);
     sheetInfo->tickCallbackID = gtk_widget_add_tick_callback(GTK_WIDGET(sheet), (GtkTickCallback)sheet_animate_open, sheetInfo, NULL);
@@ -492,6 +516,11 @@ void graphene_material_box_hide_sheet(GrapheneMaterialBox *self, GrapheneMateria
     GdkFrameClock *frameClock = gtk_widget_get_frame_clock(GTK_WIDGET(sheet));
     sheetInfo->animStartTime = gdk_frame_clock_get_frame_time(frameClock) - (GRAPHENE_SHEET_TRANSITION_TIME-sheetInfo->animOffsetTime);
     
+    GtkAllocation alloc;
+    gtk_widget_get_allocation(GTK_WIDGET(self), &alloc);
+    sheetInfo->animStartWidth = alloc.width;
+    sheetInfo->animStartHeight = alloc.height;
+
     if(sheetInfo->tickCallbackID > 0)
       gtk_widget_remove_tick_callback(GTK_WIDGET(sheet), sheetInfo->tickCallbackID);
     sheetInfo->tickCallbackID = gtk_widget_add_tick_callback(GTK_WIDGET(sheet), (GtkTickCallback)sheet_animate_close, sheetInfo, NULL);

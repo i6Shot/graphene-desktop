@@ -74,7 +74,7 @@ static void graphene_settings_applet_init(GrapheneSettingsApplet *self)
   gtk_container_add(GTK_CONTAINER(self), GTK_WIDGET(box));
   gtk_widget_show_all(GTK_WIDGET(self));
   
-  g_signal_connect(self, "button_press_event", G_CALLBACK(applet_on_click), NULL);
+  g_signal_connect(self, "clicked", G_CALLBACK(applet_on_click), NULL);
 }
 
 static gboolean applet_on_click(GrapheneSettingsApplet *self, GdkEvent *event)
@@ -111,8 +111,9 @@ static void popup_on_show(GrapheneSettingsPopup *self);
 static void popup_on_hide(GrapheneSettingsPopup *self);
 static void popup_on_mapped(GrapheneSettingsPopup *self);
 static void popup_on_monitors_changed(GrapheneSettingsPopup *self, GdkScreen *screen);
-static gboolean popup_on_mouse_event(GrapheneSettingsPopup *self, GdkEventButton *event);
+static void popup_on_size_allocate(GrapheneSettingsPopup *self, GtkAllocation *alloc);
 static void popup_update_size(GrapheneSettingsPopup *self);
+static gboolean popup_on_mouse_event(GrapheneSettingsPopup *self, GdkEventButton *event);
 static void popup_on_logout_button_clicked(GrapheneSettingsPopup *self, GtkButton *button);
 static void popup_on_vertical_scrolled(GrapheneSettingsPopup *self, GtkAdjustment *vadj);
 static void enum_settings_widgets(GrapheneSettingsPopup *self);
@@ -139,8 +140,9 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
   g_signal_connect(self, "show", G_CALLBACK(popup_on_show), NULL);
   g_signal_connect(self, "hide", G_CALLBACK(popup_on_hide), NULL);
   g_signal_connect(self, "map", G_CALLBACK(popup_on_mapped), NULL);
+  g_signal_connect(self, "size-allocate", G_CALLBACK(popup_on_size_allocate), NULL);
   g_signal_connect(self, "button_press_event", G_CALLBACK(popup_on_mouse_event), NULL);
-  g_signal_connect(gtk_widget_get_screen(GTK_WIDGET(self)), "monitors-changed", G_CALLBACK(popup_on_monitors_changed), NULL);
+  g_signal_connect_swapped(gtk_widget_get_screen(GTK_WIDGET(self)), "monitors-changed", G_CALLBACK(popup_on_monitors_changed), self);
   gtk_window_set_role(GTK_WINDOW(self), "GraphenePopup"); // Tells graphene-wm this is a popup
   gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(self)), "graphene-settings-popup");
   
@@ -220,20 +222,31 @@ static void popup_on_monitors_changed(GrapheneSettingsPopup *self, GdkScreen *sc
   popup_update_size(self);
 }
 
+static void popup_on_size_allocate(GrapheneSettingsPopup *self, GtkAllocation *alloc)
+{
+  GdkRectangle rect;
+  gdk_screen_get_monitor_workarea(gtk_widget_get_screen(GTK_WIDGET(self)), graphene_panel_get_monitor(graphene_panel_get_default()), &rect);
+  gtk_window_move(GTK_WINDOW(self), rect.x + rect.width - alloc->width, rect.y);
+}
+
+static void popup_update_size(GrapheneSettingsPopup *self)
+{  
+  GdkWindow *window = gtk_widget_get_window(GTK_WIDGET(self));
+  if(window)
+  {
+    GdkRectangle rect;
+    GtkAllocation alloc;
+    gdk_screen_get_monitor_workarea(gtk_widget_get_screen(GTK_WIDGET(self)), graphene_panel_get_monitor(graphene_panel_get_default()), &rect);
+    gtk_widget_get_allocation(GTK_WIDGET(self), &alloc);
+    gdk_window_move_resize(window, rect.x + rect.width - alloc.width, rect.y, alloc.width, rect.height);
+  }
+}
+
 static gboolean popup_on_mouse_event(GrapheneSettingsPopup *self, GdkEventButton *event)
 {
   if(gdk_window_get_toplevel(event->window) != gtk_widget_get_window(GTK_WIDGET(self)))
     gtk_widget_hide(GTK_WIDGET(self));
   return GDK_EVENT_PROPAGATE;
-}
-
-static void popup_update_size(GrapheneSettingsPopup *self)
-{
-  GdkRectangle rect;
-  gdk_screen_get_monitor_geometry(gtk_widget_get_screen(GTK_WIDGET(self)), graphene_panel_get_monitor(graphene_panel_get_default()), &rect);
-  GdkWindow *window = gtk_widget_get_window(GTK_WIDGET(self));
-  if(window)
-    gdk_window_move_resize(window, rect.x + rect.width - (rect.width/6), rect.y, rect.width/6, rect.height-graphene_panel_get_height(graphene_panel_get_default()));
 }
 
 static void popup_on_logout_button_clicked(GrapheneSettingsPopup *self, GtkButton *button)
@@ -267,7 +280,7 @@ static void enum_settings_widgets(GrapheneSettingsPopup *self)
   add_setting_widget(self, "Network",          "network-workgroup",                TRUE,  "network",        FALSE);
   add_setting_widget(self, "Power",            "gnome-power-manager",              FALSE, "power",          FALSE);
   add_setting_widget(self, "Printers",         "printer",                          FALSE, "printers",       FALSE);
-  add_setting_widget(self, "Sound",            "sound",                            TRUE,  "sound",          FALSE);
+  add_setting_widget(self, "Sound",            "multimedia-volume-control",        TRUE,  "sound",          FALSE);
   add_setting_widget(self, "Wacom Tablet",     "input-tablet",                     FALSE, "wacom",          TRUE);
   add_settings_category_label(self, "System");
   add_setting_widget(self, "Date & Time",      "preferences-system-time",          FALSE, "datetime",       FALSE);
@@ -298,6 +311,7 @@ static void add_setting_widget(GrapheneSettingsPopup *self, const gchar *title, 
   GtkBox *buttonBox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 7));
   gtk_box_pack_start(buttonBox, GTK_WIDGET(gtk_image_new_from_icon_name(iconName, GTK_ICON_SIZE_DND)), TRUE, TRUE, 7);
   GtkLabel *label = GTK_LABEL(gtk_label_new(title));
+  gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(label)), "settings-widget-label");
   gtk_label_set_yalign(label, 0.5);
   gtk_box_pack_start(buttonBox, GTK_WIDGET(label), TRUE, TRUE, 0);
   gtk_widget_set_halign(GTK_WIDGET(buttonBox), GTK_ALIGN_START);

@@ -88,6 +88,9 @@ scrollbar {
   padding-left: 2px;
   padding-right: 2px;
 }
+.settings-widget-label {
+  padding-right: 60px;
+}
 .graphene-settings-view .group-label, .graphene-applist-view .group-label {
   color: @fg-highlight;
   padding: 1em 0 1em 2em;

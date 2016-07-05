@@ -59,7 +59,7 @@ static void graphene_launcher_applet_init(GrapheneLauncherApplet *self)
   
   // Init button
   gtk_button_set_label(GTK_BUTTON(self), "");
-  g_signal_connect(self, "button_press_event", G_CALLBACK(applet_on_click), NULL);
+  g_signal_connect(self, "clicked", G_CALLBACK(applet_on_click), NULL);
   
   // Get the icon for the launcher, force it to be the default Adwaita theme open-menu-symbolic
   // TODO: Maybe use the default theme's in the future? Paper's open-menu-symbolic looks like Google's material design
@@ -130,8 +130,9 @@ static void popup_on_show(GrapheneLauncherPopup *self);
 static void popup_on_hide(GrapheneLauncherPopup *self);
 static void popup_on_mapped(GrapheneLauncherPopup *self);
 static void popup_on_monitors_changed(GrapheneLauncherPopup *self, GdkScreen *screen);
-static gboolean popup_on_mouse_event(GrapheneLauncherPopup *self, GdkEventButton *event);
+static void popup_on_size_allocate(GrapheneLauncherPopup *self, GtkAllocation *alloc);
 static void popup_update_size(GrapheneLauncherPopup *self);
+static gboolean popup_on_mouse_event(GrapheneLauncherPopup *self, GdkEventButton *event);
 static void popup_on_search_changed(GrapheneLauncherPopup *self, GtkSearchEntry *searchBar);
 static void popup_on_search_enter(GrapheneLauncherPopup *self, GtkSearchEntry *searchBar);
 static gboolean popup_on_key_event(GrapheneLauncherPopup *self, GdkEvent *event);
@@ -159,10 +160,11 @@ static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
   g_signal_connect(self, "show", G_CALLBACK(popup_on_show), NULL);
   g_signal_connect(self, "hide", G_CALLBACK(popup_on_hide), NULL);
   g_signal_connect(self, "map", G_CALLBACK(popup_on_mapped), NULL);
+  g_signal_connect(self, "size-allocate", G_CALLBACK(popup_on_size_allocate), NULL);
   g_signal_connect(self, "button_press_event", G_CALLBACK(popup_on_mouse_event), NULL);
   g_signal_connect(self, "key_press_event", G_CALLBACK(popup_on_key_event), NULL);
   g_signal_connect(self, "key_release_event", G_CALLBACK(popup_on_key_event), NULL);
-  g_signal_connect(gtk_widget_get_screen(GTK_WIDGET(self)), "monitors-changed", G_CALLBACK(popup_on_monitors_changed), NULL);
+  g_signal_connect_swapped(gtk_widget_get_screen(GTK_WIDGET(self)), "monitors-changed", G_CALLBACK(popup_on_monitors_changed), self);
   gtk_window_set_role(GTK_WINDOW(self), "GraphenePopup");
   gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(self)), "graphene-launcher-popup");
   
@@ -233,20 +235,31 @@ static void popup_on_monitors_changed(GrapheneLauncherPopup *self, GdkScreen *sc
   popup_update_size(self);
 }
 
+static void popup_on_size_allocate(GrapheneLauncherPopup *self, GtkAllocation *alloc)
+{
+  GdkRectangle rect;
+  gdk_screen_get_monitor_workarea(gtk_widget_get_screen(GTK_WIDGET(self)), graphene_panel_get_monitor(graphene_panel_get_default()), &rect);
+  gtk_window_move(GTK_WINDOW(self), rect.x, rect.y);
+}
+
+static void popup_update_size(GrapheneLauncherPopup *self)
+{
+  GdkWindow *window = gtk_widget_get_window(GTK_WIDGET(self));
+  if(window)
+  {
+    GdkRectangle rect;
+    GtkAllocation alloc;
+    gdk_screen_get_monitor_workarea(gtk_widget_get_screen(GTK_WIDGET(self)), graphene_panel_get_monitor(graphene_panel_get_default()), &rect);
+    gtk_widget_get_allocation(GTK_WIDGET(self), &alloc);
+    gdk_window_move_resize(window, rect.x, rect.y, alloc.width, rect.height);
+  }
+}
+
 static gboolean popup_on_mouse_event(GrapheneLauncherPopup *self, GdkEventButton *event)
 {
   if(gdk_window_get_toplevel(event->window) != gtk_widget_get_window(GTK_WIDGET(self)))
     gtk_widget_hide(GTK_WIDGET(self));
   return GDK_EVENT_PROPAGATE;
-}
-
-static void popup_update_size(GrapheneLauncherPopup *self)
-{
-  GdkRectangle rect;
-  gdk_screen_get_monitor_geometry(gtk_widget_get_screen(GTK_WIDGET(self)), graphene_panel_get_monitor(graphene_panel_get_default()), &rect);
-  GdkWindow *window = gtk_widget_get_window(GTK_WIDGET(self));
-  if(window)
-    gdk_window_move_resize(window, rect.x, rect.y, rect.width/6, rect.height-graphene_panel_get_height(graphene_panel_get_default()));
 }
 
 static void popup_on_search_changed(GrapheneLauncherPopup *self, GtkSearchEntry *searchBar)
