@@ -4,8 +4,10 @@ add_custom_command(
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-file(GLOB panel_SRC "*.c" "*.h" "*/*.c" "*/*.h")
-add_executable(graphene-panel ${panel_SRC} "notifications-dbus-iface.c" "notifications-dbus-iface.h")
+add_custom_command(OUTPUT "${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.c" DEPENDS status-notifier-codegen)
+
+file(GLOB panel_SRC "*.c" "*/*.c")
+add_executable(graphene-panel ${panel_SRC} "notifications-dbus-iface.c" "${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.c")
 pkg_check_modules(GTK3 REQUIRED gtk+-3.0>=3.10)
 pkg_check_modules(LIBPULSE REQUIRED libpulse>=8.0)
 pkg_check_modules(LIBPULSEGLIB REQUIRED libpulse-mainloop-glib>=8.0)

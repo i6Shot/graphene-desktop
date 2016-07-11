@@ -47,8 +47,8 @@ scrollbar {
 
 
 .graphene-applet {
-  padding-left: 10px;
-  padding-right: 10px;
+  padding-left: 6px;
+  padding-right: 6px;
 }
 
 .graphene-launcher-applet {
@@ -119,6 +119,7 @@ scrollbar {
 }
 
 .graphene-clock-applet {
+  padding-left: 10px;
   padding-right: 20px;
 }
 

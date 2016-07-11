@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include "client.h"
 #include "util.h"
+#include "status-notifier-watcher.h"
 
 #define SESSION_MANAGER_APP_ID "org.gnome.SessionManager"
 #define INHIBITOR_OBJECT_PATH "/org/gnome/SessionManager/Inhibitor"
@@ -82,6 +83,8 @@ typedef struct
 
   GHashTable *inhibitors;
   guint32 inhibitCookieCounter;
+  
+  GrapheneStatusNotifierWatcher *statusNotifierWatcher;
   
 } Session;
 
@@ -190,7 +193,9 @@ static void shutdown(GApplication *application, gpointer userdata)
   GDBusConnection *connection = g_application_get_dbus_connection(self->app);
   if(self->interfaceRegistrationId)
     g_dbus_connection_unregister_object(connection, self->interfaceRegistrationId);
-    
+  
+  g_clear_object(&self->statusNotifierWatcher);
+  
   g_list_free_full(self->clients, g_object_unref);
   g_hash_table_unref(self->inhibitors);
   g_hash_table_unref(self->autostarts);
@@ -236,6 +241,7 @@ static gboolean run_phase(guint phase)
       break;
     case SESSION_PHASE_INITIALIZATION: // Important GNOME stuff
       run_autostart_phase("Initialization");
+      self->statusNotifierWatcher = graphene_status_notifier_watcher_new();
       waitTime = 10;
       break;
     case SESSION_PHASE_WINDOWMANAGER: // This starts graphene-wm

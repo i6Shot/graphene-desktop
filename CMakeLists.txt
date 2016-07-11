@@ -28,26 +28,30 @@ pkg_check_modules(GLIB2 REQUIRED glib-2.0>=2.10)
 link_libraries(${GLIB2_LIBRARIES})
 include_directories(${GLIB2_INCLUDE_DIRS})
 
+# status-notifier-dbus-ifaces is used by multiple targets, so put the generator here
+add_custom_command(
+  OUTPUT ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.c ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.h
+  COMMAND gdbus-codegen --interface-prefix org --c-namespace DBus --generate-c-code status-notifier-dbus-ifaces ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.xml
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+  DEPENDS ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.xml
+)
+add_custom_target(status-notifier-codegen DEPENDS ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.c ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.h)
+
 # Setup target for the window manager
-file(GLOB wm_SRC "wm/*.c" "wm/*.h")
+file(GLOB wm_SRC "wm/*.c")
 add_executable(graphene-wm ${wm_SRC})
 pkg_check_modules(LIBMUTTER REQUIRED libmutter>=3.00)
 target_link_libraries(graphene-wm ${LIBMUTTER_LIBRARIES})
 target_include_directories(graphene-wm PRIVATE ${LIBMUTTER_INCLUDE_DIRS})
 
 # Setup target for the session manager
-file(GLOB session_SRC "session/*.c" "session/*.h")
-add_executable(graphene-session ${session_SRC})
-pkg_check_modules(GIOUNIX2 REQUIRED gio-unix-2.0>=2.10)
-target_link_libraries(graphene-session ${GIOUNIX2_LIBRARIES})
-target_include_directories(graphene-session PRIVATE ${GIOUNIX2_INCLUDE_DIRS})
+add_subdirectory(session)
 
 # Setup target for the panel executable
 add_subdirectory(panel)
 
 # Install
 install(TARGETS graphene-wm DESTINATION ${GRAPHENE_DATA_DIR})
-install(TARGETS graphene-session DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)
 # install(TARGETS graphene DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
 install(DIRECTORY data/ DESTINATION ${GRAPHENE_DATA_DIR}) # Slash after 'data' makes it only install contents of directory
 # install(FILES ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.gir DESTINATION ${CMAKE_INSTALL_PREFIX}/share/gir-1.0)

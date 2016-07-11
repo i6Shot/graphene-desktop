@@ -24,3 +24,5 @@ CTestTestfile.cmake
 config.h
 graphene-panel.desktop
 graphene-wm.desktop
+status-notifier-dbus-ifaces.c
+status-notifier-dbus-ifaces.h
