@@ -20,6 +20,8 @@
 #include "background.h"
 #include "dialog.h"
 #include <meta/meta-shadow-factory.h>
+#include <meta/display.h>
+#include <meta/keybindings.h>
 
 // GrapheneWM class (private)
 struct _GrapheneWM {
@@ -100,7 +102,8 @@ static const MetaPluginInfo * plugin_info(MetaPlugin *plugin);
 // static void launch_rundialog(MetaDisplay *display, MetaScreen *screen,
 //                      MetaWindow *window, ClutterKeyEvent *event,
 //                      MetaKeyBinding *binding);
-                     
+static void graphene_wm_init_keybindings(GrapheneWM *self);
+               
 G_DEFINE_TYPE (GrapheneWM, graphene_wm, META_TYPE_PLUGIN);
 
 static void graphene_wm_class_init(GrapheneWMClass *klass)
@@ -176,9 +179,7 @@ static void start(MetaPlugin *plugin)
   clutter_actor_show(screenGroup);
   clutter_actor_show(stage);
   
-  // meta_keybindings_set_custom_handler("panel-main-menu", launch_rundialog);
-  // meta_keybindings_set_custom_handler("switch-windows", switch_windows);
-  // meta_keybindings_set_custom_handler("switch-applications", switch_windows);
+  graphene_wm_init_keybindings(GRAPHENE_WM(plugin));
   
   dbus_register(plugin);
 }
@@ -596,4 +597,64 @@ static const MetaPluginInfo * plugin_info(MetaPlugin *plugin)
   };
   
   return &info;
+}
+
+
+
+/*
+ * *** Keybindings ***
+ *
+ * A lot of the basic keybindings are already handled by Mutter, and are attached to
+ * the GSettings path org.gnome.desktop.wm.keybindings. However, some of the default
+ * actions need to be overridden, as well as some new keybindings need to be added,
+ * such as media keys (which used to be supported by gnome-settings-daemon, but
+ * that seems to be deprecated now).
+ */
+
+static void on_panel_main_menu(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
+static void on_key_volume_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
+static void on_key_volume_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
+static void on_key_volume_mute(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
+
+static void graphene_wm_init_keybindings(GrapheneWM *self)
+{
+  GSettings *keybindings = g_settings_new("io.velt.desktop.keybindings");
+  
+  MetaDisplay *display = meta_screen_get_display(meta_plugin_get_screen(META_PLUGIN(self)));
+  
+  meta_keybindings_set_custom_handler("panel-main-menu", (MetaKeyHandlerFunc)on_panel_main_menu, self, NULL);
+  
+  meta_display_add_keybinding(display, "volume-up", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_up, self, NULL);
+  meta_display_add_keybinding(display, "volume-down", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_down, self, NULL);
+  meta_display_add_keybinding(display, "volume-mute", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_mute, self, NULL);
+  
+  // meta_display_add_keybinding(display, "backlight-up", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_up, self, NULL);
+  // meta_display_add_keybinding(display, "backlight-down", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_up, self, NULL);
+  // 
+  // meta_display_add_keybinding(display, "kb-backlight-up", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_up, self, NULL);
+  // meta_display_add_keybinding(display, "kb-backlight-down", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_up, self, NULL);
+
+
+  // meta_keybindings_set_custom_handler("switch-windows", switch_windows);
+  // meta_keybindings_set_custom_handler("switch-applications", switch_windows);
+}
+
+static void on_panel_main_menu(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+  g_message("panel");
+}
+
+static void on_key_volume_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+  g_message("on key volume up");
+}
+
+static void on_key_volume_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+  g_message("on key volume down");
+}
+
+static void on_key_volume_mute(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+  g_message("on key volume mute");
 }

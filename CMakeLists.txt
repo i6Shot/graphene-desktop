@@ -58,10 +58,19 @@ install(DIRECTORY data/ DESTINATION ${GRAPHENE_DATA_DIR}) # Slash after 'data' m
 # install(FILES ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.typelib DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/girepository-1.0)
 install(FILES graphene.desktop DESTINATION ${CMAKE_INSTALL_PREFIX}/share/xsessions)
 
+install(DIRECTORY schemas/ DESTINATION ${CMAKE_INSTALL_PREFIX}/share/glib-2.0/schemas)
+
+if(NOT DONT_COMPILE_SCHEMAS)
+  install(CODE "execute_process(COMMAND make compile-schemas)") # There is probably a better way to do this...
+endif()
+
 # Uninstall target (only works after installing with install_manifest.txt)
 # Removes all files listed in install_manifest.txt, and then removes install_manifest.txt
 # If install_manifest.txt is not available, an error message is printed.
 add_custom_target(uninstall COMMAND { [ -f install_manifest.txt ] && xargs --verbose -d '\\n' rm < install_manifest.txt && rm install_manifest.txt\; } || echo ' *** ERROR: Missing install_manifest.txt: you must install first!' )
+
+# Convenience target to compile glib schemas (usually post-install and post-uninstall)
+add_custom_target(compile-schemas COMMAND glib-compile-schemas \"${CMAKE_INSTALL_PREFIX}/share/glib-2.0/schemas\" )
 
 # Force install - kills running process, runs install
 add_custom_target(finstall COMMAND killall graphene-wm graphene-panel graphene-session nautilus gnome-settings-daemon\; make install )

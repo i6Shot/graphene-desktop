@@ -1,0 +1,36 @@
+<!-- This file is part of graphene-desktop, the desktop environment of VeltOS. -->
+<!-- This file is licensed under WTFPL (http://www.wtfpl.net/). -->
+<!-- GSettings schema file for desktop keybindings, read by the window manager (wm.c). -->
+
+<schemalist>
+  <schema id="io.velt.desktop.keybindings" path="/io/velt/desktop/keybindings/">
+    <key name="volume-up" type="as">
+      <default><![CDATA[['F12']]]></default>
+      <summary>Increase volume</summary>
+    </key>
+    <key name="volume-down" type="as">
+      <default><![CDATA[['F11']]]></default>
+      <summary>Decrease volume</summary>
+    </key>
+    <key name="volume-mute" type="as">
+      <default><![CDATA[['F10']]]></default>
+      <summary>Mute volume</summary>
+    </key>
+    <key name="backlight-up" type="as">
+      <default><![CDATA[['F2']]]></default>
+      <summary>Increase screen brightness</summary>
+    </key>
+    <key name="backlight-down" type="as">
+      <default><![CDATA[['F1']]]></default>
+      <summary>Decrease screen brightness</summary>
+    </key>
+    <key name="kb-backlight-up" type="as">
+      <default><![CDATA[['F6']]]></default>
+      <summary>Increase keyboard brightness if available</summary>
+    </key>
+    <key name="kb-backlight-down" type="as">
+      <default><![CDATA[['F5']]]></default>
+      <summary>Decrease keyboard brightness if available</summary>
+    </key>
+  </schema>
+</schemalist>
