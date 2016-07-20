@@ -22,12 +22,13 @@
 #include <meta/meta-shadow-factory.h>
 #include <meta/display.h>
 #include <meta/keybindings.h>
+#include <glib-unix.h>
 
 // GrapheneWM class (private)
 struct _GrapheneWM {
   MetaPlugin parent;
   MetaBackgroundGroup *BackgroundGroup;
-  const gchar *clientId;
+  gchar *clientId;
   guint dbusNameId;
   GDBusConnection *connection;
   GDBusProxy *smProxy;
@@ -74,7 +75,7 @@ int main(int argc, char **argv)
   meta_init();
   g_unsetenv("NO_AT_BRIDGE");
   g_unsetenv("NO_GAIL");
-    
+  
   return meta_run();
 }
 
@@ -137,10 +138,17 @@ static void graphene_wm_dispose(GObject *gobject)
   G_OBJECT_CLASS(graphene_wm_parent_class)->dispose(gobject);
 }
 
-
+static void on_exit_signal(MetaPlugin *plugin)
+{
+  quit(plugin);
+}
 
 static void start(MetaPlugin *plugin)
 {
+  g_unix_signal_add(SIGTERM, (GSourceFunc)on_exit_signal, plugin);
+  g_unix_signal_add(SIGINT, (GSourceFunc)on_exit_signal, plugin);
+  g_unix_signal_add(SIGHUP, (GSourceFunc)on_exit_signal, plugin);
+  
   /*
   The shadow factory has a bug which causes new shadow classes to not only not be created, but also
   corrupt the "normal" class. The only way I was able to fix this is by directly modifying the factory's hash
@@ -193,7 +201,7 @@ static void dbus_register(MetaPlugin *plugin)
   wm->smProxy = NULL;
   wm->clientProxy = NULL;
   
-  wm->clientId = g_getenv("DESKTOP_AUTOSTART_ID");
+  wm->clientId = g_strdup(g_getenv("DESKTOP_AUTOSTART_ID"));
   g_unsetenv("DESKTOP_AUTOSTART_ID");
   
   wm->dbusNameId = g_bus_own_name(G_BUS_TYPE_SESSION, "io.velt.GrapheneWM", G_BUS_NAME_OWNER_FLAGS_REPLACE,
@@ -205,13 +213,14 @@ static void quit(MetaPlugin *plugin)
 {
   GrapheneWM *wm = GRAPHENE_WM(plugin);
   
-  g_dbus_proxy_call_sync(wm->smProxy,
-                  "UnregisterClient",
-                  g_variant_new ("(o)", wm->clientPath),
-                  G_DBUS_CALL_FLAGS_NONE,
-                  G_MAXINT,
-                  NULL,
-                  NULL);
+  if(wm->smProxy && wm->clientPath)
+    g_dbus_proxy_call_sync(wm->smProxy,
+                    "UnregisterClient",
+                    g_variant_new ("(o)", wm->clientPath),
+                    G_DBUS_CALL_FLAGS_NONE,
+                    G_MAXINT,
+                    NULL,
+                    NULL);
   
   if(wm->clientProxy)
     g_object_unref(wm->clientProxy);
@@ -222,6 +231,7 @@ static void quit(MetaPlugin *plugin)
   if(wm->dbusNameId)
     g_bus_unown_name(wm->dbusNameId);
   wm->dbusNameId = 0;
+  g_free(wm->clientId);
   
   meta_quit(META_EXIT_SUCCESS);
 }
@@ -244,7 +254,7 @@ static void dbus_name_acquired(GDBusConnection *connection, const gchar *name, M
   {
     GVariant *r = g_dbus_proxy_call_sync(wm->smProxy,
                     "RegisterClient",
-                    g_variant_new ("(ss)", "io.velt.GrapheneWM", wm->clientId),
+                    g_variant_new("(ss)", "io.velt.GrapheneWM", wm->clientId ? wm->clientId : ""),
                     G_DBUS_CALL_FLAGS_NONE,
                     G_MAXINT,
                     NULL,
