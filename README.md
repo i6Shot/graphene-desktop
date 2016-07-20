@@ -8,7 +8,7 @@ Installing for Arch
 --------
 
 If you are running Arch Linux, you can install Graphene Desktop by adding
-*vosrepo.velt.io/x86_64* to your list of repositories and installing the
+*cdn.velt.io/vosrepo/$arch* to your list of repositories and installing the
 package *graphene-desktop* via pacman. [Click here for more detail.](https://velt.io/veltos-installation/)
 
 Building Manually
@@ -26,8 +26,8 @@ graphene-desktop uses the following libraries and packages:
     - libwnck3
     - mutter >= 3.20
     - nautilus (optional)
-    - paper-gtk-theme-git >= 297 (AUR or vosrepo.velt.io/x86_64)
-    - paper-icon-theme-git >= 552 (AUR or vosrepo.velt.io/x86_64)
+    - paper-gtk-theme-git >= 297 (AUR or cdn.velt.io/vosrepo/$arch)
+    - paper-icon-theme-git >= 552 (AUR or cdn.velt.io/vosrepo/$arch)
 
 All of these are available from Arch's official repositories, the AUR,
 or the vos repository. For any other Linux distros, you're on your own.
@@ -45,7 +45,7 @@ Download/clone this repo and
     sudo make all install
 ```
 
-graphene-desktop's data files (including panel applets) are stored in /usr/share/graphene.
+graphene-desktop's data files are stored in /usr/share/graphene.
 All files here are customizable, however know that **running "sudo make install"
 will overwrite any custom changes made to that directory.**
 
