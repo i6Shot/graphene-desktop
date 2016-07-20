@@ -23,6 +23,7 @@ graphene-desktop uses the following libraries and packages:
     - gnome-menus
     - gtk+-3.0 >= 3.20
     - libpulse
+    - libsettings (vos repo or github)
     - libwnck3
     - mutter >= 3.20
     - nautilus (optional)

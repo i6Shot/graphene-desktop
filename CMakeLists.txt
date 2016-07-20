@@ -7,7 +7,7 @@ project(graphene-desktop)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 set(GRAPHENE_VERSION 0.2.5)
-set(GRAPHENE_DEBUG FALSE)
+set(GRAPHENE_DEBUG TRUE)
 
 # Assume the user wants to install Graphene to /usr unless otherwise specified
 # with the -DCMAKE_INSTALL_PREFIX=<path> flag to cmake. http://stackoverflow.com/a/16076855
@@ -41,8 +41,10 @@ add_custom_target(status-notifier-codegen DEPENDS ${PROJECT_SOURCE_DIR}/status-n
 file(GLOB wm_SRC "wm/*.c")
 add_executable(graphene-wm ${wm_SRC})
 pkg_check_modules(LIBMUTTER REQUIRED libmutter>=3.00)
-target_link_libraries(graphene-wm ${LIBMUTTER_LIBRARIES})
-target_include_directories(graphene-wm PRIVATE ${LIBMUTTER_INCLUDE_DIRS})
+pkg_check_modules(LIBPULSEGLIB REQUIRED libpulse-mainloop-glib>=8.0)
+pkg_check_modules(LIBSETTINGS REQUIRED libsettings)
+target_link_libraries(graphene-wm ${LIBMUTTER_LIBRARIES} ${LIBPULSEGLIB_LIBRARIES} ${LIBSETTINGS_LIBRARIES})
+target_include_directories(graphene-wm PRIVATE ${LIBMUTTER_INCLUDE_DIRS} ${LIBPULSEGLIB_INCLUDE_DIRS} ${LIBSETTINGS_INCLUDE_DIRS})
 
 # Setup target for the session manager
 add_subdirectory(session)
