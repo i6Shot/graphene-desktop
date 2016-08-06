@@ -490,7 +490,7 @@ static const gchar * register_client(const gchar *sender, const gchar *appId, co
   {
     GDBusConnection *connection = g_application_get_dbus_connection(self->app);
     g_application_hold(self->app);
-    client = graphene_session_client_new(connection, (g_strcmp0(startupId, "") == 0) ? NULL : startupId);
+    client = graphene_session_client_new(connection, NULL);
     g_object_connect(client,
       "signal::complete", on_client_complete, NULL,
       "signal::end-session-response", on_client_end_session_response, NULL, NULL);
