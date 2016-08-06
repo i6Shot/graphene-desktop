@@ -336,6 +336,8 @@ void graphene_session_client_register(GrapheneSessionClient *self, const gchar *
   if(!self->objectPath)
     self->objectPath = g_strdup_printf("%s%s", CLIENT_OBJECT_PATH, self->id);
   
+  g_debug("Registering client '%s' with sender '%s', appId '%s', and objectPath '%s'", self->id, sender, appId, self->objectPath);
+  
   if(!self->objectRegistrationId)
   {
     self->objectRegistrationId = g_dbus_connection_register_object(self->connection, self->objectPath, ClientInterfaceInfo->interfaces[0], &ClientInterfaceCallbacks, self, NULL, &error);

@@ -30,6 +30,7 @@
 #include "client.h"
 #include "util.h"
 #include "status-notifier-watcher.h"
+#include <stdio.h>
 
 #define SESSION_MANAGER_APP_ID "org.gnome.SessionManager"
 #define INHIBITOR_OBJECT_PATH "/org/gnome/SessionManager/Inhibitor"
@@ -132,6 +133,10 @@ static Session *self;
 
 int main(int argc, char **argv)
 {
+  // TEMP debug: Sends all output and error to a log file
+  freopen("~/.graphene.log","a",stdout);
+  freopen("~/.graphene.log","a",stderr);
+  
   // Make sure X is running before starting anything
   if(g_getenv("DISPLAY") == NULL)
   {
