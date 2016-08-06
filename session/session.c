@@ -613,7 +613,7 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
   {
     if(g_strcmp0(methodName, "RegisterClient") == 0)
     {
-      gchar *appId, *startupId;
+      gchar *appId = NULL, *startupId = NULL;
       g_variant_get(parameters, "(ss)", &appId, &startupId);
       const gchar *clientObjectPath = register_client(sender, appId, startupId);
       g_free(appId);
@@ -623,7 +623,7 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
     }
     else if(g_strcmp0(methodName, "UnregisterClient") == 0)
     {
-      gchar *clientObjectPath;
+      gchar *clientObjectPath = NULL;
       g_variant_get(parameters, "(o)", &clientObjectPath);
       unregister_client(clientObjectPath);
       g_free(clientObjectPath);
@@ -664,7 +664,7 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
     }
     else if(g_strcmp0(methodName, "Inhibit") == 0)
     {
-      gchar *appId, *reason;
+      gchar *appId = NULL, *reason = NULL;
       guint32 xId, flags;
       g_variant_get(parameters, "(susu)", &appId, &xId, &reason, &flags);
       guint32 cookie = inhibit(sender, appId, xId, reason, flags);

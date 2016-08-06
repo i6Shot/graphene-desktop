@@ -20,18 +20,24 @@
 #include "background.h"
 #include "dialog.h"
 #include <meta/meta-shadow-factory.h>
+#include <meta/display.h>
+#include <meta/keybindings.h>
+#include <libsettings/sound.h>
+#include <pulse/glib-mainloop.h>
+#include <glib-unix.h>
 
 // GrapheneWM class (private)
 struct _GrapheneWM {
   MetaPlugin parent;
   MetaBackgroundGroup *BackgroundGroup;
-  const gchar *clientId;
+  gchar *clientId;
   guint dbusNameId;
   GDBusConnection *connection;
   GDBusProxy *smProxy;
   gchar *clientPath;
   GDBusProxy *clientProxy;
   guint interfaceRegistrationId;
+  SoundSettings *soundSettings;
 };
 
 // Structs copied from meta-shadow-factory.c (commit a191554 on Jul 6, 2015)
@@ -72,7 +78,7 @@ int main(int argc, char **argv)
   meta_init();
   g_unsetenv("NO_AT_BRIDGE");
   g_unsetenv("NO_GAIL");
-    
+  
   return meta_run();
 }
 
@@ -100,7 +106,8 @@ static const MetaPluginInfo * plugin_info(MetaPlugin *plugin);
 // static void launch_rundialog(MetaDisplay *display, MetaScreen *screen,
 //                      MetaWindow *window, ClutterKeyEvent *event,
 //                      MetaKeyBinding *binding);
-                     
+static void graphene_wm_init_keybindings(GrapheneWM *self);
+               
 G_DEFINE_TYPE (GrapheneWM, graphene_wm, META_TYPE_PLUGIN);
 
 static void graphene_wm_class_init(GrapheneWMClass *klass)
@@ -134,10 +141,17 @@ static void graphene_wm_dispose(GObject *gobject)
   G_OBJECT_CLASS(graphene_wm_parent_class)->dispose(gobject);
 }
 
-
+static void on_exit_signal(MetaPlugin *plugin)
+{
+  quit(plugin);
+}
 
 static void start(MetaPlugin *plugin)
 {
+  g_unix_signal_add(SIGTERM, (GSourceFunc)on_exit_signal, plugin);
+  g_unix_signal_add(SIGINT, (GSourceFunc)on_exit_signal, plugin);
+  g_unix_signal_add(SIGHUP, (GSourceFunc)on_exit_signal, plugin);
+  
   /*
   The shadow factory has a bug which causes new shadow classes to not only not be created, but also
   corrupt the "normal" class. The only way I was able to fix this is by directly modifying the factory's hash
@@ -176,9 +190,7 @@ static void start(MetaPlugin *plugin)
   clutter_actor_show(screenGroup);
   clutter_actor_show(stage);
   
-  // meta_keybindings_set_custom_handler("panel-main-menu", launch_rundialog);
-  // meta_keybindings_set_custom_handler("switch-windows", switch_windows);
-  // meta_keybindings_set_custom_handler("switch-applications", switch_windows);
+  graphene_wm_init_keybindings(GRAPHENE_WM(plugin));
   
   dbus_register(plugin);
 }
@@ -192,7 +204,7 @@ static void dbus_register(MetaPlugin *plugin)
   wm->smProxy = NULL;
   wm->clientProxy = NULL;
   
-  wm->clientId = g_getenv("DESKTOP_AUTOSTART_ID");
+  wm->clientId = g_strdup(g_getenv("DESKTOP_AUTOSTART_ID"));
   g_unsetenv("DESKTOP_AUTOSTART_ID");
   
   wm->dbusNameId = g_bus_own_name(G_BUS_TYPE_SESSION, "io.velt.GrapheneWM", G_BUS_NAME_OWNER_FLAGS_REPLACE,
@@ -204,13 +216,14 @@ static void quit(MetaPlugin *plugin)
 {
   GrapheneWM *wm = GRAPHENE_WM(plugin);
   
-  g_dbus_proxy_call_sync(wm->smProxy,
-                  "UnregisterClient",
-                  g_variant_new ("(o)", wm->clientPath),
-                  G_DBUS_CALL_FLAGS_NONE,
-                  G_MAXINT,
-                  NULL,
-                  NULL);
+  if(wm->smProxy && wm->clientPath)
+    g_dbus_proxy_call_sync(wm->smProxy,
+                    "UnregisterClient",
+                    g_variant_new ("(o)", wm->clientPath),
+                    G_DBUS_CALL_FLAGS_NONE,
+                    G_MAXINT,
+                    NULL,
+                    NULL);
   
   if(wm->clientProxy)
     g_object_unref(wm->clientProxy);
@@ -221,6 +234,9 @@ static void quit(MetaPlugin *plugin)
   if(wm->dbusNameId)
     g_bus_unown_name(wm->dbusNameId);
   wm->dbusNameId = 0;
+  g_free(wm->clientId);
+  
+  sound_settings_unref(wm->soundSettings);
   
   meta_quit(META_EXIT_SUCCESS);
 }
@@ -243,7 +259,7 @@ static void dbus_name_acquired(GDBusConnection *connection, const gchar *name, M
   {
     GVariant *r = g_dbus_proxy_call_sync(wm->smProxy,
                     "RegisterClient",
-                    g_variant_new ("(ss)", "io.velt.GrapheneWM", wm->clientId),
+                    g_variant_new("(ss)", "io.velt.GrapheneWM", wm->clientId ? wm->clientId : ""),
                     G_DBUS_CALL_FLAGS_NONE,
                     G_MAXINT,
                     NULL,
@@ -584,16 +600,113 @@ static void map(MetaPlugin *plugin, MetaWindowActor *windowActor)
   }
 }
 
+#define WM_VERSION_STRING "1.0.0"
 
 static const MetaPluginInfo * plugin_info(MetaPlugin *plugin)
 {
   static const MetaPluginInfo info = {
     .name = "Graphene Window Manager",
-    .version = "1.0.0",
+    .version = WM_VERSION_STRING,
     .author = "Velt (Aidan Shafran)",
     .license = "GPLv3",
     .description = "Graphene Window Manager for VeltOS"
   };
   
   return &info;
+}
+
+
+
+/*
+ * *** Keybindings ***
+ *
+ * A lot of the basic keybindings are already handled by Mutter, and are attached to
+ * the GSettings path org.gnome.desktop.wm.keybindings. However, some of the default
+ * actions need to be overridden, as well as some new keybindings need to be added,
+ * such as media keys (which used to be supported by gnome-settings-daemon, but
+ * that seems to be deprecated now).
+ */
+
+static void on_panel_main_menu(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
+static void on_key_volume_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
+static void on_key_volume_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
+static void on_key_volume_mute(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
+
+// static void on_sound_settings_event(SoundSettings *settings, SoundSettingsEventType type, SoundDevice *device, void *userdata)
+// {
+//   // g_message("event type: %i", type);
+//   
+//   
+//   switch(type)
+//   {
+//     case SOUND_SETTINGS_EVENT_TYPE_STATE_CHANGED:
+//       g_message("state: %i", sound_settings_get_state(settings));
+//       break;
+//     case SOUND_SETTINGS_EVENT_TYPE_ACTIVE_DEVICE_CHANGED:
+//       g_message("device '%s' is now active", sound_device_get_description(device));
+//       break;
+//     case SOUND_SETTINGS_EVENT_TYPE_DEVICE_CHANGED:
+//       g_message("device '%s' (%i) volume: %f", sound_device_get_description(device), sound_device_get_type(device), sound_device_get_volume(device));
+//       break;
+//     case SOUND_SETTINGS_EVENT_TYPE_DEVICE_ADDED:
+//       g_message("device '%s' (%i) added", sound_device_get_description(device), sound_device_get_type(device));
+//       break;
+//     case SOUND_SETTINGS_EVENT_TYPE_DEVICE_REMOVED:
+//       g_message("device '%s' (%i) removed", sound_device_get_description(device), sound_device_get_type(device));
+//       sound_device_unref(device);
+//       break;
+//   }
+// }
+
+static void graphene_wm_init_keybindings(GrapheneWM *self)
+{
+  pa_proplist *proplist = pa_proplist_new();
+  pa_proplist_sets(proplist, PA_PROP_APPLICATION_NAME, "graphene-window-manager");
+  // pa_proplist_sets(proplist, PA_PROP_APPLICATION_ID, g_application_get_application_id(g_application_get_default()));
+  pa_proplist_sets(proplist, PA_PROP_APPLICATION_ICON_NAME, "multimedia-volume-control-symbolic");
+  pa_proplist_sets(proplist, PA_PROP_APPLICATION_VERSION, WM_VERSION_STRING);
+  
+  pa_glib_mainloop *mainloop = pa_glib_mainloop_new(g_main_context_default());
+  self->soundSettings = sound_settings_init(mainloop, pa_glib_mainloop_get_api(mainloop), proplist, (DestroyPAMainloopNotify)pa_glib_mainloop_free);
+
+  GSettings *keybindings = g_settings_new("io.velt.desktop.keybindings");
+  MetaDisplay *display = meta_screen_get_display(meta_plugin_get_screen(META_PLUGIN(self)));
+  
+  meta_display_add_keybinding(display, "volume-up", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_up, self, NULL);
+  meta_display_add_keybinding(display, "volume-down", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_down, self, NULL);
+  meta_display_add_keybinding(display, "volume-mute", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_mute, self, NULL);
+  
+  // meta_display_add_keybinding(display, "backlight-up", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_up, self, NULL);
+  // meta_display_add_keybinding(display, "backlight-down", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_up, self, NULL);
+  // 
+  // meta_display_add_keybinding(display, "kb-backlight-up", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_up, self, NULL);
+  // meta_display_add_keybinding(display, "kb-backlight-down", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_up, self, NULL);
+
+  // meta_keybindings_set_custom_handler("panel-main-menu", (MetaKeyHandlerFunc)on_panel_main_menu, self, NULL);
+  // meta_keybindings_set_custom_handler("switch-windows", switch_windows);
+  // meta_keybindings_set_custom_handler("switch-applications", switch_windows);
+}
+
+static void on_panel_main_menu(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+  g_message("panel");
+}
+
+static void on_key_volume_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+  SoundDevice *device = sound_settings_get_active_output_device(self->soundSettings);
+  float vol = sound_device_get_volume(device) + 0.08334;
+  sound_device_set_volume(device, (vol > 1) ? 1 : vol);
+}
+
+static void on_key_volume_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+  SoundDevice *device = sound_settings_get_active_output_device(self->soundSettings);
+  sound_device_set_volume(device, sound_device_get_volume(device) - 0.08334);
+}
+
+static void on_key_volume_mute(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+  SoundDevice *device = sound_settings_get_active_output_device(self->soundSettings);
+  sound_device_set_muted(device, !sound_device_get_muted(device));
 }
