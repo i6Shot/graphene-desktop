@@ -635,6 +635,23 @@ static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender
       g_dbus_method_invocation_return_value(invocation, NULL);
       return;
     }
+    else if(g_strcmp0(methodName, "Relaunch") == 0)
+    {
+      gchar *clientName = NULL;
+      g_variant_get(parameters, "(s)", &clientName);
+      
+      GrapheneSessionClient *client = find_client_from_given_info(clientName, clientName, clientName, clientName);
+      if(client)
+      {
+        graphene_session_client_force_next_restart(client);
+        g_dbus_connection_emit_signal(connection, graphene_session_client_get_dbus_name(client), graphene_session_client_get_object_path(client),
+          "org.gnome.SessionManager.ClientPrivate", "Stop", NULL, NULL);
+      }
+
+      g_free(clientName);
+      g_dbus_method_invocation_return_value(invocation, NULL);
+      return;
+    }
     else if(g_strcmp0(methodName, "GetClients") == 0)
     {
       guint count = 0;
@@ -777,6 +794,9 @@ static const gchar *SessionManagerInterfaceXML =
 "    </method>"
 "    <method name='UnregisterClient'>"
 "      <arg type='o' direction='in' name='client_id'/>"
+"    </method>"
+"    <method name='Relaunch'>"
+"      <arg type='s' direction='in' name='name'/>"
 "    </method>"
 "    <method name='Inhibit'>"
 "      <arg type='s' direction='in' name='app_id'/>"
