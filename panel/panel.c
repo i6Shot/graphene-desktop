@@ -289,11 +289,13 @@ static void update_position(GraphenePanel *self)
       panelRect.width = monitorRect.width;
       panelRect.height = self->Height;
       
+      gint scaleFactor = gdk_screen_get_monitor_scale_factor(screen, self->MonitorID);
+      
       struts[0] = 0; struts[1] = 0; struts[2] = 0;
-      struts[3] = (gdk_screen_get_height(screen) - monitorRect.height - monitorRect.y) + self->Height;
+      struts[3] = ((gdk_screen_get_height(screen) - monitorRect.height - monitorRect.y) + self->Height) * scaleFactor;
       struts[4] = 0; struts[5] = 0; struts[6] = 0; struts[7] = 0; struts[8] = 0; struts[9] = 0;
-      struts[10] = monitorRect.x;
-      struts[11] = monitorRect.x + monitorRect.width;
+      struts[10] = monitorRect.x * scaleFactor;
+      struts[11] = (monitorRect.x + monitorRect.width) * scaleFactor;
       break;
     // case GTK_POS_TOP:
     //   newRect.x = monitorRect.x;
