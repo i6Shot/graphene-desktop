@@ -35,6 +35,8 @@
 #define SESSION_MANAGER_APP_ID "org.gnome.SessionManager"
 #define INHIBITOR_OBJECT_PATH "/org/gnome/SessionManager/Inhibitor"
 #define SHOW_ALL_OUTPUT TRUE // Set to TRUE for release; FALSE only shows output from .desktop files with 'Graphene-ShowOutput=true'
+#define USE_LOGFILE TRUE // Set to FALSE for release; TRUE sends stdout/err to LOGFILE_NAME in the home or tmp folder
+#define LOGFILE_NAME ".graphene.log"
 
 typedef enum
 {
@@ -133,10 +135,16 @@ static Session *self;
 
 int main(int argc, char **argv)
 {
-  // TEMP debug: Sends all output and error to a log file
-  freopen("~/.graphene.log","a",stdout);
-  freopen("~/.graphene.log","a",stderr);
-  
+#if USE_LOGFILE
+  // Debug: Sends all output and error to a log file
+  gchar *logfile = g_strdup_printf("%s/%s",
+    (g_getenv("HOME") != NULL) ? g_getenv("HOME") : g_get_tmp_dir(),
+    LOGFILE_NAME);
+  freopen(logfile,"a",stdout);
+  freopen(logfile,"a",stderr);
+  g_free(logfile);
+#endif
+
   // Make sure X is running before starting anything
   if(g_getenv("DISPLAY") == NULL)
   {
