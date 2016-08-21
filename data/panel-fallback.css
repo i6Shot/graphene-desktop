@@ -1,8 +1,0 @@
-@define-color selection white;
-
-.panel {
-  background-color: shade(gray, 1.3);
-}
-GtkLabel {
-  color: @selection;
-}
