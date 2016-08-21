@@ -37,23 +37,12 @@ add_custom_command(
 )
 add_custom_target(status-notifier-codegen DEPENDS ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.c ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.h)
 
-# Setup target for the window manager
-file(GLOB wm_SRC "wm/*.c")
-add_executable(graphene-wm ${wm_SRC})
-pkg_check_modules(LIBMUTTER REQUIRED libmutter>=3.00)
-pkg_check_modules(LIBPULSEGLIB REQUIRED libpulse-mainloop-glib>=8.0)
-pkg_check_modules(LIBSETTINGS REQUIRED libsettings)
-target_link_libraries(graphene-wm ${LIBMUTTER_LIBRARIES} ${LIBPULSEGLIB_LIBRARIES} ${LIBSETTINGS_LIBRARIES})
-target_include_directories(graphene-wm PRIVATE ${LIBMUTTER_INCLUDE_DIRS} ${LIBPULSEGLIB_INCLUDE_DIRS} ${LIBSETTINGS_INCLUDE_DIRS})
-
-# Setup target for the session manager
+# Setup targets
+add_subdirectory(wm)
 add_subdirectory(session)
-
-# Setup target for the panel executable
 add_subdirectory(panel)
 
 # Install
-install(TARGETS graphene-wm DESTINATION ${GRAPHENE_DATA_DIR})
 # install(TARGETS graphene DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
 install(DIRECTORY data/ DESTINATION ${GRAPHENE_DATA_DIR}) # Slash after 'data' makes it only install contents of directory
 # install(FILES ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.gir DESTINATION ${CMAKE_INSTALL_PREFIX}/share/gir-1.0)
