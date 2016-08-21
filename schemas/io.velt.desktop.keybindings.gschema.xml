@@ -12,6 +12,14 @@
       <default><![CDATA[['F11']]]></default>
       <summary>Decrease volume</summary>
     </key>
+    <key name="volume-up-half" type="as">
+      <default><![CDATA[['<Shift>F12']]]></default>
+      <summary>Increase volume by a half step</summary>
+    </key>
+    <key name="volume-down-half" type="as">
+      <default><![CDATA[['<Shift>F11']]]></default>
+      <summary>Decrease volume by half step</summary>
+    </key>
     <key name="volume-mute" type="as">
       <default><![CDATA[['F10']]]></default>
       <summary>Mute volume</summary>

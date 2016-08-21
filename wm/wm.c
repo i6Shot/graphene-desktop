@@ -19,14 +19,15 @@
 #include "wm.h"
 #include "background.h"
 #include "dialog.h"
+#include "common/sound.h"
 #include <meta/meta-shadow-factory.h>
 #include <meta/display.h>
 #include <meta/keybindings.h>
-#include <libsettings/sound.h>
 #include <pulse/glib-mainloop.h>
 #include <glib-unix.h>
 
 #define WM_VERSION_STRING "1.0.0"
+#define WM_VOLUME_NUM_STEPS 12
 
 // GrapheneWM class (private)
 struct _GrapheneWM {
@@ -439,8 +440,6 @@ static void show_logout_dialog(GrapheneWM *wm)
 
 
 
-
-
 /*
  * Window management
  */
@@ -658,6 +657,8 @@ static void graphene_wm_init_keybindings(GrapheneWM *self)
 	
 	meta_display_add_keybinding(display, "volume-up", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_up, self, NULL);
 	meta_display_add_keybinding(display, "volume-down", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_down, self, NULL);
+	meta_display_add_keybinding(display, "volume-up-half", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_up, self, NULL);
+	meta_display_add_keybinding(display, "volume-down-half", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_down, self, NULL);
 	meta_display_add_keybinding(display, "volume-mute", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_mute, self, NULL);
 	
 	// meta_display_add_keybinding(display, "backlight-up", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_up, self, NULL);
@@ -678,15 +679,29 @@ static void on_panel_main_menu(MetaDisplay *display, MetaScreen *screen, MetaWin
 
 static void on_key_volume_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
+	
+	
 	SoundDevice *device = sound_settings_get_active_output_device(self->soundSettings);
-	float vol = sound_device_get_volume(device) + 0.08334;
+	sound_device_set_muted(device, FALSE);
+	
+	float stepSize = 1.0/WM_VOLUME_NUM_STEPS;
+	if(clutter_event_has_shift_modifier((ClutterEvent *)event))
+		stepSize /= 2;
+	
+	float vol = sound_device_get_volume(device) + stepSize;
 	sound_device_set_volume(device, (vol > 1) ? 1 : vol);
 }
 
 static void on_key_volume_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
 	SoundDevice *device = sound_settings_get_active_output_device(self->soundSettings);
-	sound_device_set_volume(device, sound_device_get_volume(device) - 0.08334);
+	sound_device_set_muted(device, FALSE);
+	
+	float stepSize = 1.0/WM_VOLUME_NUM_STEPS;
+	if(clutter_event_has_shift_modifier((ClutterEvent *)event))
+		stepSize /= 2;
+	
+	sound_device_set_volume(device, sound_device_get_volume(device) - stepSize);
 }
 
 static void on_key_volume_mute(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
