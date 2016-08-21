@@ -614,6 +614,10 @@ static void on_panel_main_menu(MetaDisplay *display, MetaScreen *screen, MetaWin
 static void on_key_volume_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
 static void on_key_volume_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
 static void on_key_volume_mute(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
+static void on_key_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
+static void on_key_backlight_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
+static void on_key_kb_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
+static void on_key_kb_backlight_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
 
 // static void on_sound_settings_event(SoundSettings *settings, SoundSettingsEventType type, SoundDevice *device, void *userdata)
 // {
@@ -661,11 +665,11 @@ static void graphene_wm_init_keybindings(GrapheneWM *self)
 	meta_display_add_keybinding(display, "volume-down-half", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_down, self, NULL);
 	meta_display_add_keybinding(display, "volume-mute", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_mute, self, NULL);
 	
-	// meta_display_add_keybinding(display, "backlight-up", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_up, self, NULL);
-	// meta_display_add_keybinding(display, "backlight-down", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_up, self, NULL);
-	// 
-	// meta_display_add_keybinding(display, "kb-backlight-up", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_up, self, NULL);
-	// meta_display_add_keybinding(display, "kb-backlight-down", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_volume_up, self, NULL);
+	meta_display_add_keybinding(display, "backlight-up", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_backlight_up, self, NULL);
+	meta_display_add_keybinding(display, "backlight-down", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_backlight_down, self, NULL);
+	
+	meta_display_add_keybinding(display, "kb-backlight-up", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_kb_backlight_up, self, NULL);
+	meta_display_add_keybinding(display, "kb-backlight-down", keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)on_key_kb_backlight_down, self, NULL);
 
 	// meta_keybindings_set_custom_handler("panel-main-menu", (MetaKeyHandlerFunc)on_panel_main_menu, self, NULL);
 	// meta_keybindings_set_custom_handler("switch-windows", switch_windows);
@@ -679,8 +683,6 @@ static void on_panel_main_menu(MetaDisplay *display, MetaScreen *screen, MetaWin
 
 static void on_key_volume_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
-	
-	
 	SoundDevice *device = sound_settings_get_active_output_device(self->soundSettings);
 	sound_device_set_muted(device, FALSE);
 	
@@ -708,4 +710,68 @@ static void on_key_volume_mute(MetaDisplay *display, MetaScreen *screen, MetaWin
 {
 	SoundDevice *device = sound_settings_get_active_output_device(self->soundSettings);
 	sound_device_set_muted(device, !sound_device_get_muted(device));
+}
+
+static void on_key_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+	if(!self->connection)
+		return;
+	
+	g_dbus_connection_call(self->connection,
+		"org.gnome.SettingsDaemon.Power",
+		"/org/gnome/SettingsDaemon/Power",
+		"org.gnome.SettingsDaemon.Power.Screen",
+		"StepUp",
+		NULL,
+		NULL,
+		G_DBUS_CALL_FLAGS_NONE,
+		-1, NULL, NULL, NULL);
+}
+
+static void on_key_backlight_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+	if(!self->connection)
+		return;
+	
+	g_dbus_connection_call(self->connection,
+		"org.gnome.SettingsDaemon.Power",
+		"/org/gnome/SettingsDaemon/Power",
+		"org.gnome.SettingsDaemon.Power.Screen",
+		"StepDown",
+		NULL,
+		NULL,
+		G_DBUS_CALL_FLAGS_NONE,
+		-1, NULL, NULL, NULL);
+}
+
+static void on_key_kb_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+	if(!self->connection)
+		return;
+	
+	g_dbus_connection_call(self->connection,
+		"org.gnome.SettingsDaemon.Power",
+		"/org/gnome/SettingsDaemon/Power",
+		"org.gnome.SettingsDaemon.Power.Keyboard",
+		"StepUp",
+		NULL,
+		NULL,
+		G_DBUS_CALL_FLAGS_NONE,
+		-1, NULL, NULL, NULL);
+}
+
+static void on_key_kb_backlight_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+	if(!self->connection)
+		return;
+	
+	g_dbus_connection_call(self->connection,
+		"org.gnome.SettingsDaemon.Power",
+		"/org/gnome/SettingsDaemon/Power",
+		"org.gnome.SettingsDaemon.Power.Keyboard",
+		"StepDown",
+		NULL,
+		NULL,
+		G_DBUS_CALL_FLAGS_NONE,
+		-1, NULL, NULL, NULL);
 }
