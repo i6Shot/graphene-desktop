@@ -41,6 +41,10 @@ struct _GrapheneWM {
 	GDBusProxy *clientProxy;
 	guint interfaceRegistrationId;
 	SoundSettings *soundSettings;
+	
+	ClutterActor *percentBarBg;
+	ClutterActor *percentBar;
+	gboolean percentBarAnimating;
 };
 
 // Structs copied from meta-shadow-factory.c (commit a191554 on Jul 6, 2015)
@@ -73,6 +77,7 @@ static void unminimize(MetaPlugin *wm, MetaWindowActor *actor);
 static void map(MetaPlugin *plugin, MetaWindowActor *actor);
 static void destroy(MetaPlugin *plugin, MetaWindowActor *actor);
 static void graphene_wm_init_keybindings(GrapheneWM *self);
+static void percent_bar_transition_complete(ClutterActor *actor, GrapheneWM *wm);
 
 
 
@@ -168,15 +173,37 @@ static void start(MetaPlugin *plugin)
 	ClutterActor *screenGroup = meta_get_window_group_for_screen(screen);
 	ClutterActor *stage = meta_get_stage_for_screen(screen);
 	
+	// Initialize the background
 	ClutterActor *backgroundGroup = meta_background_group_new();
 	GRAPHENE_WM(plugin)->BackgroundGroup = META_BACKGROUND_GROUP(backgroundGroup);
 	clutter_actor_set_reactive(backgroundGroup, TRUE);
-	clutter_actor_insert_child_below(screenGroup, backgroundGroup, NULL);
+	clutter_actor_insert_child_below(stage, backgroundGroup, NULL);
+	clutter_actor_show(backgroundGroup);
+
+	// Initialize percent bar (for volume/brightness buttons)
+	GrapheneWM *wm = GRAPHENE_WM(plugin);
+	wm->percentBarBg = clutter_actor_new();
+	clutter_actor_set_reactive(wm->percentBarBg, FALSE);
+	clutter_actor_insert_child_above(stage, wm->percentBarBg, NULL);
+	clutter_actor_set_height(wm->percentBarBg, 15);
+	clutter_actor_set_y(wm->percentBarBg, 10);
+	clutter_actor_hide(wm->percentBarBg);
+	
+	wm->percentBar = clutter_actor_new();
+	clutter_actor_add_child(wm->percentBarBg, wm->percentBar);
+	clutter_actor_set_height(wm->percentBar, 15);
+	g_signal_connect(wm->percentBar, "transitions_completed", G_CALLBACK(percent_bar_transition_complete), wm);
+	//clutter_actor_show(wm->percentBar);
+	
+	ClutterColor *color = clutter_color_new(255, 255, 255, 130);
+	clutter_actor_set_background_color(wm->percentBarBg, color);
+	clutter_color_init(color, 255, 255, 255, 255);
+	clutter_actor_set_background_color(wm->percentBar, color);
+	clutter_color_free(color);
 	
 	g_signal_connect(screen, "monitors_changed", G_CALLBACK(on_monitors_changed), plugin);
 	on_monitors_changed(screen, plugin);
 	
-	clutter_actor_show(backgroundGroup);
 	clutter_actor_show(screenGroup);
 	clutter_actor_show(stage);
 	
@@ -229,6 +256,14 @@ static void on_monitors_changed(MetaScreen *screen, MetaPlugin *plugin)
 	gint numMonitors = meta_screen_get_n_monitors(screen);
 	for(int i=0;i<numMonitors;++i)
 		clutter_actor_add_child(backgroundGroup, CLUTTER_ACTOR(graphene_wm_background_new(screen, i)));
+	
+	int width = 0, height = 0;
+	meta_screen_get_size(screen, &width, &height);
+	
+	clutter_actor_set_x(GRAPHENE_WM(plugin)->percentBarBg, width/2-width/6);
+	//clutter_actor_set_y(GRAPHENE_WM(plugin)->percentBarBg, 30);
+	clutter_actor_set_width(GRAPHENE_WM(plugin)->percentBarBg, width/3);
+	//clutter_actor_set_width(GRAPHENE_WM(plugin)->percentBar, width/3);
 }
 
 
@@ -618,6 +653,7 @@ static void on_key_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWi
 static void on_key_backlight_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
 static void on_key_kb_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
 static void on_key_kb_backlight_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self);
+static void set_percent_bar(GrapheneWM *wm, double percent, const gchar *icon);
 
 // static void on_sound_settings_event(SoundSettings *settings, SoundSettingsEventType type, SoundDevice *device, void *userdata)
 // {
@@ -691,7 +727,9 @@ static void on_key_volume_up(MetaDisplay *display, MetaScreen *screen, MetaWindo
 		stepSize /= 2;
 	
 	float vol = sound_device_get_volume(device) + stepSize;
-	sound_device_set_volume(device, (vol > 1) ? 1 : vol);
+	vol = (vol > 1) ? 1 : vol;
+	set_percent_bar(self, vol, "");
+	sound_device_set_volume(device, vol);
 }
 
 static void on_key_volume_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
@@ -703,13 +741,18 @@ static void on_key_volume_down(MetaDisplay *display, MetaScreen *screen, MetaWin
 	if(clutter_event_has_shift_modifier((ClutterEvent *)event))
 		stepSize /= 2;
 	
-	sound_device_set_volume(device, sound_device_get_volume(device) - stepSize);
+	float vol = sound_device_get_volume(device) - stepSize;
+	vol = (vol < 0) ? 0 : vol;
+	set_percent_bar(self, vol, "");
+	sound_device_set_volume(device, vol);
 }
 
 static void on_key_volume_mute(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
 	SoundDevice *device = sound_settings_get_active_output_device(self->soundSettings);
-	sound_device_set_muted(device, !sound_device_get_muted(device));
+	gboolean newMute = !sound_device_get_muted(device);
+	set_percent_bar(self, newMute ? 0 : sound_device_get_volume(device), "");
+	sound_device_set_muted(device, newMute);
 }
 
 static void on_key_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
@@ -774,4 +817,54 @@ static void on_key_kb_backlight_down(MetaDisplay *display, MetaScreen *screen, M
 		NULL,
 		G_DBUS_CALL_FLAGS_NONE,
 		-1, NULL, NULL, NULL);
+}
+
+static void set_percent_bar(GrapheneWM *wm, double percent, const gchar *icon)
+{
+	MetaScreen *screen = meta_plugin_get_screen(META_PLUGIN(wm));
+	int width = 0, height = 0;
+	meta_screen_get_size(screen, &width, &height);
+	width /= 3;
+	
+	if(clutter_actor_is_visible(wm->percentBarBg))
+	{
+		if(!wm->percentBarAnimating)
+		{
+			wm->percentBarAnimating = TRUE;
+			clutter_actor_remove_all_transitions(wm->percentBar);
+			clutter_actor_set_opacity(wm->percentBarBg, 255);
+			clutter_actor_save_easing_state(wm->percentBar);
+			clutter_actor_set_easing_mode(wm->percentBar, CLUTTER_EASE_IN_QUAD);
+			clutter_actor_set_easing_duration(wm->percentBar, 100);
+			clutter_actor_set_width(wm->percentBar, width * percent);
+			clutter_actor_restore_easing_state(wm->percentBar);
+		}
+		
+		//clutter_actor_remove_all_transitions(wm->percentBar);
+		clutter_actor_set_width(wm->percentBar, width * percent);
+	}
+	else
+	{
+		clutter_actor_show(wm->percentBarBg);
+		clutter_actor_set_width(wm->percentBar, width * percent);
+	}
+}
+
+static void percent_bar_transition_complete(ClutterActor *actor, GrapheneWM *wm)
+{
+	wm->percentBarAnimating = FALSE;
+	
+	clutter_actor_save_easing_state(wm->percentBarBg);
+	clutter_actor_set_easing_mode(wm->percentBarBg, CLUTTER_EASE_IN_QUAD);
+	clutter_actor_set_easing_duration(wm->percentBarBg, 500);
+	clutter_actor_set_opacity(wm->percentBarBg, 0);
+	clutter_actor_restore_easing_state(wm->percentBarBg);
+	// End transition
+	//
+	//g_signal_handlers_disconnect_by_func(actor, minimize_done, plugin);
+	//clutter_actor_set_scale(actor, 1, 1);
+	//clutter_actor_hide(actor); // Actually hide the window
+	
+	// Must call to complete the minimization
+	//meta_plugin_minimize_completed(plugin, META_WINDOW_ACTOR(actor));
 }
