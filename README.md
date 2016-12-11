@@ -24,7 +24,7 @@ graphene-desktop uses the following libraries and packages:
     - gtk+-3.0 >= 3.20
     - libpulse
     - libwnck3
-    - mutter >= 3.20
+    - mutter >= 3.22
     - nautilus (optional)
     - paper-gtk-theme-git >= 297 (AUR or cdn.velt.io/vosrepo/$arch)
     - paper-icon-theme-git >= 552 (AUR or cdn.velt.io/vosrepo/$arch)
