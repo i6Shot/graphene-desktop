@@ -132,7 +132,12 @@ static gboolean graphene_session_exit_internal(gboolean failed)
 {
 	if(!session)
 		return G_SOURCE_REMOVE;
+
 	g_message("Session exiting...");
+
+	g_list_free_full(session->clients, g_object_unref);
+	session->clients = NULL;
+	
 	if(session->connection && session->dbusNameId)
 		g_bus_unown_name(session->dbusNameId);
 	session->dbusNameId = 0;
@@ -141,9 +146,6 @@ static gboolean graphene_session_exit_internal(gboolean failed)
 	g_clear_object(&session->connection);
 
 	g_clear_object(&session->dbusSMSkeleton);
-	
-	g_list_free_full(session->clients, g_object_unref);
-	session->clients = NULL;
 	
 	CSMQuitCallback quitCb = session->quitCb;
 	gpointer cbUserdata = session->cbUserdata;
