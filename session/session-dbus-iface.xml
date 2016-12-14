@@ -1,0 +1,82 @@
+<node>
+  <interface name='org.gnome.SessionManager'>
+    <method name='Setenv'>
+      <arg type='s' direction='in' name='variable'/>
+      <arg type='s' direction='in' name='value'/>
+    </method>
+    <method name='GetLocale'>
+      <arg type='i' direction='in' name='category'/>
+      <arg type='s' direction='out' name='value'/>
+    </method>
+    <method name='InitializationError'>
+      <arg type='s' direction='in' name='message'/>
+      <arg type='b' direction='in' name='fatal'/>
+    </method>
+    <method name='RegisterClient'>
+      <arg type='s' direction='in' name='app_id'/>
+      <arg type='s' direction='in' name='client_startup_id'/>
+      <arg type='o' direction='out' name='client_id'/>
+    </method>
+    <method name='UnregisterClient'>
+      <arg type='o' direction='in' name='client_id'/>
+    </method>
+    <method name='Relaunch'>
+      <arg type='s' direction='in' name='name'/>
+    </method>
+    <method name='Inhibit'>
+      <arg type='s' direction='in' name='app_id'/>
+      <arg type='u' direction='in' name='toplevel_xid'/>
+      <arg type='s' direction='in' name='reason'/>
+      <arg type='u' direction='in' name='flags'/>
+      <arg type='u' direction='out' name='cookie'/>
+    </method>
+    <method name='Uninhibit'>
+      <arg type='u' direction='in' name='inhibit_cookie'/>
+    </method>
+    <method name='IsInhibited'>
+      <arg type='u' direction='in' name='flags'/>
+      <arg type='u' direction='out' name='is_inhibited'/>
+    </method>
+    <method name='GetCurrentClient'>
+      <arg type='o' direction='out' name='client'/>
+    </method>
+    <method name='GetClients'>
+      <arg type='ao' direction='out' name='clients'/>
+    </method>
+    <method name='GetInhibitors'>
+      <arg type='ao' direction='out' name='inhibitors'/>
+    </method>
+    <method name='IsAutostartConditionHandled'>
+      <arg type='s' direction='in' name='condition'/>
+      <arg type='b' direction='out' name='handled'/>
+    </method>
+    <method name='Shutdown'> </method>
+    <method name='Reboot'> </method>
+    <method name='CanShutdown'>
+      <arg type='b' direction='out' name='is_available'/>
+    </method>
+    <method name='Logout'>
+      <arg type='u' direction='in' name='mode'/>
+    </method>
+    <method name='IsSessionRunning'>
+      <arg type='b' direction='out' name='running'/>
+    </method>
+    <signal name='ClientAdded'>
+      <arg type='o' name='id'/>
+    </signal>
+    <signal name='ClientRemoved'>
+      <arg type='o' name='id'/>
+    </signal>
+    <signal name='InhibitorAdded'>
+      <arg type='o' name='id'/>
+    </signal>
+    <signal name='InhibitorRemoved'>
+      <arg type='o' name='id'/>
+    </signal>
+    <signal name='SessionRunning'></signal>
+    <signal name='SessionOver'></signal>
+    <property name='SessionName' type='s' access='read'> </property>
+    <property name='SessionIsActive' type='b' access='read'> </property>
+    <property name='InhibitedActions' type='u' access='read'> </property>
+  </interface>
+</node>

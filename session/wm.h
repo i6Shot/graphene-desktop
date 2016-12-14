@@ -24,20 +24,25 @@
 
 #include <meta/main.h>
 #include <meta/meta-plugin.h>
+#include <meta/meta-background-group.h>
 
 G_BEGIN_DECLS
 
-// Declare the GrapheneWM class
-#define GRAPHENE_TYPE_WM  graphene_wm_get_type()
+#define GRAPHENE_TYPE_WM (graphene_wm_get_type())
+extern void glib_autoptr_cleanup_MetaPlugin(MetaPlugin **_ptr); // Fix implicit function declaration warning. Weird GLib stuff.
+G_DECLARE_FINAL_TYPE(GrapheneWM, graphene_wm, GRAPHENE, WM, MetaPlugin);
 
-#pragma GCC diagnostic ignored "-Wimplicit-function-declaration"
-// G_DECLARE_FINAL_TYPE with MetaPlugin gives a warning for the unknown function 'glib_autoptr_cleanup_MetaPlugin'.
-// I don't know how to fix that, but it doesn't seem to be a problem.
-G_DECLARE_FINAL_TYPE(GrapheneWM, graphene_wm, GRAPHENE, WM, MetaPlugin)
-#pragma GCC diagnostic warning "-Wimplicit-function-declaration"
+struct _GrapheneWM {
+	MetaPlugin parent;
+	MetaBackgroundGroup *backgroundGroup;
+};
 
-// Public methods for GrapheneWM
-GrapheneWM*       graphene_wm_new               (void)  G_GNUC_CONST;
+const MetaPluginInfo * wm_plugin_info(MetaPlugin *plugin);
+void wm_start(MetaPlugin *plugin);
+void wm_minimize(MetaPlugin *plugin, MetaWindowActor *windowActor);
+void wm_unminimize(MetaPlugin *plugin, MetaWindowActor *windowActor);
+void wm_destroy(MetaPlugin *plugin, MetaWindowActor *windowActor);
+void wm_map(MetaPlugin *plugin, MetaWindowActor *windowActor);
 
 G_END_DECLS
 

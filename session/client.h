@@ -30,6 +30,12 @@ G_DECLARE_FINAL_TYPE(GrapheneSessionClient, graphene_session_client, GRAPHENE, S
 
 GrapheneSessionClient * graphene_session_client_new(GDBusConnection *connection, const gchar *clientId);
 
+typedef enum {
+	CSM_CLIENT_RESTART_NEVER = 0,
+	CSM_CLIENT_RESTART_FAIL_ONLY,
+	CSM_CLIENT_RESTART_ALWAYS
+} CSMClientAutoRestart;
+
 void          graphene_session_client_spawn(GrapheneSessionClient *self, guint delay);
 void          graphene_session_client_register(GrapheneSessionClient *self, const gchar *sender, const gchar *appId);
 void          graphene_session_client_unregister(GrapheneSessionClient *self);

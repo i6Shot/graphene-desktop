@@ -423,6 +423,12 @@ static void wm_proxy_signal_cb(GDBusProxy *proxy, const gchar *sender, const gch
     {
       begin_end_session(FALSE);
     }
+	else if(g_strcmp0(response, "Sleep") == 0)
+	{
+		gchar **argsSplit = g_strsplit("systemctl suspend", " ", -1);
+		g_spawn_async(NULL, argsSplit, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
+		g_strfreev(argsSplit);
+	}
     
     g_free(response);
   }
