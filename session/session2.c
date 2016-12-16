@@ -90,9 +90,9 @@ static void run_phase(SessionPhase phase);
 static void check_startup_complete();
 
 static gboolean on_client_register(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *appId, const gchar *startupId, gpointer userdata);
-static void on_client_ready(GrapheneSessionClient *client);
+static void on_client_notify_ready(GrapheneSessionClient *client);
 static gboolean on_client_unregister(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *clientObjectPath, gpointer userdata);
-static void on_client_complete(GrapheneSessionClient *client);
+static void on_client_notify_complete(GrapheneSessionClient *client);
 
 static void launch_desktop();
 static void launch_apps();
@@ -111,6 +111,8 @@ void graphene_session_init(CSMStartupCompleteCallback startupCb, CSMQuitCallback
 	if(session || !startupCb || !quitCb)
 		return;
 	
+	g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
+
 	session = g_new0(GrapheneSession, 1);
 	
 	session->startupCb = startupCb;
@@ -142,7 +144,12 @@ static gboolean graphene_session_exit_internal(gboolean failed)
 		g_bus_unown_name(session->dbusNameId);
 	session->dbusNameId = 0;
 
-	// This automatically closes the connection, which might be blocking
+	if(session->dbusSMSkeleton)
+		g_dbus_interface_skeleton_unexport(G_DBUS_INTERFACE_SKELETON(session->dbusSMSkeleton));
+
+	// Flush and close the connection. This may be blocking.
+	if(session->connection)
+		g_dbus_connection_flush_sync(session->connection, NULL, NULL);
 	g_clear_object(&session->connection);
 
 	g_clear_object(&session->dbusSMSkeleton);
@@ -185,16 +192,15 @@ static void on_dbus_connection_acquired(GDBusConnection *connection, const gchar
 	g_message("Acquired DBus connection"); 
 	session->connection = connection;
 
-	// Export objects
+	g_signal_connect(session->dbusSMSkeleton, "handle-register-client", G_CALLBACK(on_client_register), NULL);
+	g_signal_connect(session->dbusSMSkeleton, "handle-unregister-client", G_CALLBACK(on_client_unregister), NULL);
+
 	if(!g_dbus_interface_skeleton_export(G_DBUS_INTERFACE_SKELETON(session->dbusSMSkeleton), connection, SESSION_DBUS_PATH, NULL))
 	{
 		g_critical("Failed to export SM dbus object. Aborting SM.");
 		graphene_session_exit_internal(TRUE);
 		return;
 	}
-
-	g_signal_connect(session->dbusSMSkeleton, "handle-register-client", G_CALLBACK(on_client_register), NULL);
-	g_signal_connect(session->dbusSMSkeleton, "handle-unregister-client", G_CALLBACK(on_client_unregister), NULL);
 }
 
 static void on_dbus_name_acquired(GDBusConnection *connection, const gchar *name, void *userdata)
@@ -232,17 +238,23 @@ static void run_phase(SessionPhase phase)
 	case SESSION_PHASE_STARTUP:
 		if(prevPhase != SESSION_PHASE_INIT)
 			return;	
+		g_message("------------------------");
 		g_message("Running startup phase");
-		//launch_desktop();
+		g_message("------------------------");
+		launch_desktop();
 		check_startup_complete();
 		break;
 	case SESSION_PHASE_RUNNING:
+		g_message("------------------------");
 		g_message("Running idle phase");
-		//if(prevPhase == SESSION_PHASE_STARTUP)
-			//launch_apps();
+		g_message("------------------------");
+		if(prevPhase == SESSION_PHASE_STARTUP)
+			launch_apps();
 		break;
 	case SESSION_PHASE_LOGOUT:
+		g_message("------------------------");
 		g_message("Running logout phase");
+		g_message("------------------------");
 		graphene_session_exit_internal(FALSE);
 		break;
 	}
@@ -252,10 +264,13 @@ static void check_startup_complete()
 {
 	if(session->phase != SESSION_PHASE_STARTUP)
 		return;
-
-	//for(GList *it = session->clients; it != NULL; it = it->next)
-	//	if(!graphene_session_client_is_ready(it->data))
-	//		return;
+	g_message("Checking startup complete...");
+	for(GList *it = session->clients; it != NULL; it = it->next)
+		if(!graphene_session_client_get_is_ready(it->data))
+		{
+			g_message("Client '%s' is not ready\n", graphene_session_client_get_best_name(it->data));
+			return;
+		}
 	
 	run_phase(SESSION_PHASE_RUNNING);
 }
@@ -298,20 +313,30 @@ static gboolean on_client_register(DBusSessionManager *object, GDBusMethodInvoca
 	{
 		client = graphene_session_client_new(session->connection, NULL);
 		g_object_connect(client,
-			"signal::complete", on_client_complete, NULL,
+			"signal::notify::complete", on_client_notify_complete, NULL,
 			//"signal::end-session-response", on_client_end_session_response, NULL,
 			NULL);
 		session->clients = g_list_prepend(session->clients, client);
 	}
 
 	graphene_session_client_register(client, sender, appId);
-	dbus_session_manager_complete_register_client(object, invocation, graphene_session_client_get_object_path(client));
-	g_message("Client %s registered.", graphene_session_client_get_best_name(client));
+	
+	if(graphene_session_client_get_object_path(client) != NULL)
+	{
+		dbus_session_manager_complete_register_client(object, invocation, graphene_session_client_get_object_path(client));
+		g_message("Client %s registered.", graphene_session_client_get_best_name(client));
+		return TRUE;
+	}
+
+	on_client_notify_complete(client);
+	g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Failed to register client."); 
 	return TRUE;
 }
 
-static void on_client_ready(GrapheneSessionClient *client)
+static void on_client_notify_ready(GrapheneSessionClient *client)
 {
+	if(!graphene_session_client_get_is_ready(client))
+		return;
 	g_message("Client %s is ready.", graphene_session_client_get_best_name(client));
 	check_startup_complete();
 }
@@ -327,15 +352,17 @@ static gboolean on_client_unregister(DBusSessionManager *object, GDBusMethodInvo
 	return TRUE;
 }
 
-static void on_client_complete(GrapheneSessionClient *client)
+static void on_client_notify_complete(GrapheneSessionClient *client)
 {
+	if(!graphene_session_client_get_is_complete(client))
+		return;
 	g_message("Client %s is complete.", graphene_session_client_get_best_name(client));
 	session->clients = g_list_remove(session->clients, client);
 	g_object_unref(client);
 
 	// If all clients die, exit
 	// This will happen at the end of a successful Logout
-	// Exit on idle because on_client_complete can be called indirectly from
+	// Exit on idle because on_client_notify_complete can be called indirectly from
 	// on_client_register, a DBus callback.
 	if(session->clients == NULL)
 		graphene_session_exit_internal_on_idle(FALSE);
@@ -489,11 +516,6 @@ static void launch_autostart(GDesktopAppInfo *desktopInfo)
 		delay = g_ascii_strtoll(delayString, NULL, 0) * 1000; // seconds to milliseconds
 	g_free(delayString);
 
-	g_object_connect(client,
-		"signal::ready", on_client_ready, NULL,
-		"signal::complete", on_client_complete, NULL,
-		//"signal::end-session-response", on_client_end_session_response, NULL,
-		NULL);
 	g_object_set(client,
 		"name", g_app_info_get_display_name(G_APP_INFO(desktopInfo)),
 		"args", g_app_info_get_commandline(G_APP_INFO(desktopInfo)),
@@ -502,6 +524,12 @@ static void launch_autostart(GDesktopAppInfo *desktopInfo)
 		"delay", delay,
 		"condition", g_desktop_app_info_get_string(desktopInfo, "AutostartCondition"),
 		NULL);
-	
-	//graphene_session_client_spawn(client); // Ignored if autostart condition is false
+
+	g_object_connect(client,
+		"signal::notify::ready", on_client_notify_ready, NULL,
+		"signal::notify::complete", on_client_notify_complete, NULL,
+		//"signal::end-session-response", on_client_end_session_response, NULL,
+		NULL);
+
+	graphene_session_client_spawn(client); // Ignored if autostart condition is false
 }
