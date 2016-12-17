@@ -54,6 +54,7 @@
 #include <session-dbus-iface.h>
 #include <stdio.h>
 
+#define GRAPHENE_SESSION_NAME "Graphene"
 #define SESSION_DBUS_NAME "org.gnome.SessionManager"
 #define SESSION_DBUS_PATH "/org/gnome/SessionManager"
 #define SHOW_ALL_OUTPUT TRUE // Set to TRUE for release; FALSE only shows output from .desktop files with 'Graphene-ShowOutput=true'
@@ -79,7 +80,6 @@ typedef struct {
 } GrapheneSession;
 
 
-
 static gboolean graphene_session_exit_internal(gboolean failed);
 
 static void on_dbus_connection_acquired(GDBusConnection *connection, const gchar *name, void *userdata);
@@ -89,14 +89,14 @@ static void on_dbus_name_lost(GDBusConnection *connection, const gchar *name, vo
 static void run_phase(SessionPhase phase);
 static void check_startup_complete();
 
-static gboolean on_client_register(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *appId, const gchar *startupId, gpointer userdata);
 static void on_client_notify_ready(GrapheneSessionClient *client);
-static gboolean on_client_unregister(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *clientObjectPath, gpointer userdata);
 static void on_client_notify_complete(GrapheneSessionClient *client);
 
 static void launch_desktop();
 static void launch_apps();
 static void launch_autostart(GDesktopAppInfo *desktopInfo);
+
+static void connect_dbus_methods();
 
 
 
@@ -137,6 +137,8 @@ static gboolean graphene_session_exit_internal(gboolean failed)
 
 	g_message("Session exiting...");
 
+	// Kill and free any remaining client objects
+	// (In a successful logout, there should be no clients left anyway)
 	g_list_free_full(session->clients, g_object_unref);
 	session->clients = NULL;
 	
@@ -192,8 +194,12 @@ static void on_dbus_connection_acquired(GDBusConnection *connection, const gchar
 	g_message("Acquired DBus connection"); 
 	session->connection = connection;
 
-	g_signal_connect(session->dbusSMSkeleton, "handle-register-client", G_CALLBACK(on_client_register), NULL);
-	g_signal_connect(session->dbusSMSkeleton, "handle-unregister-client", G_CALLBACK(on_client_unregister), NULL);
+	connect_dbus_methods();
+		
+	dbus_session_manager_set_session_name(session->dbusSMSkeleton, GRAPHENE_SESSION_NAME);
+	dbus_session_manager_set_session_is_active(session->dbusSMSkeleton, FALSE);
+	// TODO: How does inhibited actions work
+	//dbus_session_manager_set_inhibited_actions(session->dbusSMSkeleton, ...);
 
 	if(!g_dbus_interface_skeleton_export(G_DBUS_INTERFACE_SKELETON(session->dbusSMSkeleton), connection, SESSION_DBUS_PATH, NULL))
 	{
@@ -228,8 +234,7 @@ static void on_dbus_name_lost(GDBusConnection *connection, const gchar *name, vo
 	g_critical("Lost DBus name");
 }
 
-
-static void run_phase(SessionPhase phase)
+static gboolean run_phase_idle(SessionPhase phase)
 {
 	SessionPhase prevPhase = session->phase;
 	session->phase = phase;
@@ -237,7 +242,7 @@ static void run_phase(SessionPhase phase)
 	{
 	case SESSION_PHASE_STARTUP:
 		if(prevPhase != SESSION_PHASE_INIT)
-			return;	
+			return G_SOURCE_REMOVE;	
 		g_message("------------------------");
 		g_message("Running startup phase");
 		g_message("------------------------");
@@ -248,6 +253,11 @@ static void run_phase(SessionPhase phase)
 		g_message("------------------------");
 		g_message("Running idle phase");
 		g_message("------------------------");
+		if(session->dbusSMSkeleton)
+		{
+			dbus_session_manager_set_session_is_active(session->dbusSMSkeleton, TRUE);
+			dbus_session_manager_emit_session_running(session->dbusSMSkeleton);
+		}
 		if(prevPhase == SESSION_PHASE_STARTUP)
 			launch_apps();
 		break;
@@ -255,9 +265,20 @@ static void run_phase(SessionPhase phase)
 		g_message("------------------------");
 		g_message("Running logout phase");
 		g_message("------------------------");
+		if(session->dbusSMSkeleton)
+		{
+			dbus_session_manager_set_session_is_active(session->dbusSMSkeleton, FALSE);
+			dbus_session_manager_emit_session_over(session->dbusSMSkeleton);
+		}
 		graphene_session_exit_internal(FALSE);
 		break;
 	}
+	return G_SOURCE_REMOVE;
+}
+
+static void run_phase(SessionPhase phase)
+{
+	g_idle_add((GSourceFunc)run_phase_idle, GINT_TO_POINTER(phase));
 }
 
 static void check_startup_complete()
@@ -320,10 +341,12 @@ static gboolean on_client_register(DBusSessionManager *object, GDBusMethodInvoca
 	}
 
 	graphene_session_client_register(client, sender, appId);
+	const gchar *objectPath = graphene_session_client_get_object_path(client);
 	
-	if(graphene_session_client_get_object_path(client) != NULL)
+	if(objectPath != NULL)
 	{
-		dbus_session_manager_complete_register_client(object, invocation, graphene_session_client_get_object_path(client));
+		dbus_session_manager_complete_register_client(object, invocation, objectPath);
+		dbus_session_manager_emit_client_added(session->dbusSMSkeleton, objectPath);
 		g_message("Client %s registered.", graphene_session_client_get_best_name(client));
 		return TRUE;
 	}
@@ -344,10 +367,12 @@ static void on_client_notify_ready(GrapheneSessionClient *client)
 static gboolean on_client_unregister(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *clientObjectPath, gpointer userdata)
 {
 	GrapheneSessionClient *client = find_client_from_given_info(NULL, clientObjectPath, NULL, NULL);
-	if(!client)
-		return TRUE;
-	g_message("Client %s unregistered.", graphene_session_client_get_best_name(client));
-	graphene_session_client_unregister(client);
+	if(client)
+	{
+		graphene_session_client_unregister(client);
+		dbus_session_manager_emit_client_removed(session->dbusSMSkeleton, clientObjectPath);
+		g_message("Client %s unregistered.", graphene_session_client_get_best_name(client));
+	}
 	dbus_session_manager_complete_unregister_client(object, invocation);
 	return TRUE;
 }
@@ -532,4 +557,200 @@ static void launch_autostart(GDesktopAppInfo *desktopInfo)
 		NULL);
 
 	graphene_session_client_spawn(client); // Ignored if autostart condition is false
+}
+
+
+
+/*
+ * Session Inhibition
+ */
+
+static gboolean on_client_inhibit(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *appId, guint toplevelXId, const gchar *reason, guint flags, gpointer userdata)
+{
+	// TODO
+	return FALSE;
+}
+
+static gboolean on_client_uninhibit(DBusSessionManager *object, GDBusMethodInvocation *invocation, gint inhibit_cookie, gpointer userdata)
+{
+	// TODO
+	return FALSE;
+}
+
+
+
+/*
+ * Other DBus Commands
+ */
+
+static gboolean on_dbus_set_env(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *variable, const gchar *value, gpointer userdata)
+{
+	// Setting environment variables isn't really useful after the startup phase
+	if(session && session->phase <= SESSION_PHASE_STARTUP)
+	{
+		// Variable name cannot contain = according to g_setenv docs.
+		if(g_strstr_len(variable, -1, "=") != NULL)
+		{
+			g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_INVALID_ARGS, "Variable name cannot contain =."); 
+			return TRUE;
+		}
+		
+		g_setenv(variable, value, FALSE);
+	}
+
+	dbus_session_manager_complete_setenv(object, invocation);
+	return TRUE;
+}
+
+static gboolean on_dbus_get_locale(DBusSessionManager *object, GDBusMethodInvocation *invocation, gint category, gpointer userdata)
+{
+	// TODO
+	//dbus_session_manager_complete_get_locale(object, invocation, "");
+	return FALSE;
+}
+
+static gboolean on_dbus_initialization_error(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *message, gboolean fatal, gpointer userdata)
+{
+	if(fatal && session->phase <= SESSION_PHASE_STARTUP)
+	{
+		g_critical("Fatal External Initialization Error: %s", message);
+		graphene_session_exit_internal_on_idle(TRUE);
+	}
+	else
+	{
+		g_warning("External Initialization Error: %s", message);
+	}
+
+	dbus_session_manager_complete_initialization_error(object, invocation);
+	return TRUE;
+}
+
+static gboolean on_dbus_client_relaunch(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *name, gpointer userdata)
+{
+	GrapheneSessionClient *client = find_client_from_given_info(name, name, name, name);
+	if(client)
+		graphene_session_client_restart(client);
+	dbus_session_manager_complete_relaunch(object, invocation);
+	return FALSE;
+}
+
+static gboolean on_dbus_is_inhibited(DBusSessionManager *object, GDBusMethodInvocation *invocation, gint flags, gpointer userdata)
+{
+	// TODO
+	dbus_session_manager_complete_is_inhibited(object, invocation, 0);
+	return TRUE;
+}
+
+static gboolean on_dbus_get_current_client(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
+{
+	const gchar *sender = g_dbus_method_invocation_get_sender(invocation);
+	GrapheneSessionClient *client = find_client_from_given_info(NULL, NULL, NULL, sender);
+	if(client)
+	{
+		const gchar *objectPath = graphene_session_client_get_object_path(client);
+		dbus_session_manager_complete_get_current_client(object, invocation, objectPath);
+	}
+	else
+	{
+		g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Calling process is not a client."); 
+	}
+	return TRUE;
+}
+
+static gboolean on_dbus_get_clients(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
+{
+	guint count = 0;
+	for(GList *clients=session->clients;clients!=NULL;clients=clients->next)
+	{
+		GrapheneSessionClient *client = (GrapheneSessionClient *)clients->data;
+		const gchar *path = graphene_session_client_get_object_path(client);
+		if(path)
+			count++;
+	}
+	
+	gchar **arr = g_new(gchar*, count+1);
+	count = 0;
+	for(GList *clients=session->clients;clients!=NULL;clients=clients->next)
+	{
+		GrapheneSessionClient *client = (GrapheneSessionClient *)clients->data;
+		const gchar *path = graphene_session_client_get_object_path(client);
+		if(path)
+			arr[count++] = g_strdup(path);
+	}
+	arr[count] = NULL;
+	
+	dbus_session_manager_complete_get_clients(object, invocation, (const gchar * const *)arr);
+	g_strfreev(arr);
+	return TRUE;
+}
+
+static gboolean on_dbus_get_inhibitors(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
+{
+	// TODO
+	//dbus_session_manager_complete_get_inhibitors(object, invocation);
+	return FALSE;
+}
+
+static gboolean on_dbus_get_is_autostart_condition_handled(DBusSessionManager *object, GDBusMethodInvocation *invocation, const gchar *condition, gpointer userdata)
+{
+	// TODO: What is the format for 'condition'?
+	dbus_session_manager_complete_is_autostart_condition_handled(object, invocation, FALSE);
+	return TRUE;
+}
+
+static gboolean on_dbus_shutdown(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
+{
+	// TODO
+	return FALSE;
+}
+
+static gboolean on_dbus_reboot(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
+{
+	// TODO
+	return FALSE;
+}
+
+static gboolean on_dbus_get_can_shutdown(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
+{
+	// TODO: Return based on inhibition status
+	dbus_session_manager_complete_can_shutdown(object, invocation, TRUE);
+	return TRUE;
+}
+
+static gboolean on_dbus_logout(DBusSessionManager *object, GDBusMethodInvocation *invocation, gint mode, gpointer userdata)
+{
+	dbus_session_manager_complete_logout(object, invocation);
+	graphene_session_logout();
+	return TRUE;
+}
+
+static gboolean on_dbus_get_is_session_running(DBusSessionManager *object, GDBusMethodInvocation *invocation, gpointer userdata)
+{
+	gboolean running = session && session->phase == SESSION_PHASE_RUNNING;
+	dbus_session_manager_complete_is_session_running(object, invocation, running);
+	return TRUE;
+}
+
+// At the end to avoid a huge block of function declarations
+static void connect_dbus_methods()
+{
+	#define connect(s, f) g_signal_connect(session->dbusSMSkeleton, s, G_CALLBACK(f), NULL)
+	connect("handle-setenv", on_dbus_set_env);
+	connect("handle-get-locale", on_dbus_get_locale);
+	connect("handle-initialization-error", on_dbus_initialization_error);
+	connect("handle-register-client", on_client_register);
+	connect("handle-unregister-client", on_client_unregister);
+	connect("handle-relaunch", on_dbus_client_relaunch);
+	connect("handle-inhibit", on_client_inhibit);
+	connect("handle-uninhibit", on_client_uninhibit);
+	connect("handle-get-current-client", on_dbus_get_current_client);
+	connect("handle-get-clients", on_dbus_get_clients);
+	connect("handle-get-inhibitors", on_dbus_get_inhibitors);
+	connect("handle-is-autostart-condition-handled", on_dbus_get_is_autostart_condition_handled);
+	connect("handle-shutdown", on_dbus_shutdown);
+	connect("handle-reboot", on_dbus_reboot);
+	connect("handle-can-shutdown", on_dbus_get_can_shutdown);
+	connect("handle-logout", on_dbus_logout);
+	connect("handle-is-session-running", on_dbus_get_is_session_running);
+	#undef connect
 }

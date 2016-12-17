@@ -117,6 +117,8 @@ static void on_client_exit(GrapheneSessionClient *self, guint status);
 static gboolean test_condition(GrapheneSessionClient *self);
 static void update_condition(GrapheneSessionClient *self);
 
+static void connect_dbus_methods(GrapheneSessionClient *self);
+
 
 G_DEFINE_TYPE(GrapheneSessionClient, graphene_session_client, G_TYPE_OBJECT);
 
@@ -191,6 +193,7 @@ static void graphene_session_client_dispose(GObject *self_)
 {
 	GrapheneSessionClient *self = GRAPHENE_SESSION_CLIENT(self_);
 
+	graphene_session_client_kill(self);
 	graphene_session_client_unregister_internal(self);
 	
 	if(self->childWatchId)
@@ -405,30 +408,28 @@ void graphene_session_client_spawn(GrapheneSessionClient *self)
 
 static gboolean graphene_session_client_spawn_delay_cb(GrapheneSessionClient *self)
 {
-	// TODO: Replace FALSE with the "stop source" constant. I forget what it is.
-
 	if(self->spawnDelaySourceId)
 		g_source_remove(self->spawnDelaySourceId);
 	self->spawnDelaySourceId = 0;
 	
 	if(self->alive || self->processId)
 	{
-		return FALSE;
+		return G_SOURCE_REMOVE;
 	}
 	else if(!self->args)
 	{
 		g_warning("Cannot spawn client '%s' because args is not set", graphene_session_client_get_best_name(self));
-		return FALSE;
+		return G_SOURCE_REMOVE;
 	}
 	else if(!test_condition(self))
 	{
 		g_debug("Cannot spawn client '%s' immediately because condition is not met (might spawn later)", graphene_session_client_get_best_name(self));
 		set_ready(self, TRUE);
-		return FALSE;
+		return G_SOURCE_REMOVE;
 	}
 	
-	set_alive(self, FALSE);
-	set_ready(self, FALSE);
+	set_alive(self, G_SOURCE_REMOVE);
+	set_ready(self, G_SOURCE_REMOVE);
 
 	GSpawnFlags flags = G_SPAWN_SEARCH_PATH | G_SPAWN_DO_NOT_REAP_CHILD;
 	if(self->silent)
@@ -437,8 +438,13 @@ static gboolean graphene_session_client_spawn_delay_cb(GrapheneSessionClient *se
 	GPid pid = 0;
 	GError *e = NULL;
 	
-	// TODO: Use g_shell_parse_argv
-	gchar **argsSplit = g_strsplit(self->args, " ", -1);
+	gchar **argsSplit;
+	if(!g_shell_parse_argv(self->args, NULL, &argsSplit, &e))
+	{
+		g_critical("Failed to parse args '%s' (%s) to start process", self->args, e->message);
+		g_error_free(e);
+		return G_SOURCE_REMOVE;
+	}
 	gchar *startupIdVar = g_strdup_printf("DESKTOP_AUTOSTART_ID=%s", self->id);
 	gchar **env = strv_append((const char * const *)g_get_environ(), startupIdVar);
 	
@@ -452,7 +458,7 @@ static gboolean graphene_session_client_spawn_delay_cb(GrapheneSessionClient *se
 	{
 		g_critical("Failed to start process with args '%s' (%s)", self->args, e->message);
 		g_error_free(e);
-		return FALSE;
+		return G_SOURCE_REMOVE;
 	}
 	
 	self->processId = pid;
@@ -464,12 +470,14 @@ static gboolean graphene_session_client_spawn_delay_cb(GrapheneSessionClient *se
 	update_condition(self); // Reset condition monitor, in case it was stopped
 
 	g_debug(" + Spawned client with args '%s' with id '%s' and pId %i", self->args, self->id, self->processId);
-	return FALSE;
+	return G_SOURCE_REMOVE;
 }
 
 void graphene_session_client_term(GrapheneSessionClient *self)
 {
 	g_return_if_fail(GRAPHENE_IS_SESSION_CLIENT(self));
+	if(!self->alive)
+		return;
 	g_debug("requesting term client '%s'", graphene_session_client_get_best_name(self));
 	if(self->connection && self->dbusName && self->objectPath)
 	{
@@ -490,10 +498,11 @@ void graphene_session_client_term(GrapheneSessionClient *self)
 void graphene_session_client_kill(GrapheneSessionClient *self)
 {
 	g_return_if_fail(GRAPHENE_IS_SESSION_CLIENT(self));
+	if(!self->alive)
+		return;
 	g_debug("killing client '%s'", graphene_session_client_get_best_name(self));
 	if(self->processId)
 	{
-		g_debug(" - Client '%s' is not registered. Sending SIGKILL to %i to kill client.", graphene_session_client_get_best_name(self), self->processId);
 		kill(self->processId, SIGKILL);
 	}
 	else if(self->connection && self->dbusName && self->objectPath)
@@ -511,6 +520,9 @@ void graphene_session_client_kill(GrapheneSessionClient *self)
 void graphene_session_client_restart(GrapheneSessionClient *self)
 {
 	g_return_if_fail(GRAPHENE_IS_SESSION_CLIENT(self));
+	if(!self->alive)
+		return;
+	// TODO
 }
 
 /*
@@ -533,6 +545,7 @@ void graphene_session_client_register(GrapheneSessionClient *self, const gchar *
 	
 	self->dbusClientSkeleton = dbus_session_manager_client_skeleton_new();
 	self->dbusPClientSkeleton = dbus_session_manager_client_private_skeleton_new();
+	connect_dbus_methods(self);
 	
 	GError *error = NULL;	
 	if(!g_dbus_interface_skeleton_export(G_DBUS_INTERFACE_SKELETON(self->dbusClientSkeleton), self->connection, self->objectPath, &error))
@@ -901,78 +914,94 @@ gboolean graphene_session_client_get_is_complete(GrapheneSessionClient *self)
 
 
 /*
- * TODO: Replace!
+ * Other DBus Commands
  */
 
-/*
-static void on_dbus_method_call(GDBusConnection *connection, const gchar* sender,
-	const gchar           *objectPath,
-	const gchar           *interfaceName,
-	const gchar           *methodName,
-	GVariant              *parameters,
-	GDBusMethodInvocation *invocation,
-	gpointer              userdata)
+static gboolean on_dbus_get_app_id(DBusSessionManagerClient *object, GDBusMethodInvocation *invocation, GrapheneSessionClient *self)
 {
-	GrapheneSessionClient *client = (GrapheneSessionClient*)userdata;
-	g_debug("client dbus method call: %s, %s, %s.%s", sender, graphene_session_client_get_best_name(client), interfaceName, methodName);
+	g_return_val_if_fail(GRAPHENE_IS_SESSION_CLIENT(self), FALSE);
+	// TODO: Test if this crashes if self->appId is NULL
+	// GVariants sometimes get angry on NULLs
+	dbus_session_manager_client_complete_get_app_id(object, invocation, self->appId);
+	return TRUE;
+}
 
-	if(g_strcmp0(interfaceName, "org.gnome.SessionManager.Client") == 0)
-	{
-		if(!client)
-		{
-			g_dbus_method_invocation_return_value(invocation, NULL);
-			return;
-		}
-		else if(g_strcmp0(methodName, "GetAppId") == 0) {
-			g_dbus_method_invocation_return_value(invocation, g_variant_new("(s)", client->appId));
-			return;
-		}
-		else if(g_strcmp0(methodName, "GetStartupId") == 0) {
-			g_dbus_method_invocation_return_value(invocation, g_variant_new("(s)", client->id));
-			return;
-		}
-		else if(g_strcmp0(methodName, "GetRestartStyleHint") == 0) {
-			// 0=never, 1=if-running, 2=anyway, 3=immediately
-			// Not sure what 1 or 2 mean, but we'll go with 0 and 3 always (TODO: for now)
-			g_dbus_method_invocation_return_value(invocation, g_variant_new("(u)", (guint32)client->autoRestart));
-			return;
-		}
-		else if(g_strcmp0(methodName, "GetUnixProcessId") == 0) {
-			g_dbus_method_invocation_return_value(invocation, g_variant_new("(u)", (guint32)client->processId));
-			return;
-		}
-		else if(g_strcmp0(methodName, "GetStatus") == 0) {
-			// 0=unregistered, 1=registered, 2=finished, 3=failed
-			// TODO: status 2 & 3
-			g_dbus_method_invocation_return_value(invocation, g_variant_new("(u)", client->objectPath != NULL));
-			return;
-		}
-		else if(g_strcmp0(methodName, "Stop") == 0) {
-			graphene_session_client_stop(client);
-			g_dbus_method_invocation_return_value(invocation, NULL);
-			return;
-		}
-		else if(g_strcmp0(methodName, "Restart") == 0) {
-			graphene_session_client_force_next_restart(client);
-			g_dbus_connection_emit_signal(connection, sender, objectPath,
-				"org.gnome.SessionManager.ClientPrivate", "Stop", NULL, NULL);
-			g_dbus_method_invocation_return_value(invocation, NULL);
-			return;
-		}
-	}
-	else if(g_strcmp0(interfaceName, "org.gnome.SessionManager.ClientPrivate") == 0)
-			// && sender == client->dbusName)
-	{
-		if(g_strcmp0(methodName, "EndSessionResponse") == 0) {
-			gboolean isOk;
-			gchar *reason;
-			g_variant_get(parameters, "(bs)", &isOk, &reason);
-			g_signal_emit_by_name(client, "end-session-response", isOk, reason);
-			g_free(reason);
-			g_dbus_method_invocation_return_value(invocation, NULL);
-			return;
-		}
-	}
-	
-	g_dbus_method_invocation_return_value(invocation, NULL);
-}*/
+static gboolean on_dbus_get_startup_id(DBusSessionManagerClient *object, GDBusMethodInvocation *invocation, GrapheneSessionClient *self)
+{
+	g_return_val_if_fail(GRAPHENE_IS_SESSION_CLIENT(self), FALSE);
+	dbus_session_manager_client_complete_get_startup_id(object, invocation, self->id);
+	return TRUE;
+}
+
+static gboolean on_dbus_get_restart_style_hint(DBusSessionManagerClient *object, GDBusMethodInvocation *invocation, GrapheneSessionClient *self)
+{
+	g_return_val_if_fail(GRAPHENE_IS_SESSION_CLIENT(self), FALSE);
+	// From GNOME SM code
+	// 0=never, 1=if-running, 2=anyway, 3=immediately
+	// Not sure what 1 or 2 mean, but we'll go with 0 and 3 always (TODO: for now)
+	dbus_session_manager_client_complete_get_restart_style_hint(object, invocation,
+		(self->autoRestart == CSM_CLIENT_RESTART_NEVER) ? 0 : 3);
+	return TRUE;
+}
+
+static gboolean on_dbus_get_unix_process_id(DBusSessionManagerClient *object, GDBusMethodInvocation *invocation, GrapheneSessionClient *self)
+{
+	g_return_val_if_fail(GRAPHENE_IS_SESSION_CLIENT(self), FALSE);
+	dbus_session_manager_client_complete_get_unix_process_id(object, invocation, self->processId);
+	return TRUE;
+}
+
+static gboolean on_dbus_get_status(DBusSessionManagerClient *object, GDBusMethodInvocation *invocation, GrapheneSessionClient *self)
+{
+	g_return_val_if_fail(GRAPHENE_IS_SESSION_CLIENT(self), FALSE);
+	// From GNOME SM code
+	// 0=unregistered, 1=registered, 2=finished, 3=failed
+	guint status = 0;
+	if(self->failed) // A client can be both failed and complete, but put failed first because it's more descriptive
+		status = 3;
+	else if(self->complete)
+		status = 2;
+	else
+		status = (self->objectPath == NULL) ? 0 : 1;
+	dbus_session_manager_client_complete_get_status(object, invocation, status);
+	return TRUE;
+}
+
+static gboolean on_dbus_stop(DBusSessionManagerClient *object, GDBusMethodInvocation *invocation, GrapheneSessionClient *self)
+{
+	g_return_val_if_fail(GRAPHENE_IS_SESSION_CLIENT(self), FALSE);
+	graphene_session_client_term(self);
+	dbus_session_manager_client_complete_stop(object, invocation);
+	return TRUE;
+}
+
+static gboolean on_dbus_restart(DBusSessionManagerClient *object, GDBusMethodInvocation *invocation, GrapheneSessionClient *self)
+{
+	g_return_val_if_fail(GRAPHENE_IS_SESSION_CLIENT(self), FALSE);
+	graphene_session_client_restart(self);
+	dbus_session_manager_client_complete_stop(object, invocation);
+	return TRUE;
+}
+
+static gboolean on_dbus_end_session_response(DBusSessionManagerClient *object, GDBusMethodInvocation *invocation, gboolean isOk, const gchar *reason, GrapheneSessionClient *self)
+{
+	g_return_val_if_fail(GRAPHENE_IS_SESSION_CLIENT(self), FALSE);
+	// TODO
+	return TRUE;
+}
+
+static void connect_dbus_methods(GrapheneSessionClient *self)
+{
+	#define connect(s, f) g_signal_connect(self->dbusClientSkeleton, s, G_CALLBACK(f), self)
+	#define connectp(s, f) g_signal_connect(self->dbusPClientSkeleton, s, G_CALLBACK(f), self)
+	connect("handle-get-app-id", on_dbus_get_app_id);
+	connect("handle-get-startup-id", on_dbus_get_startup_id);
+	connect("handle-get-restart-style-hint", on_dbus_get_restart_style_hint);
+	connect("handle-get-unix-process-id", on_dbus_get_unix_process_id);
+	connect("handle-get-status", on_dbus_get_status);
+	connect("handle-stop", on_dbus_stop);
+	connect("handle-restart", on_dbus_restart);
+	connectp("handle-end-session-response", on_dbus_end_session_response);
+	#undef connectp
+	#undef connect
+}
