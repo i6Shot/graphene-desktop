@@ -68,8 +68,9 @@ typedef enum {
 
 typedef struct {
 	CSMStartupCompleteCallback startupCb;
+	CSMDialogCallback dialogCb;
 	CSMQuitCallback quitCb;
-	void *cbUserdata;
+	gpointer cbUserdata;
 
 	GDBusConnection *connection;
 	guint dbusNameId;
@@ -106,9 +107,9 @@ static GrapheneSession *session = NULL;
  * GrapheneSession
  */
 
-void graphene_session_init(CSMStartupCompleteCallback startupCb, CSMQuitCallback quitCb, void *cbUserdata)
+void graphene_session_init(CSMStartupCompleteCallback startupCb, CSMDialogCallback dialogCb, CSMQuitCallback quitCb, gpointer cbUserdata)
 {
-	if(session || !startupCb || !quitCb)
+	if(session || !startupCb || !dialogCb || !quitCb)
 		return;
 	
 	g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
@@ -116,6 +117,7 @@ void graphene_session_init(CSMStartupCompleteCallback startupCb, CSMQuitCallback
 	session = g_new0(GrapheneSession, 1);
 	
 	session->startupCb = startupCb;
+	session->dialogCb = dialogCb;
 	session->quitCb = quitCb;
 	session->cbUserdata = cbUserdata;
 
@@ -236,6 +238,7 @@ static void on_dbus_name_lost(GDBusConnection *connection, const gchar *name, vo
 
 static gboolean run_phase_idle(SessionPhase phase)
 {
+	// TODO: Phase timer
 	SessionPhase prevPhase = session->phase;
 	session->phase = phase;
 	switch(phase)
@@ -259,7 +262,11 @@ static gboolean run_phase_idle(SessionPhase phase)
 			dbus_session_manager_emit_session_running(session->dbusSMSkeleton);
 		}
 		if(prevPhase == SESSION_PHASE_STARTUP)
+		{
+			if(session->startupCb)
+				session->startupCb(session->cbUserdata);
 			launch_apps();
+		}
 		break;
 	case SESSION_PHASE_LOGOUT:
 		g_message("------------------------");

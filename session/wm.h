@@ -25,6 +25,8 @@
 #include <meta/main.h>
 #include <meta/meta-plugin.h>
 #include <meta/meta-background-group.h>
+#include "wmwidgets/percent-floater.h"
+#include "common/sound.h"
 
 G_BEGIN_DECLS
 
@@ -35,14 +37,20 @@ G_DECLARE_FINAL_TYPE(GrapheneWM, graphene_wm, GRAPHENE, WM, MetaPlugin);
 struct _GrapheneWM {
 	MetaPlugin parent;
 	MetaBackgroundGroup *backgroundGroup;
+	GraphenePercentFloater *percentBar;
+	SoundSettings *soundSettings;
+	ClutterActor *coverGroup;
+	ClutterActor *dialog;
 };
 
-const MetaPluginInfo * wm_plugin_info(MetaPlugin *plugin);
-void wm_start(MetaPlugin *plugin);
-void wm_minimize(MetaPlugin *plugin, MetaWindowActor *windowActor);
-void wm_unminimize(MetaPlugin *plugin, MetaWindowActor *windowActor);
-void wm_destroy(MetaPlugin *plugin, MetaWindowActor *windowActor);
-void wm_map(MetaPlugin *plugin, MetaWindowActor *windowActor);
+void graphene_wm_show_dialog(GrapheneWM *wm, ClutterActor *actor);
+
+const MetaPluginInfo * graphene_wm_plugin_info(MetaPlugin *plugin);
+void graphene_wm_start(MetaPlugin *plugin);
+void graphene_wm_minimize(MetaPlugin *plugin, MetaWindowActor *windowActor);
+void graphene_wm_unminimize(MetaPlugin *plugin, MetaWindowActor *windowActor);
+void graphene_wm_destroy(MetaPlugin *plugin, MetaWindowActor *windowActor);
+void graphene_wm_map(MetaPlugin *plugin, MetaWindowActor *windowActor);
 
 G_END_DECLS
 

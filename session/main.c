@@ -34,8 +34,9 @@
 G_DEFINE_TYPE(GrapheneWM, graphene_wm, META_TYPE_PLUGIN);
 static void graphene_wm_dispose(GObject *gobject);
 static gboolean on_exit_signal(gpointer userdata);
-static void on_session_quit(gboolean failed, gpointer userdata);
 static void on_session_startup_complete(gpointer userdata);
+static void on_show_dialog(ClutterActor *dialog, gpointer userdata);
+static void on_session_quit(gboolean failed, gpointer userdata);
 
 int main(int argc, char **argv)
 {
@@ -64,19 +65,19 @@ int main(int argc, char **argv)
 static void graphene_wm_class_init(GrapheneWMClass *class)
 {
 	MetaPluginClass *pluginClass = META_PLUGIN_CLASS(class);
-	pluginClass->start = wm_start;
-	pluginClass->minimize = wm_minimize;
-	pluginClass->unminimize = wm_unminimize;
-	pluginClass->map = wm_map;
-	pluginClass->destroy = wm_destroy;
-	pluginClass->plugin_info = wm_plugin_info;
+	pluginClass->plugin_info = graphene_wm_plugin_info;
+	pluginClass->start = graphene_wm_start;
+	pluginClass->minimize = graphene_wm_minimize;
+	pluginClass->unminimize = graphene_wm_unminimize;
+	pluginClass->map = graphene_wm_map;
+	pluginClass->destroy = graphene_wm_destroy;
 	
 	G_OBJECT_CLASS(class)->dispose = graphene_wm_dispose;
 }
 
 static void graphene_wm_init(GrapheneWM *wm)
 {
-	graphene_session_init(on_session_startup_complete, on_session_quit, wm);
+	graphene_session_init(on_session_startup_complete, on_show_dialog, on_session_quit, wm);
 
 	g_unix_signal_add(SIGTERM, (GSourceFunc)on_exit_signal, NULL);
 	g_unix_signal_add(SIGINT, (GSourceFunc)on_exit_signal, NULL);
@@ -102,15 +103,20 @@ static gboolean on_exit_signal(gpointer userdata)
 	return G_SOURCE_CONTINUE;
 }
 
+static void on_session_startup_complete(gpointer userdata)
+{
+	g_message("SM startup complete.");
+	// Hide the startup "cover" dialog
+	graphene_wm_show_dialog(GRAPHENE_WM(userdata), NULL);
+}
+
+static void on_show_dialog(ClutterActor *dialog, gpointer userdata)
+{
+	graphene_wm_show_dialog(GRAPHENE_WM(userdata), dialog);
+}
+
 static void on_session_quit(gboolean failed, gpointer userdata)
 {
 	g_message("SM has completed %s. Exiting mutter.", failed ? "with an error" : "successfully");
 	meta_quit(failed ? META_EXIT_ERROR : META_EXIT_SUCCESS);
-}
-
-static void on_session_startup_complete(gpointer userdata)
-{
-	g_message("SM startup complete.");
-	GrapheneWM *wm = GRAPHENE_WM(userdata);
-	// TODO: The WM should show only the background picture up until this point
 }

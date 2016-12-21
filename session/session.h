@@ -25,9 +25,10 @@
 G_BEGIN_DECLS
 
 typedef void (*CSMStartupCompleteCallback)(gpointer userdata);
+typedef void (*CSMDialogCallback)(ClutterActor *dialog, gpointer userdata);
 typedef void (*CSMQuitCallback)(gboolean failed, gpointer userdata);
 
-void graphene_session_init(CSMStartupCompleteCallback startupCb, CSMQuitCallback quitCb, void *userdata);
+void graphene_session_init(CSMStartupCompleteCallback startupCb, CSMDialogCallback dialogCb, CSMQuitCallback quitCb, gpointer userdata);
 
 /*
  * Starts the logout phase, which asks all clients to close and eventually

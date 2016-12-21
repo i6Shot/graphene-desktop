@@ -22,11 +22,12 @@ add_executable(graphene-session
 	client.c
 	# status-notifier-watcher.c
 	# ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.c
+	wmwidgets/percent-floater.c
 	util.c
 	wm.c
-	background.c
+	wmwidgets/background.c
 	# ${PROJECT_SOURCE_DIR}/common/dbusmonitor.c
-	# ${PROJECT_SOURCE_DIR}/common/sound.c
+	${PROJECT_SOURCE_DIR}/common/sound.c
 )
 target_link_libraries(graphene-session
 	${GIOUNIX2_LIBRARIES}

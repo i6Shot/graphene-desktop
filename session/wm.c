@@ -17,9 +17,8 @@
  */
 
 #include "wm.h"
-#include "background.h"
+#include "wmwidgets/background.h"
 #include "dialog.h"
-#include "common/sound.h"
 #include <meta/meta-shadow-factory.h>
 #include <meta/display.h>
 #include <meta/keybindings.h>
@@ -27,14 +26,18 @@
 #include <glib-unix.h>
 
 #define WM_VERSION_STRING "1.0.0"
+#define WM_PERCENT_BAR_STEPS 15
 
 static void on_monitors_changed(MetaScreen *screen, GrapheneWM *wm);
+
 static void minimize_done(ClutterActor *actor, MetaPlugin *plugin);
 static void unminimize_done(ClutterActor *actor, MetaPlugin *plugin);
 static void destroy_done(ClutterActor *actor, MetaPlugin *plugin);
 static void map_done(ClutterActor *actor, MetaPlugin *plugin);
 
-const MetaPluginInfo * wm_plugin_info(MetaPlugin *plugin)
+static void init_keybindings(GrapheneWM *self);
+
+const MetaPluginInfo * graphene_wm_plugin_info(MetaPlugin *plugin)
 {
 	static const MetaPluginInfo info = {
 		.name = "Graphene WM Manager",
@@ -47,41 +50,148 @@ const MetaPluginInfo * wm_plugin_info(MetaPlugin *plugin)
 	return &info;
 }
 
-void wm_start(MetaPlugin *plugin)
+void graphene_wm_start(MetaPlugin *plugin)
 {
-	GrapheneWM *wm = GRAPHENE_WM(plugin);
-	
+	GrapheneWM *self = GRAPHENE_WM(plugin);
+	MetaDisplay *display = meta_screen_get_display(meta_plugin_get_screen(META_PLUGIN(self)));
+
 	// Get stage
 	MetaScreen *screen = meta_plugin_get_screen(plugin);
 	ClutterActor *stage = meta_get_stage_for_screen(screen);
-	
+
+	init_keybindings(self);
+	self->percentBar = graphene_percent_floater_new();
+	graphene_percent_floater_set_divisions(self->percentBar, WM_PERCENT_BAR_STEPS);
+	graphene_percent_floater_set_scale(self->percentBar, 2);
+	clutter_actor_insert_child_above(stage, CLUTTER_ACTOR(self->percentBar), NULL);
+
 	// Create background
 	ClutterActor *backgroundGroup = meta_background_group_new();
-	wm->backgroundGroup = META_BACKGROUND_GROUP(backgroundGroup);
-	clutter_actor_set_reactive(backgroundGroup, TRUE);
+	self->backgroundGroup = META_BACKGROUND_GROUP(backgroundGroup);
+	clutter_actor_set_reactive(backgroundGroup, FALSE);
 	clutter_actor_insert_child_below(stage, backgroundGroup, NULL);
+
+	self->coverGroup = clutter_actor_new();
+	clutter_actor_set_reactive(self->coverGroup, FALSE);
+	clutter_actor_insert_child_above(stage, self->coverGroup, NULL);
+
+	g_signal_connect(screen, "monitors_changed", G_CALLBACK(on_monitors_changed), self);
+	on_monitors_changed(screen, self);
+
 	clutter_actor_show(backgroundGroup);
-	g_signal_connect(screen, "monitors_changed", G_CALLBACK(on_monitors_changed), wm);
-	on_monitors_changed(screen, wm);
+	
+	// Start the WM modal, and the session manager can end the modal when
+	// startup completes with graphene_wm_show_dialog(wm, NULL);
+	meta_plugin_begin_modal(META_PLUGIN(self), 0, 0);
+	clutter_actor_show(self->coverGroup);
 
 	// Show windows
-	clutter_actor_show(meta_get_window_group_for_screen(screen));
+	ClutterActor *windowGroup = meta_get_window_group_for_screen(screen);
+	clutter_actor_show(windowGroup);
+	//clutter_actor_set_opacity(windowGroup, 50);
 	
 	// Show stage
 	clutter_actor_show(stage);
 }
 
-static void on_monitors_changed(MetaScreen *screen, GrapheneWM *wm)
+static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self)
 {
-	ClutterActor *bgGroup = CLUTTER_ACTOR(wm->backgroundGroup);
+	ClutterActor *bgGroup = CLUTTER_ACTOR(self->backgroundGroup);
 	clutter_actor_destroy_all_children(bgGroup);
+	clutter_actor_destroy_all_children(self->coverGroup);
 	
+	ClutterColor *coverColor = clutter_color_new(0,0,0,140);
+
 	gint numMonitors = meta_screen_get_n_monitors(screen);
 	for(int i=0;i<numMonitors;++i)
+	{
 		clutter_actor_add_child(bgGroup, CLUTTER_ACTOR(graphene_wm_background_new(screen, i)));
+	
+		MetaRectangle rect = meta_rect(0,0,0,0);
+		meta_screen_get_monitor_geometry(screen, i, &rect);
+
+		ClutterActor *cover = clutter_actor_new();
+		clutter_actor_set_background_color(cover, coverColor);
+		clutter_actor_set_position(cover, rect.x, rect.y);
+		clutter_actor_set_size(cover, rect.width, rect.height);
+		clutter_actor_add_child(self->coverGroup, cover);
+	}
+	
+	clutter_color_free(coverColor);
+
+	int width = 0, height = 0;
+	meta_screen_get_size(screen, &width, &height);
+	
+	clutter_actor_set_y(CLUTTER_ACTOR(self->percentBar), 30);
+	clutter_actor_set_x(CLUTTER_ACTOR(self->percentBar), width/2-width/8);
+	clutter_actor_set_width(CLUTTER_ACTOR(self->percentBar), width/4);
+	clutter_actor_set_height(CLUTTER_ACTOR(self->percentBar), 20);
 }
 
-void wm_minimize(MetaPlugin *plugin, MetaWindowActor *windowActor)
+static void close_dialog_complete(GrapheneWM *self, ClutterActor *dialog)
+{
+	g_signal_handlers_disconnect_by_func(dialog, close_dialog_complete, self);
+	if(dialog == self->dialog)
+		g_clear_object(&self->dialog);
+	else
+		g_object_unref(dialog);
+}
+
+static void graphene_wm_close_dialog(GrapheneWM *self, gboolean closeCover)
+{
+	if(self->dialog)
+	{
+		g_signal_connect_swapped(self->dialog, "transitions_completed", G_CALLBACK(close_dialog_complete), self);
+		clutter_actor_save_easing_state(self->dialog);
+		clutter_actor_set_easing_mode(self->dialog, CLUTTER_EASE_OUT_SINE);
+		clutter_actor_set_easing_duration(self->dialog, 200);
+		clutter_actor_set_scale(self->dialog, 0, 0);
+		clutter_actor_restore_easing_state(self->dialog);
+		clutter_actor_set_reactive(self->dialog, FALSE);
+	}
+	
+	meta_plugin_end_modal(META_PLUGIN(self), 0);
+	
+	if(!closeCover || clutter_actor_get_opacity(self->coverGroup) == 0)
+		return;
+
+	clutter_actor_save_easing_state(self->coverGroup);
+	clutter_actor_set_easing_mode(self->coverGroup, CLUTTER_EASE_OUT_SINE);
+	clutter_actor_set_easing_duration(self->coverGroup, 200);
+	clutter_actor_set_opacity(self->coverGroup, 0);
+	clutter_actor_restore_easing_state(self->coverGroup);
+}
+
+void graphene_wm_show_dialog(GrapheneWM *self, ClutterActor *dialog)
+{
+	if(!dialog || (dialog && self->dialog))
+		graphene_wm_close_dialog(self, !dialog);
+	
+	if(!dialog)
+		return;
+	
+	clutter_actor_set_scale(self->dialog, 0, 0);
+	clutter_actor_save_easing_state(self->dialog);
+	clutter_actor_set_easing_mode(self->dialog, CLUTTER_EASE_IN_SINE);
+	clutter_actor_set_easing_duration(self->dialog, 200);
+	clutter_actor_set_scale(self->dialog, 1, 1);
+	clutter_actor_restore_easing_state(self->dialog);
+	clutter_actor_set_reactive(self->dialog, TRUE);
+
+	clutter_actor_save_easing_state(self->coverGroup);
+	clutter_actor_set_easing_mode(self->coverGroup, CLUTTER_EASE_IN_SINE);
+	clutter_actor_set_easing_duration(self->coverGroup, 200);
+	clutter_actor_set_opacity(self->coverGroup, 255);
+	clutter_actor_restore_easing_state(self->coverGroup);
+	meta_plugin_begin_modal(META_PLUGIN(self), 0, 0);
+}
+
+
+
+
+
+
+void graphene_wm_minimize(MetaPlugin *plugin, MetaWindowActor *windowActor)
 {
 	ClutterActor *actor = CLUTTER_ACTOR(windowActor);
 	
@@ -115,7 +225,7 @@ static void minimize_done(ClutterActor *actor, MetaPlugin *plugin)
 	meta_plugin_minimize_completed(plugin, META_WINDOW_ACTOR(actor));
 }
 
-void wm_unminimize(MetaPlugin *plugin, MetaWindowActor *windowActor)
+void graphene_wm_unminimize(MetaPlugin *plugin, MetaWindowActor *windowActor)
 {
 	ClutterActor *actor = CLUTTER_ACTOR(windowActor);
 
@@ -151,7 +261,7 @@ static void unminimize_done(ClutterActor *actor, MetaPlugin *plugin)
 	meta_plugin_unminimize_completed(plugin, META_WINDOW_ACTOR(actor));
 }
 
-void wm_destroy(MetaPlugin *plugin, MetaWindowActor *windowActor)
+void graphene_wm_destroy(MetaPlugin *plugin, MetaWindowActor *windowActor)
 {
 	ClutterActor *actor = CLUTTER_ACTOR(windowActor);
 
@@ -187,7 +297,7 @@ static void destroy_done(ClutterActor *actor, MetaPlugin *plugin)
 	meta_plugin_destroy_completed(plugin, META_WINDOW_ACTOR(actor));
 }
 
-void wm_map(MetaPlugin *plugin, MetaWindowActor *windowActor)
+void graphene_wm_map(MetaPlugin *plugin, MetaWindowActor *windowActor)
 {
 	ClutterActor *actor = CLUTTER_ACTOR(windowActor);
 
@@ -231,3 +341,160 @@ static void map_done(ClutterActor *actor, MetaPlugin *plugin)
 }
 
 
+
+/*
+ * Keybindings
+ */
+
+static void on_key_volume_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+	SoundDevice *device = sound_settings_get_active_output_device(self->soundSettings);
+	sound_device_set_muted(device, FALSE);
+	
+	float stepSize = 1.0/WM_PERCENT_BAR_STEPS;
+	if(clutter_event_has_shift_modifier((ClutterEvent *)event))
+		stepSize /= 2;
+	
+	float vol = sound_device_get_volume(device) + stepSize;
+	vol = (vol > 1) ? 1 : vol;
+	graphene_percent_floater_set_percent(self->percentBar, vol);
+	sound_device_set_volume(device, vol);
+}
+
+static void on_key_volume_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+	SoundDevice *device = sound_settings_get_active_output_device(self->soundSettings);
+	sound_device_set_muted(device, FALSE);
+	
+	float stepSize = 1.0/WM_PERCENT_BAR_STEPS;
+	if(clutter_event_has_shift_modifier((ClutterEvent *)event))
+		stepSize /= 2;
+	
+	float vol = sound_device_get_volume(device) - stepSize;
+	vol = (vol < 0) ? 0 : vol;
+	graphene_percent_floater_set_percent(self->percentBar, vol);
+	sound_device_set_volume(device, vol);
+}
+
+static void on_key_volume_mute(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+	SoundDevice *device = sound_settings_get_active_output_device(self->soundSettings);
+	gboolean newMute = !sound_device_get_muted(device);
+	graphene_percent_floater_set_percent(self->percentBar, newMute ? 0 : sound_device_get_volume(device));
+	sound_device_set_muted(device, newMute);
+}
+
+static void on_key_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+	//if(!self->connection)
+	//	return;
+	//
+	//g_dbus_connection_call(self->connection,
+	//	"org.gnome.SettingsDaemon.Power",
+	//	"/org/gnome/SettingsDaemon/Power",
+	//	"org.gnome.SettingsDaemon.Power.Screen",
+	//	"StepUp",
+	//	NULL,
+	//	NULL,
+	//	G_DBUS_CALL_FLAGS_NONE,
+	//	-1, NULL, NULL, NULL);
+}
+
+static void on_key_backlight_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+	//if(!self->connection)
+	//	return;
+	//
+	//g_dbus_connection_call(self->connection,
+	//	"org.gnome.SettingsDaemon.Power",
+	//	"/org/gnome/SettingsDaemon/Power",
+	//	"org.gnome.SettingsDaemon.Power.Screen",
+	//	"StepDown",
+	//	NULL,
+	//	NULL,
+	//	G_DBUS_CALL_FLAGS_NONE,
+	//	-1, NULL, NULL, NULL);
+}
+
+static void on_key_kb_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+	//if(!self->connection)
+	//	return;
+	//
+	//g_dbus_connection_call(self->connection,
+	//	"org.gnome.SettingsDaemon.Power",
+	//	"/org/gnome/SettingsDaemon/Power",
+	//	"org.gnome.SettingsDaemon.Power.Keyboard",
+	//	"StepUp",
+	//	NULL,
+	//	NULL,
+	//	G_DBUS_CALL_FLAGS_NONE,
+	//	-1, NULL, NULL, NULL);
+}
+
+static void on_key_kb_backlight_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+	//if(!self->connection)
+	//	return;
+	//
+	//g_dbus_connection_call(self->connection,
+	//	"org.gnome.SettingsDaemon.Power",
+	//	"/org/gnome/SettingsDaemon/Power",
+	//	"org.gnome.SettingsDaemon.Power.Keyboard",
+	//	"StepDown",
+	//	NULL,
+	//	NULL,
+	//	G_DBUS_CALL_FLAGS_NONE,
+	//	-1, NULL, NULL, NULL);
+}
+
+static void init_keybindings(GrapheneWM *self)
+{
+	pa_proplist *proplist = pa_proplist_new();
+	pa_proplist_sets(proplist, PA_PROP_APPLICATION_NAME, "graphene-window-manager");
+	// pa_proplist_sets(proplist, PA_PROP_APPLICATION_ID, g_application_get_application_id(g_application_get_default()));
+	pa_proplist_sets(proplist, PA_PROP_APPLICATION_ICON_NAME, "multimedia-volume-control-symbolic");
+	pa_proplist_sets(proplist, PA_PROP_APPLICATION_VERSION, WM_VERSION_STRING);
+	
+	pa_glib_mainloop *mainloop = pa_glib_mainloop_new(g_main_context_default());
+	self->soundSettings = sound_settings_init(mainloop, pa_glib_mainloop_get_api(mainloop), proplist, (DestroyPAMainloopNotify)pa_glib_mainloop_free);
+
+
+	GSettings *keybindings = g_settings_new("io.velt.desktop.keybindings");
+	MetaDisplay *display = meta_screen_get_display(meta_plugin_get_screen(META_PLUGIN(self)));
+	
+	#define bind(key, func) meta_display_add_keybinding(display, key, keybindings, META_KEY_BINDING_NONE, (MetaKeyHandlerFunc)func, self, NULL);
+	bind("volume-up", on_key_volume_up);
+	bind("volume-down", on_key_volume_down);
+	bind("volume-up-half", on_key_volume_up);
+	bind("volume-down-half", on_key_volume_down);
+	bind("volume-mute", on_key_volume_mute);
+	bind("backlight-up", on_key_backlight_up);
+	bind("backlight-down", on_key_backlight_down);
+	bind("kb-backlight-up", on_key_kb_backlight_up);
+	bind("kb-backlight-down", on_key_kb_backlight_down);
+	#undef bind
+
+	g_object_unref(keybindings);
+
+	// meta_keybindings_set_custom_handler("panel-main-menu", (MetaKeyHandlerFunc)on_panel_main_menu, self, NULL);
+	// meta_keybindings_set_custom_handler("switch-windows", switch_windows);
+	// meta_keybindings_set_custom_handler("switch-applications", switch_windows);
+}
+
+
+/*
+ * Dialog
+ */
+
+void graphene_wm_show_logout_dialog(GrapheneWM *self, GCallback onCloseCb)
+{
+	//gchar **buttons = g_strsplit("Logout Sleep Restart Shutdown Cancel", " ", 0);
+	//GrapheneWMDialog *dialog = graphene_wm_dialog_new(NULL, buttons);
+	//g_strfreev(buttons);
+
+	//g_signal_connect(dialog, "close", onCloseCb, self);
+	//graphene_wm_dialog_show(dialog, meta_plugin_get_screen(META_PLUGIN(self)), 0);
+	//meta_plugin_begin_modal(META_PLUGIN(self), 0, 0);
+}
+	
