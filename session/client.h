@@ -35,7 +35,7 @@ typedef enum {
 } CSMClientAutoRestart;
 
 GrapheneSessionClient * graphene_session_client_new(GDBusConnection *connection, const gchar *clientId);
-void          graphene_session_client_lost_dbus(); // Call if the GDBusConnection given to _new has been lost/deallocated
+void          graphene_session_client_lost_dbus(GrapheneSessionClient *self); // Call if the GDBusConnection given to _new has been lost/deallocated
 
 void          graphene_session_client_spawn(GrapheneSessionClient *self);
 void          graphene_session_client_term(GrapheneSessionClient *self);

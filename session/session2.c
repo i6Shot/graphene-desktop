@@ -144,7 +144,8 @@ static gboolean graphene_session_exit_internal(gboolean failed)
 	g_list_free_full(session->clients, g_object_unref);
 	session->clients = NULL;
 	
-	if(session->connection && session->dbusNameId)
+	// May be blocking according to g_bus_unown_name source code
+	if(session->dbusNameId)
 		g_bus_unown_name(session->dbusNameId);
 	session->dbusNameId = 0;
 
@@ -195,7 +196,8 @@ static void on_dbus_connection_acquired(GDBusConnection *connection, const gchar
 {
 	g_message("Acquired DBus connection"); 
 	session->connection = connection;
-
+	g_dbus_connection_set_exit_on_close(connection, FALSE); // We will exit, just with some cleanup first
+	
 	connect_dbus_methods();
 		
 	dbus_session_manager_set_session_name(session->dbusSMSkeleton, GRAPHENE_SESSION_NAME);
@@ -226,6 +228,9 @@ static void on_dbus_name_lost(GDBusConnection *connection, const gchar *name, vo
 	{
 		// Lost connection to DBus, nothing to do
 		g_critical("Lost DBus connection. Aborting SM.");
+	
+		for(GList *it = session->clients; it != NULL; it = it->next)
+			graphene_session_client_lost_dbus(it->data);
 		graphene_session_exit_internal(TRUE);
 		return;
 	}

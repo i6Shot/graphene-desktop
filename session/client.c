@@ -547,6 +547,15 @@ void graphene_session_client_register(GrapheneSessionClient *self, const gchar *
 	self->dbusPClientSkeleton = dbus_session_manager_client_private_skeleton_new();
 	connect_dbus_methods(self);
 	
+	if(!self->connection)
+	{
+		g_warning("Failed to register client: no DBus connection.");
+		graphene_session_client_unreigster_internal(self);
+		if(!self->childWatchId)
+			try_set_complete(self, TRUE);
+		return;
+	}
+
 	GError *error = NULL;	
 	if(!g_dbus_interface_skeleton_export(G_DBUS_INTERFACE_SKELETON(self->dbusClientSkeleton), self->connection, self->objectPath, &error))
 	{
@@ -1004,4 +1013,10 @@ static void connect_dbus_methods(GrapheneSessionClient *self)
 	connectp("handle-end-session-response", on_dbus_end_session_response);
 	#undef connectp
 	#undef connect
+}
+
+void graphene_session_client_lost_dbus(GrapheneSessionClient *self)
+{
+	g_return_if_fail(GRAPHENE_IS_SESSION_CLIENT(self));
+	self->connection = NULL;
 }
