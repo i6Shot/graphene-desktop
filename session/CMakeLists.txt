@@ -19,7 +19,7 @@ link_directories(${LIBMUTTER_LIBRARY_DIRS})
 add_executable(graphene-session
 	main.c
 	session-dbus-iface.c
-	session2.c
+	session.c
 	client.c
 	# status-notifier-watcher.c
 	# ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.c
