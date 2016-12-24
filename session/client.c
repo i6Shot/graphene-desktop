@@ -438,6 +438,8 @@ static gboolean graphene_session_client_spawn_delay_cb(GrapheneSessionClient *se
 	GPid pid = 0;
 	GError *e = NULL;
 	
+	g_setenv("G_MESSAGES_DEBUG", "none", TRUE);
+
 	gchar **argsSplit;
 	if(!g_shell_parse_argv(self->args, NULL, &argsSplit, &e))
 	{
@@ -453,6 +455,8 @@ static gboolean graphene_session_client_spawn_delay_cb(GrapheneSessionClient *se
 	g_strfreev(env);
 	g_free(startupIdVar);
 	g_strfreev(argsSplit);
+
+	g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
 	
 	if(e)
 	{
@@ -550,7 +554,7 @@ void graphene_session_client_register(GrapheneSessionClient *self, const gchar *
 	if(!self->connection)
 	{
 		g_warning("Failed to register client: no DBus connection.");
-		graphene_session_client_unreigster_internal(self);
+		graphene_session_client_unregister_internal(self);
 		if(!self->childWatchId)
 			try_set_complete(self, TRUE);
 		return;

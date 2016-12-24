@@ -117,6 +117,9 @@ static void on_show_dialog(ClutterActor *dialog, gpointer userdata)
 
 static void on_session_quit(gboolean failed, gpointer userdata)
 {
+	// TODO: If the session is aborted using ctrl+C during the startup sequence,
+	// sometimes the session closes, prints this message, and then segfaults.
+	// Doesn't really hurt anything, but it's weird. What causes that?
 	g_message("SM has completed %s. Exiting mutter.", failed ? "with an error" : "successfully");
 	meta_quit(failed ? META_EXIT_ERROR : META_EXIT_SUCCESS);
 }

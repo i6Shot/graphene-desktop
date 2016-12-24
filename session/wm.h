@@ -36,6 +36,7 @@ G_DECLARE_FINAL_TYPE(GrapheneWM, graphene_wm, GRAPHENE, WM, MetaPlugin);
 
 struct _GrapheneWM {
 	MetaPlugin parent;
+	ClutterActor *stage;
 	MetaBackgroundGroup *backgroundGroup;
 	GraphenePercentFloater *percentBar;
 	SoundSettings *soundSettings;

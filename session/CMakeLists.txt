@@ -13,6 +13,7 @@ add_custom_command(OUTPUT "${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.c" 
 pkg_check_modules(GIOUNIX2 REQUIRED gio-unix-2.0>=2.10)
 pkg_check_modules(LIBMUTTER REQUIRED libmutter>=3.22)
 pkg_check_modules(LIBPULSEGLIB REQUIRED libpulse-mainloop-glib>=8.0)
+pkg_check_modules(POLKITAGENT REQUIRED polkit-agent-1)
 link_directories(${LIBMUTTER_LIBRARY_DIRS})
 
 add_executable(graphene-session
@@ -33,12 +34,14 @@ target_link_libraries(graphene-session
 	${GIOUNIX2_LIBRARIES}
 	${LIBMUTTER_LIBRARIES}
 	${LIBPULSEGLIB_LIBRARIES}
+	${POLKITAGENT_LIBRARIES}
 )
 target_include_directories(graphene-session PRIVATE
 	${CMAKE_CURRENT_BINARY_DIR} 
 	${GIOUNIX2_INCLUDE_DIRS}
 	${LIBMUTTER_INCLUDE_DIRS}
 	${LIBPULSEGLIB_INCLUDE_DIRS}
+	${POLKITAGENT_INCLUDE_DIRS}
 )
 
 # Normally, the CMake install functionality removes the executable's rpath,
