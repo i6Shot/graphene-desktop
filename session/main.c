@@ -16,9 +16,9 @@
  * along with this program.	If not, see <http://www.gnu.org/licenses/>.
  *
  *
- * This program functions as both the wm manager and window manager.
- * Partially because I see "wm management" and "window management" as
- * very similar jobs, partially because it makes wm-related graphics
+ * This program functions as both the session manager and window manager.
+ * Partially because I see "session management" and "window management" as
+ * very similar jobs, partially because it makes session-related graphics
  * easier to display (ex. logout dialog).
  *
  * Code dealing with Mutter must be GPL'd, but session management code
