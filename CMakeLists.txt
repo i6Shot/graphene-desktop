@@ -4,7 +4,6 @@
 
 cmake_minimum_required(VERSION 3.4)
 project(graphene-desktop)
-set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 set(GRAPHENE_VERSION 0.2.5)
 set(GRAPHENE_DEBUG TRUE)
