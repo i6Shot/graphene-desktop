@@ -30,7 +30,9 @@ G_DECLARE_FINAL_TYPE(GraphenePKAuthDialog, graphene_pk_auth_dialog, GRAPHENE, PK
  * the 'completed' signal when the request has either been successfully
  * authenticated, failed, or cancelled.
  */
-GraphenePKAuthDialog * graphene_pk_auth_dialog_new(const gchar *actionId, const gchar *message, const gchar *iconName, const gchar *cookie, GVariant *identitiesV);
+GraphenePKAuthDialog * graphene_pk_auth_dialog_new(const gchar *actionId, const gchar *message, const gchar *iconName, const gchar *cookie, GVariant *identitiesV, GError **error);
+
+void graphene_pk_auth_dialog_cancel(GraphenePKAuthDialog *dialog);
 
 G_END_DECLS
 

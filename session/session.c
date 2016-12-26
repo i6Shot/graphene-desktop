@@ -86,6 +86,8 @@ typedef struct {
 	DBusSessionManager *dbusSMSkeleton;
 	DBusPolkitAuthAgent *dbusPkAgentSkeleton;
 	gchar *ldSessionObject; // DBus session object path provided by systemd-logind
+	
+	GList *pkAuthDialogList; // In case multiple requests come in at once, put them in a wait list. The first in the list is always the current one.
 
 	SessionPhase phase;
 	GList *clients;
@@ -961,6 +963,9 @@ static void connect_dbus_methods()
 
 static void on_pk_auth_dialog_complete(GraphenePKAuthDialog *dialog, gboolean cancelled, gboolean gainedAuthentication, gpointer userdata)
 {
+	session->pkAuthDialogList = g_list_remove(session->pkAuthDialogList, dialog);
+	
+	// This closes and frees the dialog
 	session->dialogCb(NULL, session->cbUserdata);
 	
 	g_return_if_fail(G_IS_DBUS_METHOD_INVOCATION(userdata));
@@ -974,6 +979,10 @@ static void on_pk_auth_dialog_complete(GraphenePKAuthDialog *dialog, gboolean ca
 	{
 		dbus_org_freedesktop_policy_kit1_authentication_agent_complete_begin_authentication(session->dbusPkAgentSkeleton, invocation);
 	}
+
+	// Show the next dialog in the queue, if any
+	if(session->pkAuthDialogList != NULL)
+		session->dialogCb(CLUTTER_ACTOR(session->pkAuthDialogList->data), session->cbUserdata);
 }
 
 static gboolean on_pk_agent_begin_authentication(DBusPolkitAuthAgent *object, GDBusMethodInvocation *invocation, const gchar *actionId, const gchar *message, const gchar *iconName, GVariant *details, const gchar *cookie, GVariant *identitiesV)
@@ -984,28 +993,29 @@ static gboolean on_pk_agent_begin_authentication(DBusPolkitAuthAgent *object, GD
 		return TRUE;
 	}
 
-	if(!g_variant_check_format_string(identitiesV, "a(sa{sv})", FALSE))
+	GError *error = NULL;
+	GraphenePKAuthDialog *dialog = graphene_pk_auth_dialog_new(actionId, message, iconName, cookie, identitiesV, &error);
+	if(!dialog)
 	{
-		g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Invalid format string on 'identities'."); 
+		g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, error->message);
 		return TRUE;
 	}
 
-	GraphenePKAuthDialog *dialog = graphene_pk_auth_dialog_new(actionId, message, iconName, cookie, identitiesV);
-	if(!dialog)
-	{
-		g_dbus_method_invocation_return_error(invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED, "Error listing identities");
-		return TRUE;
-	}
-	
 	g_signal_connect(dialog, "complete", G_CALLBACK(on_pk_auth_dialog_complete), invocation);
-	session->dialogCb(CLUTTER_ACTOR(dialog), session->cbUserdata);
+
+	gboolean firstDialog = session->pkAuthDialogList == NULL;
+	session->pkAuthDialogList = g_list_append(session->pkAuthDialogList, dialog);
+
+	if(firstDialog)
+		session->dialogCb(CLUTTER_ACTOR(dialog), session->cbUserdata);
 	return TRUE;
 }
 
 static gboolean on_pk_agent_cancel_authentication(DBusPolkitAuthAgent *object, GDBusMethodInvocation *invocation, const gchar *cookie)
 {
-	// TODO
+	if(session && session->pkAuthDialogList && session->pkAuthDialogList->data)
+		graphene_pk_auth_dialog_cancel(session->pkAuthDialogList->data);
+
 	dbus_org_freedesktop_policy_kit1_authentication_agent_complete_cancel_authentication(object, invocation);
 	return TRUE;
-
 }

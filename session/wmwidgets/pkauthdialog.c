@@ -16,6 +16,7 @@
  */
 
 #define POLKIT_AGENT_I_KNOW_API_IS_SUBJECT_TO_CHANGE
+#define THIS_ERROR_QUARK g_quark_from_static_string("GRAPHENE_PKAUTHDIALOG_ERROR")
 
 #include "pkauthdialog.h"
 #include <polkitagent/polkitagent.h>
@@ -30,6 +31,7 @@ struct _GraphenePKAuthDialog
 	GList *identities;
 	PolkitAgentSession *agentSession;
 	ClutterText *responseField;
+	gboolean cancelled;
 };
 
 enum
@@ -42,11 +44,12 @@ static guint signals[SIGNAL_LAST];
 
 static void graphene_pk_auth_dialog_dispose(GObject *self_);
 static void on_select_identity(GraphenePKAuthDialog *self, gpointer userdata);
+static gboolean on_activate(GraphenePKAuthDialog *self, ClutterButtonEvent *event, gpointer userdata);
 static void on_auth_agent_completed(PolkitAgentSession *agentSession, gboolean gainedAuthorization, gpointer userdata);
 static void on_auth_agent_request(PolkitAgentSession *agentSession, gchar *request, gboolean echoOn, gpointer userdata);
 static void on_auth_agent_show_error(PolkitAgentSession *agentSession, gchar *text, gpointer userdata);
 static void on_auth_agent_show_info(PolkitAgentSession *agentSession, gchar *text, gpointer userdata);
-static GList * get_pkidentities_from_variant(GVariant *identitiesV, gchar **error);
+static GList * get_pkidentities_from_variant(GVariant *identitiesV, GError **error);
 
 G_DEFINE_TYPE(GraphenePKAuthDialog, graphene_pk_auth_dialog, CLUTTER_TYPE_ACTOR);
 
@@ -83,29 +86,21 @@ static void graphene_pk_auth_dialog_dispose(GObject *self_)
 	G_OBJECT_CLASS(graphene_pk_auth_dialog_parent_class)->dispose(G_OBJECT(self));
 }
 
-static gboolean on_button_pressed(GraphenePKAuthDialog *self, ClutterButtonEvent *event, gpointer userdata)
-{
-	if(self->agentSession)
-	{
-		clutter_actor_set_reactive(self, FALSE);
-		clutter_actor_set_reactive(self->responseField, FALSE);
-		clutter_actor_set_opacity(self, 150);
-		polkit_agent_session_response(self->agentSession, clutter_text_get_text(self->responseField));
-	}
-}
-
-GraphenePKAuthDialog * graphene_pk_auth_dialog_new(const gchar *actionId, const gchar *message, const gchar *iconName, const gchar *cookie, GVariant *identitiesV)
+GraphenePKAuthDialog * graphene_pk_auth_dialog_new(const gchar *actionId, const gchar *message, const gchar *iconName, const gchar *cookie, GVariant *identitiesV, GError **error)
 {
 	// The Polkit Authority sends a list of identities that are capable of
 	// authorizing this particular action. These can either be users or
 	// user groups (although there is room for new identity types).
-	GList *identities = get_pkidentities_from_variant(identitiesV, NULL);
+	GList *identities = get_pkidentities_from_variant(identitiesV, error);
 	if(!identities)
 		return NULL;
 
 	GraphenePKAuthDialog *self = GRAPHENE_PK_AUTH_DIALOG(g_object_new(GRAPHENE_TYPE_PK_AUTH_DIALOG, NULL));
 	if(!GRAPHENE_IS_PK_AUTH_DIALOG(self))
+	{
+		g_set_error_literal(error, THIS_ERROR_QUARK, 2, "Failed to create GObject");
 		return NULL;
+	}
 
 	self->actionId = g_strdup(actionId);
 	self->message = g_strdup(message);
@@ -145,11 +140,21 @@ GraphenePKAuthDialog * graphene_pk_auth_dialog_new(const gchar *actionId, const 
 	clutter_actor_set_background_color(okay, frameColor);
 	clutter_color_free(frameColor);
 
-	g_signal_connect_swapped(okay, "button-press-event", G_CALLBACK(on_button_pressed), self);
-	g_signal_connect_swapped(passwordBox, "activate", G_CALLBACK(on_button_pressed), self);
+	g_signal_connect_swapped(okay, "button-press-event", G_CALLBACK(on_activate), self);
+	g_signal_connect_swapped(passwordBox, "activate", G_CALLBACK(on_activate), self);
 
 	on_select_identity(self, NULL); // TEMP
 	return self;
+}
+
+void graphene_pk_auth_dialog_cancel(GraphenePKAuthDialog *self)
+{
+	g_return_if_fail(GRAPHENE_IS_PK_AUTH_DIALOG(self));
+	if(self->agentSession)
+	{
+		self->cancelled = TRUE;
+		polkit_agent_session_cancel(self->agentSession);
+	}
 }
 
 static void on_select_identity(GraphenePKAuthDialog *self, gpointer userdata)
@@ -159,11 +164,24 @@ static void on_select_identity(GraphenePKAuthDialog *self, gpointer userdata)
 	
 	self->agentSession = polkit_agent_session_new(identity, self->cookie);
 	
-	g_signal_connect(self->agentSession, "completed", G_CALLBACK(on_auth_agent_completed), self);
-	g_signal_connect(self->agentSession, "request", G_CALLBACK(on_auth_agent_request), self);
-	g_signal_connect(self->agentSession, "show-error", G_CALLBACK(on_auth_agent_show_error), self);
-	g_signal_connect(self->agentSession, "show-info", G_CALLBACK(on_auth_agent_show_info), self);
-	polkit_agent_session_initiate(self->agentSession);
+	#define connect(signal, func) g_signal_connect(self->agentSession, signal, G_CALLBACK(func), self)
+	connect("completed", on_auth_agent_completed);
+	connect("request", on_auth_agent_request);
+	connect("show-error", on_auth_agent_show_error);
+	connect("show-info", on_auth_agent_show_info);
+	#undef connect
+}
+
+static gboolean on_activate(GraphenePKAuthDialog *self, ClutterButtonEvent *event, gpointer userdata)
+{
+	if(self->agentSession)
+	{
+		clutter_actor_set_reactive(self, FALSE);
+		clutter_actor_set_reactive(self->responseField, FALSE);
+		clutter_actor_set_opacity(self, 150);
+		polkit_agent_session_initiate(self->agentSession);
+		polkit_agent_session_response(self->agentSession, clutter_text_get_text(self->responseField));
+	}
 }
 
 static void on_auth_agent_completed(PolkitAgentSession *agentSession, gboolean gainedAuthorization, gpointer userdata)
@@ -171,13 +189,12 @@ static void on_auth_agent_completed(PolkitAgentSession *agentSession, gboolean g
 	g_return_if_fail(GRAPHENE_IS_PK_AUTH_DIALOG(userdata));
 	GraphenePKAuthDialog *self = GRAPHENE_PK_AUTH_DIALOG(userdata);
 	g_clear_object(&self->agentSession);
-	g_signal_emit(self, signals[SIGNAL_COMPLETE], 0, FALSE, gainedAuthorization);
+	g_signal_emit(self, signals[SIGNAL_COMPLETE], 0, self->cancelled, gainedAuthorization);
 }
 
 static void on_auth_agent_request(PolkitAgentSession *agentSession, gchar *request, gboolean echoOn, gpointer userdata)
 {
 	g_message("Request: %s (echo: %i)", request, echoOn);
-	// Hardcode password for testing
 }
 
 static void on_auth_agent_show_error(PolkitAgentSession *agentSession, gchar *text, gpointer userdata)
@@ -190,8 +207,14 @@ static void on_auth_agent_show_info(PolkitAgentSession *agentSession, gchar *tex
 	g_warning("Authentication info: %s", text);
 }
 
-static GList * get_pkidentities_from_variant(GVariant *identitiesV, gchar **error)
+static GList * get_pkidentities_from_variant(GVariant *identitiesV, GError **error)
 {	
+	if(!g_variant_check_format_string(identitiesV, "a(sa{sv})", FALSE))
+	{
+		g_set_error(error, THIS_ERROR_QUARK, 3, "Invalid format string on 'identitiesV', should be 'a(sa{sv})' but found '%s;.", g_variant_get_type_string(identitiesV));
+		return NULL;
+	}
+
 	GList *identities = NULL;
 
 	gchar *kind;
@@ -228,9 +251,8 @@ static GList * get_pkidentities_from_variant(GVariant *identitiesV, gchar **erro
 				g_free(key);
 				g_variant_iter_free(propIter);
 				g_free(kind);
-				if(error)
-					*error = g_strdup_printf("Invalid/unsupported user identity key: %s, %s", kind, key);
 				g_list_free_full(identities, (GDestroyNotify)g_object_unref);
+				g_set_error(error, THIS_ERROR_QUARK, 1, "Invalid/unsupported user identity key: %s, %s", kind, key);
 				return NULL;
 			}
 
