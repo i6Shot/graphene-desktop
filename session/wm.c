@@ -247,6 +247,12 @@ static void xfixes_calculate_input_region(GrapheneWM *self)
 	meta_set_stage_input_region(screen, self->xInputRegion);
 }
 
+/*
+ * Call this on any (reactive) actor which will show above windows.
+ * This includes the Panel, modal popups, etc. You shouldn't need to manually
+ * remove the actor using xfixes_remove_input_actor, as this automatically
+ * watches for moving, resizing, mapping, and destroying of the actor.
+ */
 static void xfixes_add_input_actor(GrapheneWM *self, ClutterActor *actor)
 {
 	if(meta_is_wayland_compositor())
@@ -254,8 +260,6 @@ static void xfixes_add_input_actor(GrapheneWM *self, ClutterActor *actor)
 	g_return_if_fail(CLUTTER_IS_ACTOR(actor));
 	self->xInputActors = g_list_prepend(self->xInputActors, actor);
 	
-	// Automatically recalculate input region when
-	// the actor moves, resizes, or hides/shows.
 	g_signal_connect_swapped(actor, "notify::allocation", G_CALLBACK(xfixes_calculate_input_region), self);
 	g_signal_connect_swapped(actor, "notify::mapped", G_CALLBACK(xfixes_calculate_input_region), self);
 	g_signal_connect_swapped(actor, "notify::reactive", G_CALLBACK(xfixes_calculate_input_region), self);
