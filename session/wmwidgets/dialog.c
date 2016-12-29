@@ -16,8 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
  
- // TODO: Implement content actor, highlighted button, and keyboard input
- 
 #include "dialog.h"
 #include <glib.h>
 

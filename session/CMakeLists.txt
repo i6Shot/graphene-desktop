@@ -26,7 +26,9 @@ add_executable(graphene-session
 	wmwidgets/percent-floater.c
 	util.c
 	wm.c
+	wmwidgets/style.c
 	wmwidgets/background.c
+	wmwidgets/button.c
 	# ${PROJECT_SOURCE_DIR}/common/dbusmonitor.c
 	${PROJECT_SOURCE_DIR}/common/sound.c
 )

@@ -22,8 +22,7 @@
 #ifndef __GRAPHENE_WM_DIALOG_H__
 #define __GRAPHENE_WM_DIALOG_H__
 
-#include <meta/main.h>
-#include <meta/meta-plugin.h>
+#include <clutter/clutter.h>
 
 G_BEGIN_DECLS
 

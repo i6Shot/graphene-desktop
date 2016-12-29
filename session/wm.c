@@ -18,12 +18,14 @@
 
 #include "wm.h"
 #include "wmwidgets/background.h"
-#include "dialog.h"
+#include "wmwidgets/button.h"
 #include <meta/meta-shadow-factory.h>
 #include <meta/display.h>
 #include <meta/keybindings.h>
+#include <meta/util.h>
 #include <pulse/glib-mainloop.h>
 #include <glib-unix.h>
+#include <stdio.h>
 
 #define WM_VERSION_STRING "1.0.0"
 #define WM_PERCENT_BAR_STEPS 15
@@ -47,6 +49,10 @@
 
 
 static void on_monitors_changed(MetaScreen *screen, GrapheneWM *wm);
+static void xfixes_add_input_actor(GrapheneWM *self, ClutterActor *actor);
+static void xfixes_remove_input_actor(GrapheneWM *self, ClutterActor *actor);
+static void graphene_wm_begin_modal(GrapheneWM *self);
+static void graphene_wm_end_modal(GrapheneWM *self);
 static void center_actor_on_primary(GrapheneWM *self, ClutterActor *actor);
 
 static void minimize_done(ClutterActor *actor, MetaPlugin *plugin);
@@ -71,23 +77,53 @@ const MetaPluginInfo * graphene_wm_plugin_info(MetaPlugin *plugin)
 
 void graphene_wm_start(MetaPlugin *plugin)
 {
+	
+	//int primary = meta_screen_get_primary_monitor(screen);
+	//MetaWorkspace *ws = meta_screen_get_active_workspace(screen);
+
+
+	//MetaRectangle rect;
+	//meta_screen_get_monitor_geometry(screen, primary, &rect);
+
+	//ClutterActor *panel = clutter_actor_new();
+	//clutter_actor_set_position(panel, rect.x, rect.y);
+	//clutter_actor_set_size(panel, rect.width, 60);
+	//clutter_actor_set_reactive(panel, TRUE);
+	//g_signal_connect(panel, "button-press-event", G_CALLBACK(click), self);
+	//
+	//ClutterColor color = {0,0,0,255};
+	//clutter_actor_set_background_color(panel, &color);
+	//clutter_actor_show(panel);
+	//clutter_actor_add_child(self->stage, panel);
+	//xfixes_add_input_actor(self, panel);
+
+	//MetaStrut strut = {rect.x,rect.y,rect.width,60, META_SIDE_TOP};
+	//GSList *struts = g_slist_append(NULL, &strut);
+	//meta_workspace_set_builtin_struts(ws, struts);
+
+	//clutter_actor_show(self->stage);
+	//printf("MESSAGE: %i, %i, %i, %i\n", rect.x, rect.y, rect.width, rect.height);
+	
 	GrapheneWM *self = GRAPHENE_WM(plugin);
 
-	// Get stage
 	MetaScreen *screen = meta_plugin_get_screen(plugin);
 	self->stage = meta_get_stage_for_screen(screen);
 
+	// Don't bother clearing the stage when we're drawing our own background
+	clutter_stage_set_no_clear_hint(CLUTTER_STAGE(self->stage), TRUE);
+
 	init_keybindings(self);
+
 	self->percentBar = graphene_percent_floater_new();
 	graphene_percent_floater_set_divisions(self->percentBar, WM_PERCENT_BAR_STEPS);
-	graphene_percent_floater_set_scale(self->percentBar, 2);
+	graphene_percent_floater_set_scale(self->percentBar, 2); // TEMP
 	clutter_actor_insert_child_above(self->stage, CLUTTER_ACTOR(self->percentBar), NULL);
 
-	// Create background
 	ClutterActor *backgroundGroup = meta_background_group_new();
 	self->backgroundGroup = META_BACKGROUND_GROUP(backgroundGroup);
 	clutter_actor_set_reactive(backgroundGroup, FALSE);
 	clutter_actor_insert_child_below(self->stage, backgroundGroup, NULL);
+	clutter_actor_show(backgroundGroup);
 
 	self->coverGroup = clutter_actor_new();
 	clutter_actor_set_reactive(self->coverGroup, FALSE);
@@ -95,21 +131,18 @@ void graphene_wm_start(MetaPlugin *plugin)
 
 	g_signal_connect(screen, "monitors_changed", G_CALLBACK(on_monitors_changed), self);
 	on_monitors_changed(screen, self);
-
-	clutter_actor_show(backgroundGroup);
 	
-	// Show windows
-	ClutterActor *windowGroup = meta_get_window_group_for_screen(screen);
-	clutter_actor_show(windowGroup);
-	//clutter_actor_set_opacity(windowGroup, 50);
-
-	// Show stage
 	clutter_actor_show(self->stage);
 	
 	// Start the WM modal, and the session manager can end the modal when
 	// startup completes with graphene_wm_show_dialog(wm, NULL);
-	meta_plugin_begin_modal(META_PLUGIN(self), 0, 0);
+	graphene_wm_begin_modal(self);
 	clutter_actor_show(self->coverGroup);
+	
+	CMKButton *button = cmk_button_new_with_text("hello!");
+	xfixes_add_input_actor(self, CLUTTER_ACTOR(button));
+	clutter_actor_add_child(self->stage, CLUTTER_ACTOR(button));
+	clutter_actor_set_position(CLUTTER_ACTOR(button), 200, 200);
 }
 
 static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self)
@@ -149,6 +182,137 @@ static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self)
 		center_actor_on_primary(self, self->dialog);
 }
 
+
+
+/*
+ * Based on shell-global.c:shell_global_set_stage_input_region from gnome-shell
+ *
+ * I don't know all the details, but X has some issues with compositor input.
+ * More specifically, without this, clicking on any 'reactive' ClutterActors
+ * on the Stage, may either have no effect or cause permanent loss of mouse
+ * input and requires the compositor/session to be restarted.
+ *
+ * Any reactive actors that need to show up above everything on-screen (ex.
+ * the panel) must be added to the xInputActors array, and whenever they move
+ * or resize this input region must be recalculated.
+ *
+ * Use the xfixes_add/remove_input_actor functions for this. They will
+ * automatically handle watching for size/position changes. 
+ */
+static void xfixes_calculate_input_region(GrapheneWM *self)
+{
+	if(meta_is_wayland_compositor())
+		return;
+
+	printf("calculate region\n");
+	MetaScreen *screen = meta_plugin_get_screen(META_PLUGIN(self));
+	Display *xDisplay = meta_display_get_xdisplay(meta_screen_get_display(screen));
+
+	guint numActors = g_list_length(self->xInputActors);
+
+	if(self->isModal || numActors == 0)
+	{
+		meta_empty_stage_input_region(screen);
+		if(self->xInputRegion)
+			XFixesDestroyRegion(xDisplay, self->xInputRegion);
+		self->xInputRegion = 0;
+		return;
+	}
+
+	XRectangle *rects = g_new(XRectangle, numActors);
+	guint i = 0;
+
+	for(GList *it = self->xInputActors; it != NULL; it = it->next)
+	{
+		if(!CLUTTER_IS_ACTOR(it->data))
+			continue;
+		ClutterActor *actor = CLUTTER_ACTOR(it->data);
+		if(!clutter_actor_is_mapped(actor) || !clutter_actor_get_reactive(actor))
+			return;
+		gfloat x, y, width, height;
+		clutter_actor_get_transformed_position(actor, &x, &y);
+		clutter_actor_get_transformed_size(actor, &width, &height);
+		rects[i].x = (short)x;
+		rects[i].y = (short)y;
+		rects[i].width = (unsigned short)width;
+		rects[i].height = (unsigned short)height;
+		i++;
+	}
+
+	if(self->xInputRegion)
+		XFixesDestroyRegion(xDisplay, self->xInputRegion);
+
+	self->xInputRegion = XFixesCreateRegion(xDisplay, rects, i);
+	g_free(rects);
+	meta_set_stage_input_region(screen, self->xInputRegion);
+}
+
+static void xfixes_add_input_actor(GrapheneWM *self, ClutterActor *actor)
+{
+	if(meta_is_wayland_compositor())
+		return;
+	g_return_if_fail(CLUTTER_IS_ACTOR(actor));
+	self->xInputActors = g_list_prepend(self->xInputActors, actor);
+	
+	// Automatically recalculate input region when
+	// the actor moves, resizes, or hides/shows.
+	g_signal_connect_swapped(actor, "notify::allocation", G_CALLBACK(xfixes_calculate_input_region), self);
+	g_signal_connect_swapped(actor, "notify::mapped", G_CALLBACK(xfixes_calculate_input_region), self);
+	g_signal_connect_swapped(actor, "notify::reactive", G_CALLBACK(xfixes_calculate_input_region), self);
+	g_signal_connect_swapped(actor, "destroy", G_CALLBACK(xfixes_remove_input_actor), self);
+
+	xfixes_calculate_input_region(self);
+}
+
+static void xfixes_remove_input_actor(GrapheneWM *self, ClutterActor *actor)
+{
+	if(meta_is_wayland_compositor())
+		return;
+	g_return_if_fail(CLUTTER_IS_ACTOR(actor));
+	gboolean changed = false;
+	for(GList *it = self->xInputActors; it != NULL;)
+	{
+		if(it->data == actor)
+		{
+			printf("removed\n");
+			GList *temp = it;
+			it = it->next;
+			g_signal_handlers_disconnect_by_func(temp->data, xfixes_calculate_input_region, self);
+			g_signal_handlers_disconnect_by_func(temp->data, xfixes_remove_input_actor, self);
+			self->xInputActors = g_list_delete_link(self->xInputActors, temp);
+			changed = true;
+		}
+		else
+			it = it->next;
+	}
+
+	if(changed)	
+		xfixes_calculate_input_region(self);
+}
+
+static void graphene_wm_begin_modal(GrapheneWM *self)
+{
+	if(self->isModal)
+		return;
+	meta_plugin_begin_modal(META_PLUGIN(self), 0, 0);
+	self->isModal = TRUE;
+	xfixes_calculate_input_region(self);
+}
+
+static void graphene_wm_end_modal(GrapheneWM *self)
+{
+	if(!self->isModal)
+		return;
+	meta_plugin_end_modal(META_PLUGIN(self), 0);
+	self->isModal = FALSE;
+	xfixes_calculate_input_region(self);
+}
+
+
+/*
+ * Modal dialog
+ */
+
 static void close_dialog_complete(GrapheneWM *self, ClutterActor *dialog)
 {
 	g_signal_handlers_disconnect_by_func(dialog, close_dialog_complete, self);
@@ -172,7 +336,7 @@ static void graphene_wm_close_dialog(GrapheneWM *self, gboolean closeCover)
 		TRANSITION_MEMLEAK_FIX(self->dialog, "scale-y");
 	}
 	
-	meta_plugin_end_modal(META_PLUGIN(self), 0);
+	graphene_wm_end_modal(self);
 	
 	if(!closeCover || clutter_actor_get_opacity(self->coverGroup) == 0)
 		return;
@@ -215,7 +379,7 @@ void graphene_wm_show_dialog(GrapheneWM *self, ClutterActor *dialog)
 	clutter_actor_set_opacity(self->coverGroup, 255);
 	clutter_actor_restore_easing_state(self->coverGroup);
 	TRANSITION_MEMLEAK_FIX(self->coverGroup, "opacity");
-	meta_plugin_begin_modal(META_PLUGIN(self), 0, 0);
+	graphene_wm_begin_modal(self);
 }
 
 

@@ -42,6 +42,12 @@ struct _GrapheneWM {
 	SoundSettings *soundSettings;
 	ClutterActor *coverGroup;
 	ClutterActor *dialog;
+	
+	// For fixing an input issue with the X backend
+	// See xfixes_calculate_input_region (wm.c) for more details
+	gboolean isModal;
+	GList *xInputActors; // List of ClutterActors
+	XserverRegion xInputRegion;
 };
 
 void graphene_wm_show_dialog(GrapheneWM *wm, ClutterActor *actor);
