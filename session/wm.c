@@ -78,10 +78,8 @@ const MetaPluginInfo * graphene_wm_plugin_info(MetaPlugin *plugin)
 
 void graphene_wm_start(MetaPlugin *plugin)
 {
-	
 	//int primary = meta_screen_get_primary_monitor(screen);
 	//MetaWorkspace *ws = meta_screen_get_active_workspace(screen);
-
 
 	//MetaRectangle rect;
 	//meta_screen_get_monitor_geometry(screen, primary, &rect);
@@ -109,6 +107,7 @@ void graphene_wm_start(MetaPlugin *plugin)
 
 	MetaScreen *screen = meta_plugin_get_screen(plugin);
 	self->stage = meta_get_stage_for_screen(screen);
+	clutter_actor_show(self->stage);
 
 	// Don't bother clearing the stage when we're drawing our own background
 	clutter_stage_set_no_clear_hint(CLUTTER_STAGE(self->stage), TRUE);
@@ -133,21 +132,10 @@ void graphene_wm_start(MetaPlugin *plugin)
 	g_signal_connect(screen, "monitors_changed", G_CALLBACK(on_monitors_changed), self);
 	on_monitors_changed(screen, self);
 	
-	clutter_actor_show(self->stage);
-	
 	// Start the WM modal, and the session manager can end the modal when
 	// startup completes with graphene_wm_show_dialog(wm, NULL);
 	graphene_wm_begin_modal(self);
 	clutter_actor_show(self->coverGroup);
-	
-	CMKShadow *shadow = cmk_shadow_new();
-	//xfixes_add_input_actor(self, CLUTTER_ACTOR(button));
-	cmk_shadow_set_hblur(shadow, 50);
-	cmk_shadow_set_vblur(shadow, 50);
-	clutter_actor_set_position(CLUTTER_ACTOR(shadow), 200, 200);
-	clutter_actor_set_size(CLUTTER_ACTOR(shadow), 1000, 1000);
-	clutter_actor_add_child(self->stage, CLUTTER_ACTOR(shadow));
-	clutter_actor_show(CLUTTER_ACTOR(shadow));
 }
 
 static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self)
