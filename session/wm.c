@@ -18,7 +18,8 @@
 
 #include "wm.h"
 #include "wmwidgets/background.h"
-#include "wmwidgets/button.h"
+#include "cmk/button.h"
+#include "cmk/shadow.h"
 #include <meta/meta-shadow-factory.h>
 #include <meta/display.h>
 #include <meta/keybindings.h>
@@ -139,10 +140,14 @@ void graphene_wm_start(MetaPlugin *plugin)
 	graphene_wm_begin_modal(self);
 	clutter_actor_show(self->coverGroup);
 	
-	CMKButton *button = cmk_button_new_with_text("hello!");
-	xfixes_add_input_actor(self, CLUTTER_ACTOR(button));
-	clutter_actor_add_child(self->stage, CLUTTER_ACTOR(button));
-	clutter_actor_set_position(CLUTTER_ACTOR(button), 200, 200);
+	CMKShadow *shadow = cmk_shadow_new();
+	//xfixes_add_input_actor(self, CLUTTER_ACTOR(button));
+	cmk_shadow_set_hblur(shadow, 50);
+	cmk_shadow_set_vblur(shadow, 50);
+	clutter_actor_set_position(CLUTTER_ACTOR(shadow), 200, 200);
+	clutter_actor_set_size(CLUTTER_ACTOR(shadow), 1000, 1000);
+	clutter_actor_add_child(self->stage, CLUTTER_ACTOR(shadow));
+	clutter_actor_show(CLUTTER_ACTOR(shadow));
 }
 
 static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self)
@@ -204,7 +209,6 @@ static void xfixes_calculate_input_region(GrapheneWM *self)
 	if(meta_is_wayland_compositor())
 		return;
 
-	printf("calculate region\n");
 	MetaScreen *screen = meta_plugin_get_screen(META_PLUGIN(self));
 	Display *xDisplay = meta_display_get_xdisplay(meta_screen_get_display(screen));
 
@@ -278,7 +282,6 @@ static void xfixes_remove_input_actor(GrapheneWM *self, ClutterActor *actor)
 	{
 		if(it->data == actor)
 		{
-			printf("removed\n");
 			GList *temp = it;
 			it = it->next;
 			g_signal_handlers_disconnect_by_func(temp->data, xfixes_calculate_input_region, self);

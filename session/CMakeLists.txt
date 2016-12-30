@@ -26,9 +26,10 @@ add_executable(graphene-session
 	wmwidgets/percent-floater.c
 	util.c
 	wm.c
-	wmwidgets/style.c
+	cmk/style.c
 	wmwidgets/background.c
-	wmwidgets/button.c
+	cmk/button.c
+	cmk/shadow.c
 	# ${PROJECT_SOURCE_DIR}/common/dbusmonitor.c
 	${PROJECT_SOURCE_DIR}/common/sound.c
 )
@@ -37,6 +38,7 @@ target_link_libraries(graphene-session
 	${LIBMUTTER_LIBRARIES}
 	${LIBPULSEGLIB_LIBRARIES}
 	${POLKITAGENT_LIBRARIES}
+	m
 )
 target_include_directories(graphene-session PRIVATE
 	${CMAKE_CURRENT_BINARY_DIR} 
