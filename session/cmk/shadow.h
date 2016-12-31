@@ -8,11 +8,12 @@
 #define __CMK_SHADOW_H__
 
 #include <clutter/clutter.h>
+#include "cmk-widget.h"
 
 G_BEGIN_DECLS
 
 #define CMK_TYPE_SHADOW cmk_shadow_get_type()
-G_DECLARE_FINAL_TYPE(CMKShadow, cmk_shadow, CMK, SHADOW, ClutterActor);
+G_DECLARE_FINAL_TYPE(CMKShadow, cmk_shadow, CMK, SHADOW, CMKWidget);
 
 CMKShadow * cmk_shadow_new();
 

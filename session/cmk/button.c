@@ -29,7 +29,7 @@ static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas 
 static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, int height, CMKButton *self);
 static void on_notify_pressed(CMKButton *self, GParamSpec *spec, ClutterClickAction *action);
 
-G_DEFINE_TYPE(CMKButton, cmk_button, CLUTTER_TYPE_ACTOR);
+G_DEFINE_TYPE(CMKButton, cmk_button, CMK_TYPE_WIDGET);
 
 
 
@@ -79,8 +79,6 @@ static void on_clicked(ClutterClickAction *action, ClutterActor *actor)
 
 static void cmk_button_init(CMKButton *self)
 {
-	self->style = cmk_style_get_default();
-
 	ClutterContent *canvas = clutter_canvas_new();
 	g_signal_connect(canvas, "draw", G_CALLBACK(on_draw_canvas), self);
 
@@ -105,11 +103,9 @@ static void cmk_button_init(CMKButton *self)
 	self->text = CLUTTER_TEXT(clutter_text_new());
 	clutter_actor_add_child(actor, CLUTTER_ACTOR(self->text));
 
-	float padding = cmk_style_get_padding(self->style);
+	float padding = cmk_style_get_padding(cmk_widget_get_style(CMK_WIDGET(self)));
 	ClutterMargin margin = {padding, padding, padding, padding};
 	clutter_actor_set_margin(CLUTTER_ACTOR(self->text), &margin);
-	//clutter_grab_pointer(actor);
-	//clutter_input_device_grab(event->device, actor);
 }
 
 static void cmk_button_dispose(GObject *self_)
@@ -159,7 +155,8 @@ static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas 
 
 static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, int height, CMKButton *self)
 {
-	double radius = cmk_style_get_bevel_radius(self->style);
+	CMKStyle *style = cmk_widget_get_style(CMK_WIDGET(self));
+	double radius = cmk_style_get_bevel_radius(style);
 	double degrees = M_PI / 180.0;
 
 	cairo_save(cr);
@@ -174,7 +171,7 @@ static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, in
 	cairo_arc(cr, radius, radius, radius, 180 * degrees, 270 * degrees);
 	cairo_close_path(cr);
 
-	cairo_set_source_cmk_color(cr, cmk_style_get_color(self->style, "primary"));
+	cairo_set_source_cmk_color(cr, cmk_style_get_color(style, "primary"));
 	cairo_fill(cr);
 	return TRUE;
 }
@@ -196,11 +193,4 @@ const gchar * cmk_button_get_text(CMKButton *self)
 {
 	g_return_val_if_fail(CMK_IS_BUTTON(self), NULL);
 	return clutter_text_get_text(self->text);
-}
-
-void cmk_button_set_style(CMKButton *self, CMKStyle *style)
-{
-	g_return_if_fail(CMK_IS_BUTTON(self));
-	g_clear_object(&self->style);
-	self->style = g_object_ref(style);
 }

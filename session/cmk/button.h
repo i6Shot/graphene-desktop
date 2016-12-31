@@ -8,19 +8,18 @@
 #define __CMK_BUTTON_H__
 
 #include <clutter/clutter.h>
-#include "style.h"
+#include "cmk-widget.h"
 
 G_BEGIN_DECLS
 
 #define CMK_TYPE_BUTTON cmk_button_get_type()
-G_DECLARE_FINAL_TYPE(CMKButton, cmk_button, CMK, BUTTON, ClutterActor);
+G_DECLARE_FINAL_TYPE(CMKButton, cmk_button, CMK, BUTTON, CMKWidget);
 
 CMKButton *cmk_button_new();
 CMKButton *cmk_button_new_with_text(const gchar *text);
 
 void cmk_button_set_text(CMKButton *button, const gchar *text);
 const gchar * cmk_button_get_text(CMKButton *button);
-void cmk_button_set_style(CMKButton *button, CMKStyle *style);
 
 G_END_DECLS
 

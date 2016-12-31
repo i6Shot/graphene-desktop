@@ -30,6 +30,7 @@ add_executable(graphene-session
 	wmwidgets/background.c
 	cmk/button.c
 	cmk/shadow.c
+	cmk/cmk-widget.c
 	# ${PROJECT_SOURCE_DIR}/common/dbusmonitor.c
 	${PROJECT_SOURCE_DIR}/common/sound.c
 )

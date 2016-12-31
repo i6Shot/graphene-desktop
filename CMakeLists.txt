@@ -18,7 +18,6 @@ endif()
 # Config
 set(GRAPHENE_DATA_DIR ${CMAKE_INSTALL_PREFIX}/share/graphene) # Must end without a slash
 configure_file(${PROJECT_SOURCE_DIR}/graphene-panel.desktop.in ${PROJECT_SOURCE_DIR}/data/autostart/graphene-panel.desktop)
-configure_file(${PROJECT_SOURCE_DIR}/graphene-wm.desktop.in ${PROJECT_SOURCE_DIR}/data/autostart/graphene-wm.desktop)
 configure_file(${PROJECT_SOURCE_DIR}/config.h.in ${PROJECT_SOURCE_DIR}/config.h)
 include_directories(${PROJECT_SOURCE_DIR})
 

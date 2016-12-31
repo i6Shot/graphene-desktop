@@ -5,7 +5,6 @@
  */
 
 #include "shadow.h"
-#include "style.h"
 #include <math.h>
 
 struct _CMKShadow
@@ -20,7 +19,7 @@ static void cmk_shadow_dispose(GObject *self_);
 static void on_size_changed(CMKShadow *self, GParamSpec *spec, gpointer userdata);
 static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, int height, CMKShadow *self);
 
-G_DEFINE_TYPE(CMKShadow, cmk_shadow, CLUTTER_TYPE_ACTOR);
+G_DEFINE_TYPE(CMKShadow, cmk_shadow, CMK_TYPE_WIDGET);
 
 
 
