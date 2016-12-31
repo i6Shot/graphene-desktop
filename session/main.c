@@ -32,7 +32,6 @@
 #include "wm.h"
 
 G_DEFINE_TYPE(GrapheneWM, graphene_wm, META_TYPE_PLUGIN);
-static void graphene_wm_dispose(GObject *gobject);
 static gboolean on_exit_signal(gpointer userdata);
 static void on_session_startup_complete(gpointer userdata);
 static void on_show_dialog(ClutterActor *dialog, gpointer userdata);
@@ -71,8 +70,8 @@ static void graphene_wm_class_init(GrapheneWMClass *class)
 	pluginClass->unminimize = graphene_wm_unminimize;
 	pluginClass->map = graphene_wm_map;
 	pluginClass->destroy = graphene_wm_destroy;
-	
-	G_OBJECT_CLASS(class)->dispose = graphene_wm_dispose;
+	// The plugin class is never properly destructed, and it exists for the
+	// entire duration of the program. So don't attach dispose/finalize.
 }
 
 static void graphene_wm_init(GrapheneWM *wm)
@@ -82,18 +81,6 @@ static void graphene_wm_init(GrapheneWM *wm)
 	g_unix_signal_add(SIGTERM, (GSourceFunc)on_exit_signal, NULL);
 	g_unix_signal_add(SIGINT, (GSourceFunc)on_exit_signal, NULL);
 	g_unix_signal_add(SIGHUP, (GSourceFunc)on_exit_signal, NULL);
-}
-
-static void graphene_wm_dispose(GObject *gobject)
-{
-	GrapheneWM *wm = GRAPHENE_WM(gobject);
-	graphene_session_exit(); // Has no effect if the session already exited
-	// g_signal_handlers_disconnect_by_func(
-	// 	meta_plugin_get_screen(META_PLUGIN(gobject)),
-	// 	on_monitors_changed,
-	// 	gobject);
-	// g_clear_object(&GRAPHENE_WM(gobject)->BackgroundGroup);
-	G_OBJECT_CLASS(graphene_wm_parent_class)->dispose(gobject);
 }
 
 static gboolean on_exit_signal(gpointer userdata)
