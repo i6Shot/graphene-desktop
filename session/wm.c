@@ -31,6 +31,7 @@
 #define WM_VERSION_STRING "1.0.0"
 #define WM_PERCENT_BAR_STEPS 15
 #define WM_TRANSITION_TIME 200 // Common transition time, ms
+#define ACTOR CLUTTER_ACTOR // I am lazy
 
 /*
  * From what I can tell, the current version of Clutter has a memory leak
@@ -107,7 +108,6 @@ void graphene_wm_start(MetaPlugin *plugin)
 
 	MetaScreen *screen = meta_plugin_get_screen(plugin);
 	self->stage = meta_get_stage_for_screen(screen);
-	clutter_actor_show(self->stage);
 
 	// Don't bother clearing the stage when we're drawing our own background
 	clutter_stage_set_no_clear_hint(CLUTTER_STAGE(self->stage), TRUE);
@@ -117,7 +117,7 @@ void graphene_wm_start(MetaPlugin *plugin)
 	self->percentBar = graphene_percent_floater_new();
 	graphene_percent_floater_set_divisions(self->percentBar, WM_PERCENT_BAR_STEPS);
 	graphene_percent_floater_set_scale(self->percentBar, 2); // TEMP
-	clutter_actor_insert_child_above(self->stage, CLUTTER_ACTOR(self->percentBar), NULL);
+	clutter_actor_insert_child_above(self->stage, ACTOR(self->percentBar), NULL);
 
 	ClutterActor *backgroundGroup = meta_background_group_new();
 	self->backgroundGroup = META_BACKGROUND_GROUP(backgroundGroup);
@@ -136,11 +136,14 @@ void graphene_wm_start(MetaPlugin *plugin)
 	// startup completes with graphene_wm_show_dialog(wm, NULL);
 	graphene_wm_begin_modal(self);
 	clutter_actor_show(self->coverGroup);
+	
+	// Finally, show everything
+	clutter_actor_show(self->stage);
 }
 
 static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self)
 {
-	ClutterActor *bgGroup = CLUTTER_ACTOR(self->backgroundGroup);
+	ClutterActor *bgGroup = ACTOR(self->backgroundGroup);
 	clutter_actor_destroy_all_children(bgGroup);
 	clutter_actor_destroy_all_children(self->coverGroup);
 	
@@ -149,7 +152,7 @@ static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self)
 	gint numMonitors = meta_screen_get_n_monitors(screen);
 	for(int i=0;i<numMonitors;++i)
 	{
-		clutter_actor_add_child(bgGroup, CLUTTER_ACTOR(graphene_wm_background_new(screen, i)));
+		clutter_actor_add_child(bgGroup, ACTOR(graphene_wm_background_new(screen, i)));
 	
 		MetaRectangle rect = meta_rect(0,0,0,0);
 		meta_screen_get_monitor_geometry(screen, i, &rect);
@@ -166,10 +169,10 @@ static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self)
 	int width = 0, height = 0;
 	meta_screen_get_size(screen, &width, &height);
 	
-	clutter_actor_set_y(CLUTTER_ACTOR(self->percentBar), 30);
-	clutter_actor_set_x(CLUTTER_ACTOR(self->percentBar), width/2-width/8);
-	clutter_actor_set_width(CLUTTER_ACTOR(self->percentBar), width/4);
-	clutter_actor_set_height(CLUTTER_ACTOR(self->percentBar), 20);
+	clutter_actor_set_y(ACTOR(self->percentBar), 30);
+	clutter_actor_set_x(ACTOR(self->percentBar), width/2-width/8);
+	clutter_actor_set_width(ACTOR(self->percentBar), width/4);
+	clutter_actor_set_height(ACTOR(self->percentBar), 20);
 
 	if(self->dialog)
 		center_actor_on_primary(self, self->dialog);
@@ -218,7 +221,7 @@ static void xfixes_calculate_input_region(GrapheneWM *self)
 	{
 		if(!CLUTTER_IS_ACTOR(it->data))
 			continue;
-		ClutterActor *actor = CLUTTER_ACTOR(it->data);
+		ClutterActor *actor = ACTOR(it->data);
 		if(!clutter_actor_is_mapped(actor) || !clutter_actor_get_reactive(actor))
 			return;
 		gfloat x, y, width, height;
@@ -397,7 +400,7 @@ static void center_actor_on_primary(GrapheneWM *self, ClutterActor *actor)
 
 void graphene_wm_minimize(MetaPlugin *plugin, MetaWindowActor *windowActor)
 {
-	ClutterActor *actor = CLUTTER_ACTOR(windowActor);
+	ClutterActor *actor = ACTOR(windowActor);
 	
 	// Get the minimized position
 	MetaWindow *window = meta_window_actor_get_meta_window(windowActor);
@@ -434,7 +437,7 @@ static void minimize_done(ClutterActor *actor, MetaPlugin *plugin)
 
 void graphene_wm_unminimize(MetaPlugin *plugin, MetaWindowActor *windowActor)
 {
-	ClutterActor *actor = CLUTTER_ACTOR(windowActor);
+	ClutterActor *actor = ACTOR(windowActor);
 
 	// Get the unminimized position
 	gint x = clutter_actor_get_x(actor);
@@ -473,7 +476,7 @@ static void unminimize_done(ClutterActor *actor, MetaPlugin *plugin)
 
 void graphene_wm_destroy(MetaPlugin *plugin, MetaWindowActor *windowActor)
 {
-	ClutterActor *actor = CLUTTER_ACTOR(windowActor);
+	ClutterActor *actor = ACTOR(windowActor);
 
 	clutter_actor_remove_all_transitions(actor);
 	MetaWindow *window = meta_window_actor_get_meta_window(windowActor);
@@ -510,7 +513,7 @@ static void destroy_done(ClutterActor *actor, MetaPlugin *plugin)
 
 void graphene_wm_map(MetaPlugin *plugin, MetaWindowActor *windowActor)
 {
-	ClutterActor *actor = CLUTTER_ACTOR(windowActor);
+	ClutterActor *actor = ACTOR(windowActor);
 
 	clutter_actor_remove_all_transitions(actor);
 	MetaWindow *window = meta_window_actor_get_meta_window(windowActor);
