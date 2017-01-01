@@ -5,6 +5,12 @@ The desktop environment of VeltOS, an Arch Linux-based operating system
 built entirely upon community input. Check out [velt.io](https://www.velt.io)
 for more info.
 
+Screenshot
+--------
+
+![Screenshot of VeltOS](/screenshot.png?raw=true)
+To continue the style of Mutter: a boring desktop wallpaper for the adult in you.
+
 Installing for Arch
 --------
 
