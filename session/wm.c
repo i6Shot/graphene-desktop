@@ -17,8 +17,8 @@
  */
 
 #include "wm.h"
-#include "wmwidgets/background.h"
-#include "wmwidgets/dialog.h"
+#include "background.h"
+#include "dialog.h"
 #include "cmk/button.h"
 #include "cmk/shadow.h"
 #include <meta/meta-shadow-factory.h>

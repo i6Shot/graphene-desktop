@@ -25,7 +25,7 @@
 #include <meta/main.h>
 #include <meta/meta-plugin.h>
 #include <meta/meta-background-group.h>
-#include "wmwidgets/percent-floater.h"
+#include "percent-floater.h"
 #include "common/sound.h"
 
 G_BEGIN_DECLS

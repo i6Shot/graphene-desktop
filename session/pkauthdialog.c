@@ -124,7 +124,7 @@ GraphenePKAuthDialog * graphene_pk_auth_dialog_new(const gchar *actionId, const 
 	clutter_actor_add_child(actor, CLUTTER_ACTOR(passwordBox));
 	clutter_actor_set_reactive(CLUTTER_ACTOR(passwordBox), TRUE);
 	self->responseField = passwordBox;
-	clutter_actor_grab_key_focus(passwordBox);
+	clutter_actor_grab_key_focus(CLUTTER_ACTOR(passwordBox));
 
 	frameColor = clutter_color_new(0, 255, 0, 255);
 	clutter_actor_set_background_color(CLUTTER_ACTOR(passwordBox), frameColor);
@@ -176,9 +176,9 @@ static gboolean on_activate(GraphenePKAuthDialog *self, ClutterButtonEvent *even
 {
 	if(self->agentSession)
 	{
-		clutter_actor_set_reactive(self, FALSE);
-		clutter_actor_set_reactive(self->responseField, FALSE);
-		clutter_actor_set_opacity(self, 150);
+		clutter_actor_set_reactive(CLUTTER_ACTOR(self), FALSE);
+		clutter_actor_set_reactive(CLUTTER_ACTOR(self->responseField), FALSE);
+		clutter_actor_set_opacity(CLUTTER_ACTOR(self), 150);
 		polkit_agent_session_initiate(self->agentSession);
 		polkit_agent_session_response(self->agentSession, clutter_text_get_text(self->responseField));
 	}

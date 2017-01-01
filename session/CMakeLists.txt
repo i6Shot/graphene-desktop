@@ -23,13 +23,13 @@ add_executable(graphene-session
 	client.c
 	# status-notifier-watcher.c
 	# ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.c
-	wmwidgets/percent-floater.c
 	util.c
 	wm.c
+	percent-floater.c
+	dialog.c
+	background.c
+	pkauthdialog.c
 	cmk/style.c
-	wmwidgets/dialog.c
-	wmwidgets/background.c
-	wmwidgets/pkauthdialog.c
 	cmk/button.c
 	cmk/shadow.c
 	cmk/cmk-widget.c

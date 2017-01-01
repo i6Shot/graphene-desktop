@@ -55,8 +55,8 @@
 #include <session-dbus-iface.h>
 #include <stdio.h>
 #include "cmk/shadow.h"
-#include "wmwidgets/pkauthdialog.h"
-#include "wmwidgets/dialog.h"
+#include "pkauthdialog.h"
+#include "dialog.h"
 
 #define GRAPHENE_SESSION_NAME "Graphene"
 #define SESSION_DBUS_NAME "org.gnome.SessionManager"

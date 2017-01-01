@@ -5,7 +5,7 @@
  */
  
 #include "dialog.h"
-#include "../cmk/shadow.h"
+#include "cmk/shadow.h"
 #include <glib.h>
 #include <math.h>
 
