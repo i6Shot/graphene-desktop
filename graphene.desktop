@@ -1,7 +1,7 @@
 [Desktop Entry]
 Encoding=UTF-8
 Name=Graphene Desktop
-Comment=Default desktop environment of VeltOS
-Exec=graphene-session
+Comment=Desktop environment of VeltOS
+Exec=graphene-desktop
 Icon=
 Type=Application

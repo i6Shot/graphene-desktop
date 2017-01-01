@@ -16,8 +16,6 @@ if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 endif()
 
 # Config
-set(GRAPHENE_DATA_DIR ${CMAKE_INSTALL_PREFIX}/share/graphene) # Must end without a slash
-configure_file(${PROJECT_SOURCE_DIR}/graphene-panel.desktop.in ${PROJECT_SOURCE_DIR}/data/autostart/graphene-panel.desktop)
 configure_file(${PROJECT_SOURCE_DIR}/config.h.in ${PROJECT_SOURCE_DIR}/config.h)
 include_directories(${PROJECT_SOURCE_DIR})
 
@@ -27,39 +25,24 @@ pkg_check_modules(GLIB2 REQUIRED glib-2.0>=2.10)
 link_libraries(${GLIB2_LIBRARIES})
 include_directories(${GLIB2_INCLUDE_DIRS})
 
-# status-notifier-dbus-ifaces is used by multiple targets, so put the generator here
-add_custom_command(
-  OUTPUT ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.c ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.h
-  COMMAND gdbus-codegen --interface-prefix org --c-namespace DBus --generate-c-code status-notifier-dbus-ifaces ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.xml
-  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-  DEPENDS ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.xml
-)
-add_custom_target(status-notifier-codegen DEPENDS ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.c ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.h)
-
 # Setup targets
-add_subdirectory(session)
-add_subdirectory(panel)
+add_subdirectory(src)
 
 # Install
-# install(TARGETS graphene DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
-install(DIRECTORY data/ DESTINATION ${GRAPHENE_DATA_DIR}) # Slash after 'data' makes it only install contents of directory
-# install(FILES ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.gir DESTINATION ${CMAKE_INSTALL_PREFIX}/share/gir-1.0)
-# install(FILES ${PROJECT_BINARY_DIR}/Graphene-${GRAPHENE_VERSION}.typelib DESTINATION ${CMAKE_INSTALL_PREFIX}/lib/girepository-1.0)
 install(FILES graphene.desktop DESTINATION ${CMAKE_INSTALL_PREFIX}/share/xsessions)
-
 install(DIRECTORY schemas/ DESTINATION ${CMAKE_INSTALL_PREFIX}/share/glib-2.0/schemas)
 
 if(NOT DONT_COMPILE_SCHEMAS)
   install(CODE "execute_process(COMMAND make compile-schemas)") # There is probably a better way to do this...
 endif()
 
-# Uninstall target (only works after installing with install_manifest.txt)
-# Removes all files listed in install_manifest.txt, and then removes install_manifest.txt
-# If install_manifest.txt is not available, an error message is printed.
-add_custom_target(uninstall COMMAND { [ -f install_manifest.txt ] && xargs --verbose -d '\\n' rm < install_manifest.txt && rm install_manifest.txt\; } || echo ' *** ERROR: Missing install_manifest.txt: you must install first!' )
-
 # Convenience target to compile glib schemas (usually post-install and post-uninstall)
 add_custom_target(compile-schemas COMMAND glib-compile-schemas \"${CMAKE_INSTALL_PREFIX}/share/glib-2.0/schemas\" )
 
 # Force install - kills running process, runs install
-add_custom_target(finstall COMMAND killall graphene-wm graphene-panel graphene-session nautilus gnome-settings-daemon\; make install )
+add_custom_target(finstall COMMAND killall graphene-desktop nautilus-desktop gnome-settings-daemon\; make install )
+
+# Uninstall target (only works after installing with install_manifest.txt)
+# Removes all files listed in install_manifest.txt, and then removes install_manifest.txt
+# If install_manifest.txt is not available, an error message is printed.
+add_custom_target(uninstall COMMAND { [ -f install_manifest.txt ] && xargs --verbose -d '\\n' rm < install_manifest.txt && rm install_manifest.txt\; } || echo ' *** ERROR: Missing install_manifest.txt: you must install first!' )
