@@ -14,6 +14,14 @@ struct _CMKStyle
 	float padding;
 };
 
+enum
+{
+	SIGNAL_STYLE_CHANGED = 1,
+	SIGNAL_LAST
+};
+
+static guint signals[SIGNAL_LAST];
+
 static void cmk_style_dispose(GObject *self_);
 static void free_table_color(gpointer color);
 
@@ -38,8 +46,9 @@ CMKStyle * cmk_style_get_default()
 
 static void cmk_style_class_init(CMKStyleClass *class)
 {
-	GObjectClass *base = G_OBJECT_CLASS(class);
-	base->dispose = cmk_style_dispose;
+	G_OBJECT_CLASS(class)->dispose = cmk_style_dispose;
+
+	signals[SIGNAL_STYLE_CHANGED] = g_signal_new("style-changed", G_TYPE_FROM_CLASS(class), G_SIGNAL_RUN_FIRST, 0, NULL, NULL, NULL, G_TYPE_NONE, 0);
 }
 
 static void cmk_style_init(CMKStyle *self)
@@ -132,12 +141,13 @@ void cmk_style_set_color(CMKStyle *self, const gchar *name, const CMKColor *colo
 	CMKColor *c = g_slice_new(CMKColor);
 	cmk_copy_color(c, color);
 	g_hash_table_insert(self->colors, g_strdup(name), c);
+	g_signal_emit(self, signals[SIGNAL_STYLE_CHANGED], 0);
 }
 
 void cmk_style_get_font_color_for_background(CMKStyle *self, const gchar *bgColorName, CMKColor *dest)
 {
 	cmk_set_color(dest, 0, 0, 0, 1); 
-	g_return_val_if_fail(CMK_IS_STYLE(self), NULL);
+	g_return_if_fail(CMK_IS_STYLE(self));
 	gchar *name = g_strdup_printf("%s-font", bgColorName);
 	const CMKColor *color = cmk_style_get_color(self, name);
 	g_free(name);
@@ -149,6 +159,7 @@ void cmk_style_set_bevel_radius(CMKStyle *self, float radius)
 {
 	g_return_if_fail(CMK_IS_STYLE(self));
 	self->bevelRadius = radius;
+	g_signal_emit(self, signals[SIGNAL_STYLE_CHANGED], 0);
 }
 
 float cmk_style_get_bevel_radius(CMKStyle *self)
@@ -161,6 +172,7 @@ void cmk_style_set_padding(CMKStyle *self, float padding)
 {
 	g_return_if_fail(CMK_IS_STYLE(self));
 	self->padding = padding;
+	g_signal_emit(self, signals[SIGNAL_STYLE_CHANGED], 0);
 }
 
 float cmk_style_get_padding(CMKStyle *self)

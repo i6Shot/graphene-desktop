@@ -12,6 +12,7 @@ struct _CMKButton
 	ClutterActor parent;
 	ClutterText *text; // Owned by Clutter. Do not free.
 	CMKStyle *style;
+	gchar *backgroundColorName;
 };
 
 enum
@@ -27,6 +28,7 @@ static void cmk_button_set_property(GObject *self_, guint propertyId, const GVal
 static void cmk_button_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec);
 static gboolean on_button_press(ClutterActor *actor, ClutterButtonEvent *event);
 static gboolean on_button_release(ClutterActor *actor, ClutterButtonEvent *event);
+static void on_style_changed(CMKWidget *self_, CMKStyle *style);
 static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas *canvas);
 static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, int height, CMKButton *self);
 static void on_notify_pressed(CMKButton *self, GParamSpec *spec, ClutterClickAction *action);
@@ -55,6 +57,8 @@ static void cmk_button_class_init(CMKButtonClass *class)
 	ClutterActorClass *actorClass = CLUTTER_ACTOR_CLASS(class);
 	actorClass->button_press_event = on_button_press;
 	actorClass->button_release_event = on_button_release;
+
+	CMK_WIDGET_CLASS(class)->style_changed = on_style_changed;
 	
 	properties[PROP_TEXT] = g_param_spec_string("text", "text", "text", "", G_PARAM_READWRITE);
 	
@@ -84,14 +88,14 @@ static void cmk_button_init(CMKButton *self)
 	self->text = CLUTTER_TEXT(clutter_text_new());
 	clutter_actor_add_child(actor, CLUTTER_ACTOR(self->text));
 
-	float padding = cmk_style_get_padding(cmk_widget_get_style(CMK_WIDGET(self)));
-	ClutterMargin margin = {padding, padding, padding, padding};
-	clutter_actor_set_margin(CLUTTER_ACTOR(self->text), &margin);
+	self->backgroundColorName = g_strdup("background");
+	on_style_changed(CMK_WIDGET(self), cmk_widget_get_style(CMK_WIDGET(self)));
 }
 
 static void cmk_button_dispose(GObject *self_)
 {
 	g_clear_object(&(CMK_BUTTON(self_)->style));
+	g_clear_pointer(&(CMK_BUTTON(self_)->backgroundColorName), g_free);
 	G_OBJECT_CLASS(cmk_button_parent_class)->dispose(self_);
 }
 
@@ -137,6 +141,19 @@ static gboolean on_button_release(ClutterActor *actor, ClutterButtonEvent *event
 {
 	//clutter_input_device_ungrab(event->device);
 	return TRUE;
+}
+
+static void on_style_changed(CMKWidget *self_, CMKStyle *style)
+{
+	clutter_content_invalidate(clutter_actor_get_content(CLUTTER_ACTOR(self_)));
+	float padding = cmk_style_get_padding(style);
+	ClutterMargin margin = {padding, padding, padding, padding};
+	clutter_actor_set_margin(CLUTTER_ACTOR(CMK_BUTTON(self_)->text), &margin);
+	
+	CMKColor color;
+	cmk_style_get_font_color_for_background(style, "background", &color);
+	ClutterColor cc = cmk_to_clutter_color(&color);
+	clutter_text_set_color(CMK_BUTTON(self_)->text, &cc);
 }
 
 static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas *canvas)
@@ -192,6 +209,7 @@ const gchar * cmk_button_get_text(CMKButton *self)
 void cmk_button_set_background_color_name(CMKButton *self, const gchar *name)
 {
 	g_return_if_fail(CMK_IS_BUTTON(self));
+	self->backgroundColorName = g_strdup(name);
 	CMKColor color;
 	cmk_style_get_font_color_for_background(cmk_widget_get_style(CMK_WIDGET(self)), name, &color);
 	ClutterColor cc = cmk_to_clutter_color(&color);

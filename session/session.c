@@ -245,7 +245,7 @@ static void graphene_session_request_logout()
 	clutter_actor_add_child(CLUTTER_ACTOR(sdc), CLUTTER_ACTOR(dialog));
 	
 	g_signal_connect_swapped(dialog, "select", G_CALLBACK(close_dialog), NULL);
-	session->dialogCb(sdc, session->cbUserdata);
+	session->dialogCb(CLUTTER_ACTOR(sdc), session->cbUserdata);
 }
 
 static void on_ybus_connection_acquired(GObject *source, GAsyncResult *res, gpointer userdata)

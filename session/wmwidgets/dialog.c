@@ -36,7 +36,7 @@ enum
 static GParamSpec *properties[PROP_LAST];
 static guint signals[SIGNAL_LAST];
 
-static void graphene_dialog_dispose(GObject *self_);
+//static void graphene_dialog_dispose(GObject *self_);
 static void graphene_dialog_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec);
 static void graphene_dialog_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec);
 static void on_style_changed(CMKWidget *self_, CMKStyle *style);
