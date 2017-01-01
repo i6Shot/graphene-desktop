@@ -21,7 +21,7 @@ struct _CMKWidgetClass
 {
 	ClutterActorClass parentClass;
 	
-	void (*style_changed) (CMKWidget *self);
+	void (*style_changed) (CMKWidget *self, CMKStyle *style);
 };
 
 CMKStyle * cmk_widget_get_style(CMKWidget *widget);

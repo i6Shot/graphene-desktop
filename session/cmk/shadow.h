@@ -12,16 +12,16 @@
 
 G_BEGIN_DECLS
 
-#define CMK_TYPE_SHADOW cmk_shadow_get_type()
-G_DECLARE_FINAL_TYPE(CMKShadow, cmk_shadow, CMK, SHADOW, CMKWidget);
+#define CMK_TYPE_SHADOW_CONTAINER cmk_shadow_container_get_type()
+G_DECLARE_FINAL_TYPE(CMKShadowContainer, cmk_shadow_container, CMK, SHADOW_CONTAINER, CMKWidget);
 
-CMKShadow * cmk_shadow_new();
+CMKShadowContainer * cmk_shadow_container_new();
 
-void cmk_shadow_set_blur(CMKShadow *shadow, gfloat radius);
-void cmk_shadow_set_vblur(CMKShadow *shadow, gfloat radius);
-void cmk_shadow_set_hblur(CMKShadow *shadow, gfloat radius);
-gfloat cmk_shadow_get_vblur(CMKShadow *shadow);
-gfloat cmk_shadow_get_hblur(CMKShadow *shadow);
+void cmk_shadow_container_set_blur(CMKShadowContainer *shadow, gfloat radius);
+void cmk_shadow_container_set_vblur(CMKShadowContainer *shadow, gfloat radius);
+void cmk_shadow_container_set_hblur(CMKShadowContainer *shadow, gfloat radius);
+gfloat cmk_shadow_container_get_vblur(CMKShadowContainer *shadow);
+gfloat cmk_shadow_container_get_hblur(CMKShadowContainer *shadow);
 
 G_END_DECLS
 

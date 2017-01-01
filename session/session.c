@@ -54,7 +54,9 @@
 #include "status-notifier-watcher.h"
 #include <session-dbus-iface.h>
 #include <stdio.h>
-#include "wmwidgets/pkauthdialog.c"
+#include "cmk/shadow.h"
+#include "wmwidgets/pkauthdialog.h"
+#include "wmwidgets/dialog.h"
 
 #define GRAPHENE_SESSION_NAME "Graphene"
 #define SESSION_DBUS_NAME "org.gnome.SessionManager"
@@ -219,6 +221,31 @@ void graphene_session_logout()
 		return;
 
 	run_phase(SESSION_PHASE_LOGOUT);
+}
+
+static void close_dialog(GrapheneDialog *dialog, const gchar *button)
+{
+	if(g_strcmp0(button, "Cancel") == 0)
+	{
+		session->dialogCb(NULL, session->cbUserdata);
+	}
+	else
+	{
+		session->dialogCb(clutter_actor_new(), session->cbUserdata);
+		graphene_session_logout();
+	}
+}
+
+static void graphene_session_request_logout()
+{	
+	GrapheneDialog *dialog = graphene_dialog_new_simple("How would you like to exit?\n(Restart and Shutdown not yet implemented)", "", "Cancel", "Logout", "Restart", "Shutdown", NULL);
+
+	CMKShadowContainer *sdc = cmk_shadow_container_new();
+	cmk_shadow_container_set_blur(sdc, 30);
+	clutter_actor_add_child(CLUTTER_ACTOR(sdc), CLUTTER_ACTOR(dialog));
+	
+	g_signal_connect_swapped(dialog, "select", G_CALLBACK(close_dialog), NULL);
+	session->dialogCb(sdc, session->cbUserdata);
 }
 
 static void on_ybus_connection_acquired(GObject *source, GAsyncResult *res, gpointer userdata)
@@ -905,7 +932,7 @@ static gboolean on_dbus_get_can_shutdown(DBusSessionManager *object, GDBusMethod
 static gboolean on_dbus_logout(DBusSessionManager *object, GDBusMethodInvocation *invocation, gint mode, gpointer userdata)
 {
 	dbus_session_manager_complete_logout(object, invocation);
-	graphene_session_logout();
+	graphene_session_request_logout();
 	return TRUE;
 }
 

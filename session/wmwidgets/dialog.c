@@ -1,342 +1,239 @@
 /*
  * This file is part of graphene-desktop, the desktop environment of VeltOS.
  * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * Licensed under the Apache License 2 <www.apache.org/licenses/LICENSE-2.0>.
  */
  
 #include "dialog.h"
+#include "../cmk/shadow.h"
 #include <glib.h>
+#include <math.h>
 
-struct _GrapheneWMDialog {
-  ClutterActor parent;
-  
-  MetaScreen *screen;
-  
-  ClutterActor *backgroundGroup;
-  ClutterActor *frameContainer;
-  ClutterActor *frameBlurBg;
-  ClutterActor *frame;
-  ClutterActor *buttonBox;
-  
-  ClutterActor *content;
-  gchar **buttons;
-  gchar *highlighted;
-  gboolean allowESC;
+struct _GrapheneDialog
+{
+	ClutterActor parent;
+	
+	ClutterActor *content;
+	ClutterActor *buttonBox;
+	GList *buttons; // List of CMKButton actors
+	CMKButton *highlighted; // This button should also appear in the 'buttons' list
+	gboolean allowEsc;
 };
 
 enum
 {
-  PROP_0,
-  PROP_CONTENT,
-  PROP_HIGHLIGHTED,
-  PROP_ALLOW_ESC,
-  PROP_LAST
+	PROP_CONTENT = 1,
+	PROP_ALLOW_ESC,
+	PROP_LAST
 };
 
 enum
 {
-  SIGNAL_0,
-  SIGNAL_CLOSE,
-  SIGNAL_LAST
+	SIGNAL_SELECT = 1,
+	SIGNAL_LAST
 };
 
 static GParamSpec *properties[PROP_LAST];
 static guint signals[SIGNAL_LAST];
 
-static void graphene_wm_dialog_dispose(GObject *self_);
-static void graphene_wm_dialog_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec);
-static void graphene_wm_dialog_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec);
-static void generate_background_group(GrapheneWMDialog *self, MetaScreen *screen);
-static void generate_dialog(GrapheneWMDialog *self, MetaScreen *screen, gint monitorIndex);
+static void graphene_dialog_dispose(GObject *self_);
+static void graphene_dialog_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec);
+static void graphene_dialog_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec);
+static void on_style_changed(CMKWidget *self_, CMKStyle *style);
+static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas *canvas);
+static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, int height, GrapheneDialog *self);
 
-G_DEFINE_TYPE(GrapheneWMDialog, graphene_wm_dialog, CLUTTER_TYPE_ACTOR);
+G_DEFINE_TYPE(GrapheneDialog, graphene_dialog, CMK_TYPE_WIDGET);
 
 
-GrapheneWMDialog * graphene_wm_dialog_new(ClutterActor *content, gchar **buttons)
+
+GrapheneDialog * graphene_dialog_new()
 {
-  GrapheneWMDialog *dialog = GRAPHENE_WM_DIALOG(g_object_new(GRAPHENE_TYPE_WM_DIALOG, "content", content, NULL));
-  graphene_wm_dialog_set_buttons(dialog, buttons);
-  return dialog;
+	return GRAPHENE_DIALOG(g_object_new(GRAPHENE_TYPE_DIALOG, NULL));
 }
 
-static void graphene_wm_dialog_class_init(GrapheneWMDialogClass *klass)
+GrapheneDialog * graphene_dialog_new_simple(const gchar *message, const gchar *icon, ...)
 {
-  GObjectClass *objectClass = G_OBJECT_CLASS(klass);
-  objectClass->dispose = graphene_wm_dialog_dispose;
-  objectClass->set_property = graphene_wm_dialog_set_property;
-  objectClass->get_property = graphene_wm_dialog_get_property;
-  
-  properties[PROP_CONTENT] =
-    g_param_spec_object("content", "content", "content", CLUTTER_TYPE_ACTOR, G_PARAM_READWRITE);
-  properties[PROP_HIGHLIGHTED] =
-    g_param_spec_string("highlighted", "highlighted", "the highlighted button (should be used on enter key)", NULL, G_PARAM_READWRITE);
-  properties[PROP_ALLOW_ESC] =
-    g_param_spec_boolean("allow-esc", "allow esc", "if the dialog can be exited with the ESC key", TRUE, G_PARAM_READWRITE);
-  
-  g_object_class_install_properties(objectClass, PROP_LAST, properties);
+	GrapheneDialog *dialog = graphene_dialog_new();
+	graphene_dialog_set_message(dialog, message);
+	//graphene_dialog_set_icon(dialog, message);
+	
+	va_list args;
+	va_start(args, icon);
+	guint numButtons = 0;
+	while(va_arg(args, const gchar *) != NULL)
+		numButtons ++;
+	va_end(args);
+	
+	const gchar **buttons = g_new(const gchar *, numButtons+1);
+	buttons[numButtons] = NULL;
+	
+	va_start(args, icon);
+	for(guint i=0;i<numButtons;++i)
+	{
+		const gchar *name = va_arg(args, const gchar *);
+		buttons[i] = name;
+	}
+	va_end(args);
 
-  /*
-   * Emitted when the dialog closes. The first parameter is the button pressed, or "_ESC_" or "_ENTER_" for
-   * the escape and enter keys respectively. The "_ENTER_" response should usually map to the highlighted button.
-   */ 
-  signals[SIGNAL_CLOSE] = g_signal_new("close", G_TYPE_FROM_CLASS(klass), G_SIGNAL_RUN_FIRST,
-    0, NULL, NULL, NULL, G_TYPE_NONE, 1, G_TYPE_STRING);
+	graphene_dialog_set_buttons(dialog, buttons);
+	g_free(buttons);
+	return dialog;
 }
 
-static void graphene_wm_dialog_init(GrapheneWMDialog *self)
+static void graphene_dialog_get_preferred_width(ClutterActor *self_, gfloat forHeight, gfloat *minWidth, gfloat *natWidth)
 {
-  self->backgroundGroup = clutter_actor_new();
-  self->frameContainer = clutter_actor_new();
-  self->frameBlurBg = clutter_actor_new();
-  self->frame = clutter_actor_new();
-  
-  ClutterColor *frameColor = clutter_color_new(79, 88, 92, 255);
-  clutter_actor_set_background_color(self->frame, frameColor);
-  clutter_color_free(frameColor);
-  
-  ClutterLayoutManager *boxLayout = clutter_box_layout_new();
-  clutter_box_layout_set_orientation(CLUTTER_BOX_LAYOUT(boxLayout), CLUTTER_ORIENTATION_HORIZONTAL);
-  clutter_actor_set_layout_manager(self->frameContainer, boxLayout);
-  
-  clutter_actor_set_x_expand(self->frame, TRUE);
-  clutter_actor_set_y_expand(self->frame, TRUE);
-  clutter_actor_set_x_align(self->frame, CLUTTER_ACTOR_ALIGN_CENTER);
-  clutter_actor_set_y_align(self->frame, CLUTTER_ACTOR_ALIGN_CENTER);
-  clutter_actor_add_child(self->frameContainer, self->frame);
-  
-  clutter_actor_insert_child_below(CLUTTER_ACTOR(self), self->backgroundGroup, NULL);
-  // clutter_actor_insert_child_above(self, self->frameBlurBg, self->backgroundGroup);
-  clutter_actor_insert_child_above(CLUTTER_ACTOR(self), self->frameContainer, self->backgroundGroup);
-  
-  // ClutterEffect *blurEffect = clutter_blur_effect_new();
-  // clutter_actor_add_effect(self->frameBlurBg, blurEffect);
-  // g_object_unref(blurEffect);
+	clutter_layout_manager_get_preferred_width(clutter_actor_get_layout_manager(self_), CLUTTER_CONTAINER(self_), forHeight, minWidth, natWidth);
+
+	// TODO: Adjustable
+	*minWidth = CLAMP(*minWidth, 200, 700);
+	*natWidth = CLAMP(*natWidth, 200, 700);	
+
+	// Make sure all the buttons have room
+	gfloat minBBWidth, natBBWidth;
+	clutter_actor_get_preferred_width(GRAPHENE_DIALOG(self_)->buttonBox, -1, &minBBWidth, &natBBWidth);
+	if(minBBWidth > *minWidth)
+	{
+		*minWidth = minBBWidth;
+		*natWidth = minBBWidth;
+	}
 }
 
-static void graphene_wm_dialog_dispose(GObject *self_)
+static void graphene_dialog_get_preferred_height(ClutterActor *self_, gfloat forWidth, gfloat *minHeight, gfloat *natHeight)
 {
-  GrapheneWMDialog *self = GRAPHENE_WM_DIALOG(self_);
-  
-  // clutter_actor_free(self->frame);
-  // clutter_actor_free(self->frameBlurBg);
-  // clutter_actor_free(self->backgroundGroup);
-  
-  G_OBJECT_CLASS(graphene_wm_dialog_parent_class)->dispose(self_);
+	clutter_layout_manager_get_preferred_height(clutter_actor_get_layout_manager(self_), CLUTTER_CONTAINER(self_), forWidth, minHeight, natHeight);
+
+	*natHeight = CLAMP(*minHeight, 100, 700);
+	*natHeight = CLAMP(*natHeight, 100, 700);
 }
 
-static void graphene_wm_dialog_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec)
+static void graphene_dialog_class_init(GrapheneDialogClass *class)
 {
-  g_return_if_fail(GRAPHENE_IS_WM_DIALOG(self_));
-  GrapheneWMDialog *self = GRAPHENE_WM_DIALOG(self_);
-  switch(propertyId)
-  {
-    case PROP_CONTENT:
-      g_clear_object(&self->content);
-      GObject *object = g_value_get_object(value);
-      if(object)
-        self->content = g_object_ref_sink(object);
-      break;
-    case PROP_HIGHLIGHTED:
-      g_clear_pointer(&self->highlighted, g_free);
-      self->highlighted = g_strdup(g_value_get_string(value));
-      break;
-    case PROP_ALLOW_ESC:
-      self->allowESC = g_value_get_boolean(value);
-      break;
-    default:
-      G_OBJECT_WARN_INVALID_PROPERTY_ID(self, propertyId, pspec);
-      break;
-  }
+	GObjectClass *base = G_OBJECT_CLASS(class);
+	//base->dispose = graphene_dialog_dispose;
+	//base->set_property = graphene_dialog_set_property;
+	//base->get_property = graphene_dialog_get_property;
+	
+	CLUTTER_ACTOR_CLASS(class)->get_preferred_width = graphene_dialog_get_preferred_width;
+	CLUTTER_ACTOR_CLASS(class)->get_preferred_height = graphene_dialog_get_preferred_height;
+	
+	CMK_WIDGET_CLASS(class)->style_changed = on_style_changed;
+
+	signals[SIGNAL_SELECT] = g_signal_new("select", G_TYPE_FROM_CLASS(class), G_SIGNAL_RUN_FIRST, 0, NULL, NULL, NULL, G_TYPE_NONE, 1, G_TYPE_STRING);
 }
 
-static void graphene_wm_dialog_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec)
-{
-  g_return_if_fail(GRAPHENE_IS_WM_DIALOG(self_));
-  GrapheneWMDialog *self = GRAPHENE_WM_DIALOG(self_);  
-  switch(propertyId)
-  {
-    case PROP_CONTENT:
-      g_value_set_object(value, g_object_ref(self->content));
-      break;
-    case PROP_HIGHLIGHTED:
-      g_value_set_string(value, self->highlighted);
-      break;
-    case PROP_ALLOW_ESC:
-      g_value_set_boolean(value, self->allowESC);
-      break;
-    default:
-      G_OBJECT_WARN_INVALID_PROPERTY_ID(self, propertyId, pspec);
-      break;
-  }
+static void graphene_dialog_init(GrapheneDialog *self)
+{	
+	clutter_actor_set_reactive(CLUTTER_ACTOR(self), TRUE);
+
+	ClutterContent *canvas = clutter_canvas_new();
+	g_signal_connect(canvas, "draw", G_CALLBACK(on_draw_canvas), self);
+	clutter_actor_set_content(CLUTTER_ACTOR(self), canvas);
+
+	ClutterLayoutManager *layout = clutter_box_layout_new();
+	clutter_box_layout_set_orientation(CLUTTER_BOX_LAYOUT(layout), CLUTTER_ORIENTATION_VERTICAL);
+	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self), layout);
+
+	self->content = clutter_actor_new();
+	clutter_actor_set_layout_manager(self->content, clutter_bin_layout_new(CLUTTER_BIN_ALIGNMENT_START, CLUTTER_BIN_ALIGNMENT_START));
+	clutter_actor_set_x_expand(self->content, TRUE);
+	clutter_actor_add_child(CLUTTER_ACTOR(self), self->content);
+
+	self->buttonBox = clutter_actor_new();
+	ClutterLayoutManager *buttonLayout = clutter_box_layout_new();
+	clutter_box_layout_set_orientation(CLUTTER_BOX_LAYOUT(buttonLayout), CLUTTER_ORIENTATION_HORIZONTAL);
+	clutter_actor_set_layout_manager(self->buttonBox, buttonLayout);
+	clutter_actor_set_x_expand(self->buttonBox, TRUE);
+	clutter_actor_set_x_align(self->buttonBox, CLUTTER_ACTOR_ALIGN_END);
+	clutter_actor_add_child(CLUTTER_ACTOR(self), self->buttonBox);
+
+	g_signal_connect(CLUTTER_ACTOR(self), "notify::size", G_CALLBACK(on_size_changed), canvas);
+	on_style_changed(CMK_WIDGET(self), cmk_widget_get_style(CMK_WIDGET(self)));
 }
 
-void graphene_wm_dialog_set_buttons(GrapheneWMDialog *self, gchar **buttons)
+static void on_style_changed(CMKWidget *self_, CMKStyle *style)
 {
-  self->buttons = g_strdupv(buttons);
+	clutter_content_invalidate(clutter_actor_get_content(CLUTTER_ACTOR(self_)));
+	float padding = cmk_style_get_padding(style);
+	ClutterMargin margin = {padding, padding, padding, padding};
+	ClutterMargin margin2 = {padding*2, padding*2, padding*2, padding*2};
+	clutter_actor_set_margin(GRAPHENE_DIALOG(self_)->content, &margin2);
+	clutter_actor_set_margin(GRAPHENE_DIALOG(self_)->buttonBox, &margin);
+	
+	ClutterActor *content = clutter_actor_get_first_child(GRAPHENE_DIALOG(self_)->content);
+	if(CLUTTER_IS_TEXT(content))
+	{
+		CMKColor color;
+		cmk_style_get_font_color_for_background(style, "background", &color);
+		ClutterColor cc = cmk_to_clutter_color(&color);
+		clutter_text_set_color(CLUTTER_TEXT(content), &cc);
+	}
 }
 
-void graphene_wm_dialog_show(GrapheneWMDialog *self, MetaScreen *screen, gint monitorIndex)
+static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas *canvas)
 {
-  self->screen = screen;
-  generate_background_group(self, screen);
-  generate_dialog(self, screen, monitorIndex);
-  
-  ClutterActor *windowGroup = meta_get_window_group_for_screen(screen);
-
-  clutter_actor_set_pivot_point(self->frame, 0.5, 0.5);
-  clutter_actor_set_opacity(self->backgroundGroup, 0);
-  clutter_actor_set_scale(self->frame, 0, 0);
-  clutter_actor_insert_child_above(windowGroup, CLUTTER_ACTOR(self), NULL);
-  
-  clutter_actor_save_easing_state(self->backgroundGroup);
-  clutter_actor_set_easing_mode(self->backgroundGroup, CLUTTER_EASE_IN_SINE);
-  clutter_actor_set_easing_duration(self->backgroundGroup, 200);
-  clutter_actor_set_opacity(self->backgroundGroup, 255);
-  clutter_actor_restore_easing_state(self->backgroundGroup);
-  
-  clutter_actor_save_easing_state(self->frame);
-  clutter_actor_set_easing_mode(self->frame, CLUTTER_EASE_IN_SINE);
-  clutter_actor_set_easing_duration(self->frame, 200);
-  clutter_actor_set_scale(self->frame, 1, 1);
-  clutter_actor_restore_easing_state(self->frame);
+	gfloat width, height;
+	clutter_actor_get_size(self, &width, &height);
+	clutter_canvas_set_size(CLUTTER_CANVAS(canvas), width, height);
 }
 
-static void generate_background_group(GrapheneWMDialog *self, MetaScreen *screen)
+static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, int height, GrapheneDialog *self)
 {
-  clutter_actor_destroy_all_children(self->backgroundGroup);
-  
-  ClutterColor *bgColor = clutter_color_new(0, 0, 0, 140);
+	CMKStyle *style = cmk_widget_get_style(CMK_WIDGET(self));
+	double radius = cmk_style_get_bevel_radius(style);
+	double degrees = M_PI / 180.0;
 
-  gint numMonitors = meta_screen_get_n_monitors(screen);
-  for(gint i=0;i<numMonitors;++i)
-  {
-    MetaRectangle rect = meta_rect(0,0,0,0);
-    meta_screen_get_monitor_geometry(screen, i, &rect);
-    
-    ClutterActor *background = clutter_actor_new();
-    clutter_actor_set_background_color(background, bgColor);
-    clutter_actor_set_position(background, rect.x, rect.y);
-    clutter_actor_set_size(background, rect.width, rect.height);
-    
-    clutter_actor_add_child(self->backgroundGroup, background);
-  }
-  
-  clutter_color_free(bgColor);
+	cairo_save(cr);
+	cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
+	cairo_paint(cr);
+	cairo_restore(cr);
+
+	cairo_new_sub_path(cr);
+	cairo_arc(cr, width - radius, radius, radius, -90 * degrees, 0 * degrees);
+	cairo_arc(cr, width - radius, height - radius, radius, 0 * degrees, 90 * degrees);
+	cairo_arc(cr, radius, height - radius, radius, 90 * degrees, 180 * degrees);
+	cairo_arc(cr, radius, radius, radius, 180 * degrees, 270 * degrees);
+	cairo_close_path(cr);
+
+	cairo_set_source_cmk_color(cr, cmk_style_get_color(style, "background"));
+	cairo_fill(cr);
+	return TRUE;
 }
 
-static void close_complete(GrapheneWMDialog *self, ClutterActor *actor)
+static void on_button_click(GrapheneDialog *self, CMKButton *button)
 {
-  clutter_actor_remove_all_transitions(actor);
-  g_signal_handlers_disconnect_by_func(actor, close_complete, self);
-  ClutterActor *windowGroup = meta_get_window_group_for_screen(self->screen);
-  clutter_actor_remove_child(windowGroup, CLUTTER_ACTOR(self));
-  self->screen = NULL;
+	g_signal_emit(self, signals[SIGNAL_SELECT], 0, cmk_button_get_name(button));
 }
 
-static gboolean button_clicked(ClutterActor *button, ClutterButtonEvent *event, GrapheneWMDialog *self)
+void graphene_dialog_set_message(GrapheneDialog *self, const gchar *message)
 {
-  g_signal_emit_by_name(self, "close", clutter_actor_get_name(button));
-  
-  clutter_actor_set_pivot_point(self->frame, 0.5, 0.5);
-  clutter_actor_set_opacity(self->backgroundGroup, 255);
-  clutter_actor_set_scale(self->frame, 1, 1);
-  
-  clutter_actor_save_easing_state(self->backgroundGroup);
-  clutter_actor_set_easing_mode(self->backgroundGroup, CLUTTER_EASE_IN_SINE);
-  clutter_actor_set_easing_duration(self->backgroundGroup, 200);
-  clutter_actor_set_opacity(self->backgroundGroup, 0);
-  clutter_actor_restore_easing_state(self->backgroundGroup);
-  
-  g_signal_connect_swapped(self->frame, "transitions_completed", G_CALLBACK(close_complete), self);
-  clutter_actor_save_easing_state(self->frame);
-  clutter_actor_set_easing_mode(self->frame, CLUTTER_EASE_IN_SINE);
-  clutter_actor_set_easing_duration(self->frame, 200);
-  clutter_actor_set_scale(self->frame, 0, 0);
-  clutter_actor_restore_easing_state(self->frame);
-  return TRUE;
+	g_return_if_fail(GRAPHENE_IS_DIALOG(self));
+	
+	ClutterText *content = CLUTTER_TEXT(clutter_text_new());
+	
+	CMKColor color;
+	cmk_style_get_font_color_for_background(cmk_widget_get_style(CMK_WIDGET(self)), "background", &color);
+	ClutterColor cc = cmk_to_clutter_color(&color);
+	clutter_text_set_color(content, &cc);
+	
+	clutter_text_set_text(content, message);
+	clutter_text_set_line_wrap(content, TRUE);
+	clutter_actor_set_x_align(CLUTTER_ACTOR(content), CLUTTER_ACTOR_ALIGN_START);
+	clutter_actor_destroy_all_children(self->content);
+	clutter_actor_add_child(self->content, CLUTTER_ACTOR(content));
 }
 
-static gboolean button_enter(ClutterActor *button, ClutterCrossingEvent *event, GrapheneWMDialog *self)
+void graphene_dialog_set_buttons(GrapheneDialog *self, const gchar * const *buttons)
 {
-  ClutterActor *highlightColor = clutter_actor_get_first_child(button);
-  clutter_actor_save_easing_state(highlightColor);
-  clutter_actor_set_easing_mode(highlightColor, CLUTTER_EASE_IN_SINE);
-  clutter_actor_set_easing_duration(highlightColor, 300);
-  clutter_actor_set_opacity(highlightColor, 255);
-  clutter_actor_restore_easing_state(highlightColor);
-  return TRUE;
-}
-
-static gboolean button_leave(ClutterActor *button, ClutterCrossingEvent *event, GrapheneWMDialog *self)
-{
-  ClutterActor *highlightColor = clutter_actor_get_first_child(button);
-  clutter_actor_save_easing_state(highlightColor);
-  clutter_actor_set_easing_mode(highlightColor, CLUTTER_EASE_IN_SINE);
-  clutter_actor_set_easing_duration(highlightColor, 300);
-  clutter_actor_set_opacity(highlightColor, 0);
-  clutter_actor_restore_easing_state(highlightColor);
-  return TRUE;
-}
-
-static void generate_dialog(GrapheneWMDialog *self, MetaScreen *screen, gint monitorIndex)
-{
-  MetaRectangle rect = meta_rect(0,0,0,0);
-  meta_screen_get_monitor_geometry(screen, monitorIndex, &rect);
-  clutter_actor_set_position(self->frameContainer, rect.x, rect.y);
-  clutter_actor_set_size(self->frameContainer, rect.width, rect.height);
-  
-  ClutterLayoutManager *boxLayout = clutter_box_layout_new();
-  clutter_box_layout_set_orientation(CLUTTER_BOX_LAYOUT(boxLayout), CLUTTER_ORIENTATION_HORIZONTAL);
-  clutter_actor_set_layout_manager(self->frame, boxLayout);
-  
-  clutter_actor_destroy_all_children(self->frame);
-  
-  guint numButtons = g_strv_length(self->buttons);
-  for(guint i=0;i<numButtons;++i)
-  {
-    ClutterActor *button = clutter_actor_new();
-    clutter_actor_set_name(button, self->buttons[i]);
-    clutter_actor_set_height(button, 40);
-    clutter_actor_set_layout_manager(button, clutter_bin_layout_new(CLUTTER_BIN_ALIGNMENT_FILL, CLUTTER_BIN_ALIGNMENT_FILL));
-    clutter_actor_set_reactive(button, TRUE);
-    g_signal_connect(button, "button-press-event", G_CALLBACK(button_clicked), self);
-    g_signal_connect(button, "enter-event", G_CALLBACK(button_enter), self);
-    g_signal_connect(button, "leave-event", G_CALLBACK(button_leave), self);
-
-    ClutterActor *highlightColor = clutter_actor_new(); // Because animating background-color doesnt work very well
-    clutter_actor_set_opacity(highlightColor, 0);
-    clutter_actor_set_x_expand(highlightColor, TRUE);
-    clutter_actor_set_y_expand(highlightColor, TRUE);
-    ClutterColor *color = clutter_color_new(110, 124, 130, 255);
-    clutter_actor_set_background_color(highlightColor, color);
-    clutter_color_free(color);
-    
-    ClutterText *text = CLUTTER_TEXT(clutter_text_new_with_text(NULL, self->buttons[i]));
-    clutter_text_set_use_markup(text, FALSE);
-    clutter_text_set_selectable(text, FALSE);
-    clutter_text_set_line_wrap(text, FALSE);
-    clutter_text_set_ellipsize(text, PANGO_ELLIPSIZE_NONE);
-    color = clutter_color_new(219, 222, 224, 204);
-    clutter_text_set_color(text, color);
-    clutter_color_free(color);
-    clutter_actor_set_margin_left(CLUTTER_ACTOR(text), 15);
-    clutter_actor_set_margin_right(CLUTTER_ACTOR(text), 15);
-    clutter_actor_set_y_align(CLUTTER_ACTOR(text), CLUTTER_ACTOR_ALIGN_CENTER);
-    
-    clutter_actor_add_child(button, highlightColor); // Must be first child
-    clutter_actor_add_child(button, CLUTTER_ACTOR(text));
-    clutter_actor_add_child(self->frame, button);
-  }
+	const gchar *name = NULL;
+	guint i=0;
+	while((name = buttons[i++]) != NULL)
+	{
+		CMKButton *button = cmk_button_new_with_text(name);
+		cmk_button_set_background_color_name(button, "background");
+		ClutterAction *action = clutter_click_action_new();
+		g_signal_connect_swapped(action, "clicked", G_CALLBACK(on_button_click), self);
+		clutter_actor_add_action(CLUTTER_ACTOR(button), action);
+		clutter_actor_add_child(self->buttonBox, CLUTTER_ACTOR(button));
+	}
 }

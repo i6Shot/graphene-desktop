@@ -25,6 +25,8 @@ static GParamSpec *properties[PROP_LAST];
 static void cmk_button_dispose(GObject *self_);
 static void cmk_button_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec);
 static void cmk_button_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec);
+static gboolean on_button_press(ClutterActor *actor, ClutterButtonEvent *event);
+static gboolean on_button_release(ClutterActor *actor, ClutterButtonEvent *event);
 static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas *canvas);
 static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, int height, CMKButton *self);
 static void on_notify_pressed(CMKButton *self, GParamSpec *spec, ClutterClickAction *action);
@@ -43,19 +45,6 @@ CMKButton * cmk_button_new_with_text(const gchar *text)
 	return CMK_BUTTON(g_object_new(CMK_TYPE_BUTTON, "text", text, NULL));
 }
 
-static gboolean on_button_press(ClutterActor *actor, ClutterButtonEvent *event)
-{
-	g_message("button press");
-	return TRUE;
-}
-
-static gboolean on_button_release(ClutterActor *actor, ClutterButtonEvent *event)
-{
-	clutter_input_device_ungrab(event->device);
-	g_message("button release");
-	return TRUE;
-}
-
 static void cmk_button_class_init(CMKButtonClass *class)
 {
 	GObjectClass *base = G_OBJECT_CLASS(class);
@@ -72,11 +61,6 @@ static void cmk_button_class_init(CMKButtonClass *class)
 	g_object_class_install_properties(base, PROP_LAST, properties);
 }
 
-static void on_clicked(ClutterClickAction *action, ClutterActor *actor)
-{
-	g_message("clicked");
-}
-
 static void cmk_button_init(CMKButton *self)
 {
 	ClutterContent *canvas = clutter_canvas_new();
@@ -91,9 +75,6 @@ static void cmk_button_init(CMKButton *self)
 
 	clutter_actor_set_content_gravity(actor, CLUTTER_CONTENT_GRAVITY_CENTER);
 	clutter_actor_set_content(actor, canvas);
-
-	//g_signal_connect(actor, "captured-event", G_CALLBACK(on_button_press), NULL);
-	//g_signal_connect(actor, "button-release-event", G_CALLBACK(on_button_release), NULL);
 
 	//ClutterAction *action = clutter_click_action_new();
 	//clutter_actor_add_action(actor, action);
@@ -146,6 +127,18 @@ static void cmk_button_get_property(GObject *self_, guint propertyId, GValue *va
 	}
 }
 
+static gboolean on_button_press(ClutterActor *actor, ClutterButtonEvent *event)
+{
+	//clutter_input_device_grab(event->device, actor);
+	return TRUE;
+}
+
+static gboolean on_button_release(ClutterActor *actor, ClutterButtonEvent *event)
+{
+	//clutter_input_device_ungrab(event->device);
+	return TRUE;
+}
+
 static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas *canvas)
 {
 	gfloat width, height;
@@ -163,6 +156,7 @@ static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, in
 	cairo_set_operator(cr, CAIRO_OPERATOR_CLEAR);
 	cairo_paint(cr);
 	cairo_restore(cr);
+	return TRUE;
 
 	cairo_new_sub_path(cr);
 	cairo_arc(cr, width - radius, radius, radius, -90 * degrees, 0 * degrees);
@@ -193,4 +187,22 @@ const gchar * cmk_button_get_text(CMKButton *self)
 {
 	g_return_val_if_fail(CMK_IS_BUTTON(self), NULL);
 	return clutter_text_get_text(self->text);
+}
+
+void cmk_button_set_background_color_name(CMKButton *self, const gchar *name)
+{
+	g_return_if_fail(CMK_IS_BUTTON(self));
+	CMKColor color;
+	cmk_style_get_font_color_for_background(cmk_widget_get_style(CMK_WIDGET(self)), name, &color);
+	ClutterColor cc = cmk_to_clutter_color(&color);
+	clutter_text_set_color(self->text, &cc);
+}
+
+const gchar * cmk_button_get_name(CMKButton *self)
+{
+	g_return_val_if_fail(CMK_IS_BUTTON(self), NULL);
+	const gchar *name = clutter_actor_get_name(CLUTTER_ACTOR(self));
+	if(name)
+		return name;
+	return cmk_button_get_text(self);
 }

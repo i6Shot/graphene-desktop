@@ -18,6 +18,7 @@
 
 #include "wm.h"
 #include "wmwidgets/background.h"
+#include "wmwidgets/dialog.h"
 #include "cmk/button.h"
 #include "cmk/shadow.h"
 #include <meta/meta-shadow-factory.h>
@@ -132,13 +133,23 @@ void graphene_wm_start(MetaPlugin *plugin)
 	g_signal_connect(screen, "monitors_changed", G_CALLBACK(on_monitors_changed), self);
 	on_monitors_changed(screen, self);
 	
+	CMKStyle *style = cmk_style_get_default();
+	CMKColor bgColor = {0.28627, 0.33725, 0.36078, 1};
+	cmk_style_set_color(style, "background", &bgColor);
+	CMKColor bgColorFont = {1, 1, 1, 0.8};
+	cmk_style_set_color(style, "background-font", &bgColorFont);
+	
+	// Show everything
+	clutter_actor_show(self->stage);
+
 	// Start the WM modal, and the session manager can end the modal when
 	// startup completes with graphene_wm_show_dialog(wm, NULL);
-	graphene_wm_begin_modal(self);
+	// This must happen after showing the stage
 	clutter_actor_show(self->coverGroup);
-	
-	// Finally, show everything
-	clutter_actor_show(self->stage);
+	graphene_wm_begin_modal(self);
+
+	// The actors using the style have references to it now
+	//g_object_unref(style);
 }
 
 static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self)
@@ -316,7 +327,10 @@ static void close_dialog_complete(GrapheneWM *self, ClutterActor *dialog)
 	g_signal_handlers_disconnect_by_func(dialog, close_dialog_complete, self);
 	clutter_actor_remove_child(self->stage, dialog);
 	if(dialog == self->dialog)
+	{
 		self->dialog = NULL;
+		clutter_actor_hide(self->coverGroup);
+	}
 }
 
 static void graphene_wm_close_dialog(GrapheneWM *self, gboolean closeCover)
@@ -347,6 +361,11 @@ static void graphene_wm_close_dialog(GrapheneWM *self, gboolean closeCover)
 	TRANSITION_MEMLEAK_FIX(self->coverGroup, "opacity");
 }
 
+static void on_dialog_size_changed(ClutterActor *dialog, GParamSpec *param, GrapheneWM *self)
+{
+	center_actor_on_primary(self, dialog);
+}
+
 void graphene_wm_show_dialog(GrapheneWM *self, ClutterActor *dialog)
 {
 	if(!dialog || (dialog && self->dialog))
@@ -360,6 +379,7 @@ void graphene_wm_show_dialog(GrapheneWM *self, ClutterActor *dialog)
 	clutter_actor_show(self->dialog);
 	clutter_actor_set_pivot_point(self->dialog, 0.5, 0.5);
 	clutter_actor_set_scale(self->dialog, 0, 0);
+	g_signal_connect(self->dialog, "notify::size", G_CALLBACK(on_dialog_size_changed), self);
 	center_actor_on_primary(self, self->dialog);
 
 	clutter_actor_save_easing_state(self->dialog);
@@ -371,6 +391,7 @@ void graphene_wm_show_dialog(GrapheneWM *self, ClutterActor *dialog)
 	TRANSITION_MEMLEAK_FIX(self->dialog, "scale-x");
 	TRANSITION_MEMLEAK_FIX(self->dialog, "scale-y");
 
+	clutter_actor_show(self->coverGroup);
 	clutter_actor_save_easing_state(self->coverGroup);
 	clutter_actor_set_easing_mode(self->coverGroup, CLUTTER_EASE_IN_SINE);
 	clutter_actor_set_easing_duration(self->coverGroup, WM_TRANSITION_TIME);
