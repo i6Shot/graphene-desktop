@@ -28,15 +28,11 @@
 
 G_BEGIN_DECLS
 
-// Declare the GrapheneWMBackground class
 #define GRAPHENE_TYPE_WM_BACKGROUND  graphene_wm_background_get_type()
+//extern void glib_autoptr_cleanup_MetaBackgroundGroup(MetaPlugin **_ptr); // Same problem as in wm.h
+G_DECLARE_FINAL_TYPE(GrapheneWMBackground, graphene_wm_background, GRAPHENE, WM_BACKGROUND, ClutterActor)
 
-#pragma GCC diagnostic ignored "-Wimplicit-function-declaration" // Same problem as in wm.h
-G_DECLARE_FINAL_TYPE(GrapheneWMBackground, graphene_wm_background, GRAPHENE, WM_BACKGROUND, MetaBackgroundGroup)
-#pragma GCC diagnostic warning "-Wimplicit-function-declaration"
-
-// Public methods for GrapheneWMBackground
-GrapheneWMBackground*       graphene_wm_background_new               (MetaScreen *screen, int screenIndex);
+GrapheneWMBackground * graphene_wm_background_new(MetaScreen *screen, guint monitor);
 
 G_END_DECLS
 

@@ -1,9 +1,57 @@
+# This file is part of graphene-desktop, the desktop environment of VeltOS.
+# Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
+# This file is licensed under the WTFPL.
+
+add_custom_command(
+  OUTPUT session-dbus-iface.c session-dbus-iface.h
+  COMMAND gdbus-codegen --interface-prefix org.gnome --c-namespace DBus --generate-c-code session-dbus-iface ${CMAKE_CURRENT_SOURCE_DIR}/session-dbus-iface.xml
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+
 add_custom_command(OUTPUT "${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.c" DEPENDS status-notifier-codegen)
 
-file(GLOB session_SRC "*.c")
-add_executable(graphene-session ${session_SRC} "${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.c")
 pkg_check_modules(GIOUNIX2 REQUIRED gio-unix-2.0>=2.10)
-target_include_directories(graphene-session PRIVATE . ${GIOUNIX2_INCLUDE_DIRS})
-target_link_libraries(graphene-session ${GIOUNIX2_LIBRARIES})
+pkg_check_modules(LIBMUTTER REQUIRED libmutter>=3.22)
+pkg_check_modules(LIBPULSEGLIB REQUIRED libpulse-mainloop-glib>=8.0)
+pkg_check_modules(POLKITAGENT REQUIRED polkit-agent-1)
+link_directories(${LIBMUTTER_LIBRARY_DIRS})
 
+add_executable(graphene-session
+	main.c
+	session-dbus-iface.c
+	session.c
+	client.c
+	# status-notifier-watcher.c
+	# ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.c
+	util.c
+	wm.c
+	percent-floater.c
+	dialog.c
+	background.c
+	pkauthdialog.c
+	cmk/style.c
+	cmk/button.c
+	cmk/shadow.c
+	cmk/cmk-widget.c
+	# ${PROJECT_SOURCE_DIR}/common/dbusmonitor.c
+	${PROJECT_SOURCE_DIR}/common/sound.c
+)
+target_link_libraries(graphene-session
+	${GIOUNIX2_LIBRARIES}
+	${LIBMUTTER_LIBRARIES}
+	${LIBPULSEGLIB_LIBRARIES}
+	${POLKITAGENT_LIBRARIES}
+	m
+)
+target_include_directories(graphene-session PRIVATE
+	${CMAKE_CURRENT_BINARY_DIR} 
+	${GIOUNIX2_INCLUDE_DIRS}
+	${LIBMUTTER_INCLUDE_DIRS}
+	${LIBPULSEGLIB_INCLUDE_DIRS}
+	${POLKITAGENT_INCLUDE_DIRS}
+)
+
+# Normally, the CMake install functionality removes the executable's rpath,
+# which here includes /usr/lib/mutter. This keeps the rpath.
+set_target_properties(graphene-session PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
 install(TARGETS graphene-session DESTINATION ${CMAKE_INSTALL_PREFIX}/bin)

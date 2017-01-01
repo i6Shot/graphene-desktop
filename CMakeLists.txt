@@ -1,13 +1,13 @@
 # This file is part of graphene-desktop, the desktop environment of VeltOS.
 # Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
-# This file is licensed under the Apache License Version 2.0.
+# This file is licensed under the WTFPL.
 
 cmake_minimum_required(VERSION 3.4)
 project(graphene-desktop)
-set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 set(GRAPHENE_VERSION 0.2.5)
 set(GRAPHENE_DEBUG TRUE)
+set(CMAKE_BUILD_TYPE DEBUG)
 
 # Assume the user wants to install Graphene to /usr unless otherwise specified
 # with the -DCMAKE_INSTALL_PREFIX=<path> flag to cmake. http://stackoverflow.com/a/16076855
@@ -18,7 +18,6 @@ endif()
 # Config
 set(GRAPHENE_DATA_DIR ${CMAKE_INSTALL_PREFIX}/share/graphene) # Must end without a slash
 configure_file(${PROJECT_SOURCE_DIR}/graphene-panel.desktop.in ${PROJECT_SOURCE_DIR}/data/autostart/graphene-panel.desktop)
-configure_file(${PROJECT_SOURCE_DIR}/graphene-wm.desktop.in ${PROJECT_SOURCE_DIR}/data/autostart/graphene-wm.desktop)
 configure_file(${PROJECT_SOURCE_DIR}/config.h.in ${PROJECT_SOURCE_DIR}/config.h)
 include_directories(${PROJECT_SOURCE_DIR})
 
@@ -38,7 +37,6 @@ add_custom_command(
 add_custom_target(status-notifier-codegen DEPENDS ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.c ${PROJECT_SOURCE_DIR}/status-notifier-dbus-ifaces.h)
 
 # Setup targets
-add_subdirectory(wm)
 add_subdirectory(session)
 add_subdirectory(panel)
 

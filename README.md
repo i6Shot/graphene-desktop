@@ -2,7 +2,8 @@ Graphene Desktop
 ==========
 
 The desktop environment of VeltOS, an Arch Linux-based operating system
-built entirely upon community input. Check out [velt.io](https://www.velt.io) more info.
+built entirely upon community input. Check out [velt.io](https://www.velt.io)
+for more info.
 
 Installing for Arch
 --------
@@ -49,19 +50,18 @@ graphene-desktop's data files are stored in /usr/share/graphene.
 All files here are customizable, however know that **running "sudo make install"
 will overwrite any custom changes made to that directory.**
 
-Uninstall by running 'sudo make uninstall' in the graphene-desktop directory. This only works
-when install_manifest.txt, a file created after installing, is available.
+Uninstall by running 'sudo make uninstall' in the graphene-desktop directory.
+This only works when install_manifest.txt, a file created after installing, is
+available.
 
 License
 --------
 
-Most of Graphene Desktop uses the Apache License 2.0 (ASL). Although we support Free Software,
-the Velt team chose ASL because we want to give users the freedom to do anything they want
-with our software.
-
-However, not all of Graphene could be licensed under ASL. For example, the window manager and
-all source files in the wm directory must be licensed under the GPLv3 because libmutter is also
-GPLv3. The license information for each applicable file is listed at the top of the file.
+Currently, as a whole, the Panel is under the Apache License 2.0, and the
+Window/Session Manager is under the GPLv3. However, different source files may
+be under different licenses depending on how they're being used and which
+libraries they require. *The license information for each file is listed at the
+top of the file.*
 
 Authors
 --------
