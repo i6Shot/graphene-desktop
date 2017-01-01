@@ -41,7 +41,6 @@
  */
 
 
-#include "config.h"
 #include "session.h"
 #include <gio/gio.h>
 #include <gio/gdesktopappinfo.h>
@@ -133,8 +132,6 @@ void graphene_session_init(CSMStartupCompleteCallback startupCb, CSMDialogCallba
 	if(session || !startupCb || !dialogCb || !quitCb)
 		return;
 	
-	g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
-
 	session = g_new0(GrapheneSession, 1);
 	
 	session->startupCb = startupCb;

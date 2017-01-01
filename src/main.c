@@ -25,6 +25,7 @@
  * is under the Apache License and in its own file.
  */
 
+#include <config.h>
 #include <meta/main.h>
 #include <meta/meta-plugin.h>
 #include <glib-unix.h>
@@ -57,6 +58,8 @@ int main(int argc, char **argv)
 	meta_init();
 	g_unsetenv("NO_AT_BRIDGE");
 	g_unsetenv("NO_GAIL");
+	
+	g_message("Graphene Version %s%s", GRAPHENE_VERSION_STR, GRAPHENE_DEBUG ? "d" : "");
 	
 	return meta_run();
 }

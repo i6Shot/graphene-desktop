@@ -20,7 +20,6 @@
 #include <session-dbus-iface.h>
 #include "client.h"
 #include "util.h"
-#include "config.h"
 
 #define CLIENT_OBJECT_PATH "/org/gnome/SessionManager/Client"
 #define MAX_RESTARTS 5
@@ -437,8 +436,6 @@ static gboolean graphene_session_client_spawn_delay_cb(GrapheneSessionClient *se
 	
 	GPid pid = 0;
 	GError *e = NULL;
-	
-	g_setenv("G_MESSAGES_DEBUG", "none", TRUE);
 
 	gchar **argsSplit;
 	if(!g_shell_parse_argv(self->args, NULL, &argsSplit, &e))
@@ -456,8 +453,6 @@ static gboolean graphene_session_client_spawn_delay_cb(GrapheneSessionClient *se
 	g_free(startupIdVar);
 	g_strfreev(argsSplit);
 
-	g_setenv("G_MESSAGES_DEBUG", "all", TRUE);
-	
 	if(e)
 	{
 		g_critical("Failed to start process with args '%s' (%s)", self->args, e->message);
