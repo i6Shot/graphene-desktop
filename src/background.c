@@ -106,7 +106,6 @@ static void update_done(ClutterActor *newActor, GrapheneWMBackground *self)
 
 static void update(GrapheneWMBackground *self)
 {
-	g_message("screen %p, %i", self->screen, self->monitor);
 	ClutterActor *newActor = meta_background_actor_new(self->screen, self->monitor);
 	MetaBackground *newBackground = meta_background_new(self->screen);
 	meta_background_actor_set_background(META_BACKGROUND_ACTOR(newActor), newBackground);

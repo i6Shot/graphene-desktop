@@ -224,14 +224,11 @@ static void on_pa_event(pa_context *context, pa_subscription_event_type_t type, 
   
   if(efacility == PA_SUBSCRIPTION_EVENT_SERVER)
   {
-    printf("Server event\n");
     pa_operation *o = pa_context_get_server_info(self->context, (pa_server_info_cb_t)on_server_get_info, self);
     if(o) pa_operation_unref(o);
   }
   else if(etype == PA_SUBSCRIPTION_EVENT_NEW || etype == PA_SUBSCRIPTION_EVENT_CHANGE)
   {
-    printf("new/change event\n");
-
     pa_operation *o = NULL;
     if(efacility == PA_SUBSCRIPTION_EVENT_SINK)
       o = pa_context_get_sink_info_by_index(self->context, index, (pa_sink_info_cb_t)on_sink_get_info, self);
@@ -242,13 +239,9 @@ static void on_pa_event(pa_context *context, pa_subscription_event_type_t type, 
   }
   else if(etype == PA_SUBSCRIPTION_EVENT_REMOVE)
   {
-    printf("remove event: ");
-
     SoundDevice *device = get_device_at_index_with_type(self, index,
       (efacility == PA_SUBSCRIPTION_EVENT_SINK) ? SOUND_DEVICE_TYPE_OUTPUT : SOUND_DEVICE_TYPE_INPUT, false, NULL);
     
-    printf("remove device '%s'\n", device->description);
-
     sound_device_ref(device);
     sound_device_invalidate(device);
     if(self->eventCallback)
@@ -261,8 +254,6 @@ static void on_pa_event(pa_context *context, pa_subscription_event_type_t type, 
 static void on_server_get_info(pa_context *context, const pa_server_info *server, SoundSettings *self)
 {
   if(!server || !self) return;
-  
-  printf("server get info\n");
   
   self->defaultSinkName = strdup(server->default_sink_name);
   self->defaultSourceName = strdup(server->default_source_name);
@@ -282,8 +273,6 @@ static void on_sink_get_info(pa_context *context, const pa_sink_info *sink, int 
 {
   if(!sink || !self) return; // When listing devices, a final NULL device will be sent (with eol = 1)
   
-  printf("sink get info\n");
-
   
   // printf("   NAME: %s\n", sink->name);
   // printf("   DESC: %s\n", sink->description);
@@ -336,15 +325,11 @@ static void on_sink_get_info(pa_context *context, const pa_sink_info *sink, int 
     
   if(self->eventCallback && device->active && !wasActive)
     self->eventCallback(self, SOUND_SETTINGS_EVENT_TYPE_ACTIVE_DEVICE_CHANGED, device, self->eventUserdata);
-    
-  printf("sink done\n");
 }
 
 static void on_source_get_info(pa_context *context, const pa_source_info *source, int eol, SoundSettings *self)
 {
   if(!source || !self) return;
-  
-  printf("source get info\n");
   
   bool created;
   SoundDevice *device = get_device_at_index_with_type(self, source->index, SOUND_DEVICE_TYPE_INPUT, true, &created);
@@ -378,8 +363,6 @@ static void on_source_get_info(pa_context *context, const pa_source_info *source
     
   if(self->eventCallback && device->active && !wasActive)
     self->eventCallback(self, SOUND_SETTINGS_EVENT_TYPE_ACTIVE_DEVICE_CHANGED, device, self->eventUserdata);
-    
-  printf("source done\n");
 }
 
 /*
