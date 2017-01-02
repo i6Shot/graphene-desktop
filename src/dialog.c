@@ -11,7 +11,7 @@
 
 struct _GrapheneDialog
 {
-	ClutterActor parent;
+	CMKWidget parent;
 	
 	ClutterActor *content;
 	ClutterActor *buttonBox;
@@ -148,7 +148,6 @@ static void graphene_dialog_init(GrapheneDialog *self)
 	clutter_actor_add_child(CLUTTER_ACTOR(self), self->buttonBox);
 
 	g_signal_connect(CLUTTER_ACTOR(self), "notify::size", G_CALLBACK(on_size_changed), canvas);
-	on_style_changed(CMK_WIDGET(self), cmk_widget_get_style(CMK_WIDGET(self)));
 }
 
 static void on_style_changed(CMKWidget *self_, CMKStyle *style)
@@ -168,6 +167,8 @@ static void on_style_changed(CMKWidget *self_, CMKStyle *style)
 		ClutterColor cc = cmk_to_clutter_color(&color);
 		clutter_text_set_color(CLUTTER_TEXT(content), &cc);
 	}
+
+	CMK_WIDGET_CLASS(graphene_dialog_parent_class)->style_changed(self_, style);
 }
 
 static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas *canvas)
@@ -230,6 +231,7 @@ void graphene_dialog_set_buttons(GrapheneDialog *self, const gchar * const *butt
 	while((name = buttons[i++]) != NULL)
 	{
 		CMKButton *button = cmk_button_new_with_text(name);
+		cmk_widget_set_style_parent(CMK_WIDGET(button), CMK_WIDGET(self));
 		cmk_button_set_background_color_name(button, "background");
 		ClutterAction *action = clutter_click_action_new();
 		g_signal_connect_swapped(action, "clicked", G_CALLBACK(on_button_click), self);
