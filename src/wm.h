@@ -26,7 +26,8 @@
 #include <meta/meta-plugin.h>
 #include <meta/meta-background-group.h>
 #include "percent-floater.h"
-#include "common/sound.h"
+#include "sound.h"
+#include "panel.h"
 
 G_BEGIN_DECLS
 
@@ -42,6 +43,7 @@ struct _GrapheneWM {
 	SoundSettings *soundSettings;
 	ClutterActor *coverGroup;
 	ClutterActor *dialog;
+	GraphenePanel *panel;
 	
 	// For fixing an input issue with the X backend
 	// See xfixes_calculate_input_region (wm.c) for more details

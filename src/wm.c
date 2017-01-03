@@ -51,11 +51,13 @@
 #define TRANSITION_MEMLEAK_FIX(actor, tname) g_signal_connect_after(clutter_actor_get_transition((actor), (tname)), "stopped", G_CALLBACK(g_object_unref), NULL)
 
 
-static void on_monitors_changed(MetaScreen *screen, GrapheneWM *wm);
+static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self);
+static void update_struts(GrapheneWM *self);
 static void xfixes_add_input_actor(GrapheneWM *self, ClutterActor *actor);
 static void xfixes_remove_input_actor(GrapheneWM *self, ClutterActor *actor);
 static void graphene_wm_begin_modal(GrapheneWM *self);
 static void graphene_wm_end_modal(GrapheneWM *self);
+static void on_panel_request_modal(gboolean modal, GrapheneWM *self);
 static void center_actor_on_primary(GrapheneWM *self, ClutterActor *actor);
 
 static void minimize_done(ClutterActor *actor, MetaPlugin *plugin);
@@ -130,6 +132,14 @@ void graphene_wm_start(MetaPlugin *plugin)
 	clutter_actor_set_reactive(self->coverGroup, FALSE);
 	clutter_actor_insert_child_above(self->stage, self->coverGroup, NULL);
 
+	self->panel = graphene_panel_new((CPanelModalCallback)on_panel_request_modal, self);
+	ClutterActor *panelBar = graphene_panel_get_input_actor(self->panel);
+	xfixes_add_input_actor(self, panelBar);
+	clutter_actor_add_child(self->stage, ACTOR(self->panel));
+	g_signal_connect_swapped(panelBar, "allocation-changed", G_CALLBACK(update_struts), self);
+	g_signal_connect_swapped(screen, "workspace-switched", G_CALLBACK(update_struts), self);
+	update_struts(self);
+
 	g_signal_connect(screen, "monitors_changed", G_CALLBACK(on_monitors_changed), self);
 	on_monitors_changed(screen, self);
 	
@@ -145,6 +155,7 @@ void graphene_wm_start(MetaPlugin *plugin)
 	// Start the WM modal, and the session manager can end the modal when
 	// startup completes with graphene_wm_show_dialog(wm, NULL);
 	// This must happen after showing the stage
+	//clutter_actor_hide(self->coverGroup);
 	clutter_actor_show(self->coverGroup);
 	graphene_wm_begin_modal(self);
 
@@ -188,6 +199,45 @@ static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self)
 
 	if(self->dialog)
 		center_actor_on_primary(self, self->dialog);
+
+	clutter_actor_set_x(ACTOR(self->panel), primary.x);
+	clutter_actor_set_y(ACTOR(self->panel), primary.y);
+	clutter_actor_set_width(ACTOR(self->panel), primary.width);
+	clutter_actor_set_height(ACTOR(self->panel), primary.height);
+}
+
+static void update_struts(GrapheneWM *self)
+{
+	g_return_if_fail(GRAPHENE_IS_WM(self));
+	ClutterActor *bar = graphene_panel_get_input_actor(self->panel);
+	
+	// TODO: Using the wrong side with the given struct rectangle can be
+	// very bad, sometimes even causing segfaults. Maybe do some checks
+	// to make sure the Panel is giving us good info on it's position.
+	MetaSide side;
+	switch(graphene_panel_get_side(self->panel))
+	{
+	case GRAPHENE_PANEL_SIDE_TOP:
+		side = META_SIDE_TOP; break;
+	case GRAPHENE_PANEL_SIDE_BOTTOM:
+		side = META_SIDE_BOTTOM; break;
+	default:
+		return;
+	}
+	
+	MetaScreen *screen = meta_plugin_get_screen(META_PLUGIN(self));
+	MetaWorkspace *ws = meta_screen_get_active_workspace(screen);
+
+	gfloat x, y, width, height;
+	clutter_actor_get_position(bar, &x, &y);
+	clutter_actor_get_size(bar, &width, &height);
+
+	MetaStrut strut = {x, y, width, height, side};
+	GSList *struts = NULL;
+	if(width > 0 && height > 0)	
+		struts = g_slist_append(NULL, &strut);
+	meta_workspace_set_builtin_struts(ws, struts);
+	g_slist_free(struts);
 }
 
 
@@ -318,6 +368,14 @@ static void graphene_wm_end_modal(GrapheneWM *self)
 	xfixes_calculate_input_region(self);
 }
 
+static void on_panel_request_modal(gboolean modal, GrapheneWM *self)
+{
+	g_return_if_fail(GRAPHENE_IS_WM(self));
+	if(modal)
+		graphene_wm_begin_modal(self);
+	else
+		graphene_wm_end_modal(self);
+}
 
 /*
  * Modal dialog
