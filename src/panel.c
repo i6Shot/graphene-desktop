@@ -9,17 +9,17 @@
 
 struct _GraphenePanel
 {
-	CMKWidget parent;
+	CmkWidget parent;
 
 	CPanelModalCallback modalCb;
 	gpointer cbUserdata;
 
-	CMKWidget *bar;
-	CMKWidget *popup;
+	CmkWidget *bar;
+	CmkWidget *popup;
 };
 
 //static void graphene_panel_dispose(GObject *self_);
-static void on_style_changed(CMKWidget *self_, CMKStyle *style);
+static void on_style_changed(CmkWidget *self_, CmkStyle *style);
 //static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas *canvas);
 static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags);
 
@@ -66,7 +66,7 @@ static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *
 	CLUTTER_ACTOR_CLASS(graphene_panel_parent_class)->allocate(self_, box, flags);
 }
 
-static void on_style_changed(CMKWidget *self_, CMKStyle *style)
+static void on_style_changed(CmkWidget *self_, CmkStyle *style)
 {
 	GraphenePanel *panel = GRAPHENE_PANEL(self_);
 	CMK_WIDGET_CLASS(graphene_panel_parent_class)->style_changed(self_, style);

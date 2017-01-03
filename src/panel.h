@@ -12,7 +12,7 @@
 G_BEGIN_DECLS
 
 #define GRAPHENE_TYPE_PANEL  graphene_panel_get_type()
-G_DECLARE_FINAL_TYPE(GraphenePanel, graphene_panel, GRAPHENE, PANEL, CMKWidget)
+G_DECLARE_FINAL_TYPE(GraphenePanel, graphene_panel, GRAPHENE, PANEL, CmkWidget)
 
 typedef void (*CPanelModalCallback)(gboolean modal, gpointer userdata);
 

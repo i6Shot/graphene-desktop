@@ -17,7 +17,7 @@
 G_BEGIN_DECLS
 
 #define GRAPHENE_TYPE_DIALOG  graphene_dialog_get_type()
-G_DECLARE_FINAL_TYPE(GrapheneDialog, graphene_dialog, GRAPHENE, DIALOG, CMKWidget)
+G_DECLARE_FINAL_TYPE(GrapheneDialog, graphene_dialog, GRAPHENE, DIALOG, CmkWidget)
 
 GrapheneDialog * graphene_dialog_new();
 
@@ -33,7 +33,7 @@ void graphene_dialog_set_message(GrapheneDialog *dialog, const gchar *message);
 void graphene_dialog_set_buttons(GrapheneDialog *dialog, const gchar * const *buttons);
 
 /*
- * Gets a list of the CMKButton actors that the dialog is using.
+ * Gets a list of the CmkButton actors that the dialog is using.
  * This can be used for making custom modifications to the buttons.
  */
 GList * graphene_dialog_get_buttons(GrapheneDialog *dialog);

@@ -143,7 +143,7 @@ void graphene_wm_start(MetaPlugin *plugin)
 	g_signal_connect(screen, "monitors_changed", G_CALLBACK(on_monitors_changed), self);
 	on_monitors_changed(screen, self);
 	
-	CMKStyle *style = cmk_style_get_default();
+	CmkStyle *style = cmk_style_get_default();
 	CMKColor bgColor = {0.28627, 0.33725, 0.36078, 1};
 	cmk_style_set_color(style, "background", &bgColor);
 	CMKColor bgColorFont = {1, 1, 1, 0.8};

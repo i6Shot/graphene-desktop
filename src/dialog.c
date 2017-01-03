@@ -11,12 +11,12 @@
 
 struct _GrapheneDialog
 {
-	CMKWidget parent;
+	CmkWidget parent;
 	
 	ClutterActor *content;
 	ClutterActor *buttonBox;
-	GList *buttons; // List of CMKButton actors
-	CMKButton *highlighted; // This button should also appear in the 'buttons' list
+	GList *buttons; // List of CmkButton actors
+	CmkButton *highlighted; // This button should also appear in the 'buttons' list
 	gboolean allowEsc;
 };
 
@@ -39,7 +39,7 @@ static guint signals[SIGNAL_LAST];
 //static void graphene_dialog_dispose(GObject *self_);
 static void graphene_dialog_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec);
 static void graphene_dialog_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec);
-static void on_style_changed(CMKWidget *self_, CMKStyle *style);
+static void on_style_changed(CmkWidget *self_, CmkStyle *style);
 static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas *canvas);
 static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, int height, GrapheneDialog *self);
 
@@ -150,7 +150,7 @@ static void graphene_dialog_init(GrapheneDialog *self)
 	g_signal_connect(CLUTTER_ACTOR(self), "notify::size", G_CALLBACK(on_size_changed), canvas);
 }
 
-static void on_style_changed(CMKWidget *self_, CMKStyle *style)
+static void on_style_changed(CmkWidget *self_, CmkStyle *style)
 {
 	clutter_content_invalidate(clutter_actor_get_content(CLUTTER_ACTOR(self_)));
 	float padding = cmk_style_get_padding(style);
@@ -180,7 +180,7 @@ static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas 
 
 static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, int height, GrapheneDialog *self)
 {
-	CMKStyle *style = cmk_widget_get_style(CMK_WIDGET(self));
+	CmkStyle *style = cmk_widget_get_style(CMK_WIDGET(self));
 	double radius = cmk_style_get_bevel_radius(style);
 	double degrees = M_PI / 180.0;
 
@@ -201,7 +201,7 @@ static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, in
 	return TRUE;
 }
 
-static void on_button_click(GrapheneDialog *self, CMKButton *button)
+static void on_button_click(GrapheneDialog *self, CmkButton *button)
 {
 	g_signal_emit(self, signals[SIGNAL_SELECT], 0, cmk_button_get_name(button));
 }
@@ -230,7 +230,7 @@ void graphene_dialog_set_buttons(GrapheneDialog *self, const gchar * const *butt
 	guint i=0;
 	while((name = buttons[i++]) != NULL)
 	{
-		CMKButton *button = cmk_button_new_with_text(name);
+		CmkButton *button = cmk_button_new_with_text(name);
 		cmk_widget_set_style_parent(CMK_WIDGET(button), CMK_WIDGET(self));
 		cmk_button_set_background_color_name(button, "background");
 		ClutterAction *action = clutter_click_action_new();

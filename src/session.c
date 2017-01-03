@@ -237,7 +237,7 @@ static void graphene_session_request_logout()
 {	
 	GrapheneDialog *dialog = graphene_dialog_new_simple("How would you like to exit?\n(Restart and Shutdown not yet implemented)", "", "Cancel", "Logout", "Restart", "Shutdown", NULL);
 
-	CMKShadowContainer *sdc = cmk_shadow_container_new();
+	CmkShadowContainer *sdc = cmk_shadow_container_new();
 	cmk_shadow_container_set_blur(sdc, 30);
 	clutter_actor_add_child(CLUTTER_ACTOR(sdc), CLUTTER_ACTOR(dialog));
 	
