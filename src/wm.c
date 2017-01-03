@@ -177,12 +177,13 @@ static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self)
 	
 	clutter_color_free(coverColor);
 
-	int width = 0, height = 0;
-	meta_screen_get_size(screen, &width, &height);
+	int primaryMonitor = meta_screen_get_primary_monitor(screen);
+	MetaRectangle primary;
+	meta_screen_get_monitor_geometry(screen, primaryMonitor, &primary);
 	
-	clutter_actor_set_y(ACTOR(self->percentBar), 30);
-	clutter_actor_set_x(ACTOR(self->percentBar), width/2-width/8);
-	clutter_actor_set_width(ACTOR(self->percentBar), width/4);
+	clutter_actor_set_y(ACTOR(self->percentBar), primary.y+30);
+	clutter_actor_set_x(ACTOR(self->percentBar), primary.x+primary.width/2-primary.width/8);
+	clutter_actor_set_width(ACTOR(self->percentBar), primary.width/4);
 	clutter_actor_set_height(ACTOR(self->percentBar), 20);
 
 	if(self->dialog)
