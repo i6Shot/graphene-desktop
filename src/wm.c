@@ -80,74 +80,58 @@ const MetaPluginInfo * graphene_wm_plugin_info(MetaPlugin *plugin)
 	return &info;
 }
 
-void graphene_wm_start(MetaPlugin *plugin)
+void graphene_wm_start(MetaPlugin *self_)
 {
-	//int primary = meta_screen_get_primary_monitor(screen);
-	//MetaWorkspace *ws = meta_screen_get_active_workspace(screen);
+	GrapheneWM *self = GRAPHENE_WM(self_);
 
-	//MetaRectangle rect;
-	//meta_screen_get_monitor_geometry(screen, primary, &rect);
-
-	//ClutterActor *panel = clutter_actor_new();
-	//clutter_actor_set_position(panel, rect.x, rect.y);
-	//clutter_actor_set_size(panel, rect.width, 60);
-	//clutter_actor_set_reactive(panel, TRUE);
-	//g_signal_connect(panel, "button-press-event", G_CALLBACK(click), self);
-	//
-	//ClutterColor color = {0,0,0,255};
-	//clutter_actor_set_background_color(panel, &color);
-	//clutter_actor_show(panel);
-	//clutter_actor_add_child(self->stage, panel);
-	//xfixes_add_input_actor(self, panel);
-
-	//MetaStrut strut = {rect.x,rect.y,rect.width,60, META_SIDE_TOP};
-	//GSList *struts = g_slist_append(NULL, &strut);
-	//meta_workspace_set_builtin_struts(ws, struts);
-
-	//clutter_actor_show(self->stage);
-	//printf("MESSAGE: %i, %i, %i, %i\n", rect.x, rect.y, rect.width, rect.height);
-	
-	GrapheneWM *self = GRAPHENE_WM(plugin);
-
-	MetaScreen *screen = meta_plugin_get_screen(plugin);
+	MetaScreen *screen = meta_plugin_get_screen(self_);
 	self->stage = meta_get_stage_for_screen(screen);
 
 	// Don't bother clearing the stage when we're drawing our own background
 	clutter_stage_set_no_clear_hint(CLUTTER_STAGE(self->stage), TRUE);
 
 	init_keybindings(self);
+	
+	// Default styling
+	// TODO: Load styling from a file
+	// cmk_stlye_get_default gets a new ref here, which we never release to
+	// ensure all widgets get the same default style.
+	CmkStyle *style = cmk_style_get_default();
+	CMKColor bgColor = {0.28627, 0.33725, 0.36078, 1};
+	cmk_style_set_color(style, "background", &bgColor);
+	CMKColor bgColorFont = {1, 1, 1, 0.8};
+	cmk_style_set_color(style, "background-font", &bgColorFont);
 
-	self->percentBar = graphene_percent_floater_new();
-	graphene_percent_floater_set_divisions(self->percentBar, WM_PERCENT_BAR_STEPS);
-	graphene_percent_floater_set_scale(self->percentBar, 2); // TEMP
-	clutter_actor_insert_child_above(self->stage, ACTOR(self->percentBar), NULL);
-
+	// Background is always below all other actors
 	ClutterActor *backgroundGroup = meta_background_group_new();
 	self->backgroundGroup = META_BACKGROUND_GROUP(backgroundGroup);
 	clutter_actor_set_reactive(backgroundGroup, FALSE);
 	clutter_actor_insert_child_below(self->stage, backgroundGroup, NULL);
 	clutter_actor_show(backgroundGroup);
 
-	self->coverGroup = clutter_actor_new();
-	clutter_actor_set_reactive(self->coverGroup, FALSE);
-	clutter_actor_insert_child_above(self->stage, self->coverGroup, NULL);
-
+	// Panel goes lowest of WM widgets, but above the windows
 	self->panel = graphene_panel_new((CPanelModalCallback)on_panel_request_modal, self);
 	ClutterActor *panelBar = graphene_panel_get_input_actor(self->panel);
 	xfixes_add_input_actor(self, panelBar);
-	clutter_actor_add_child(self->stage, ACTOR(self->panel));
+	clutter_actor_insert_child_above(self->stage, ACTOR(self->panel), NULL);
 	g_signal_connect_swapped(panelBar, "allocation-changed", G_CALLBACK(update_struts), self);
 	g_signal_connect_swapped(screen, "workspace-switched", G_CALLBACK(update_struts), self);
 	update_struts(self);
 
+	// Cover group goes over everything to "dim" the screen for dialogs
+	self->coverGroup = clutter_actor_new();
+	clutter_actor_set_reactive(self->coverGroup, FALSE);
+	clutter_actor_insert_child_above(self->stage, self->coverGroup, NULL);
+
+	// Only the percent bar (for volume/brightness indication) goes above
+	self->percentBar = graphene_percent_floater_new();
+	graphene_percent_floater_set_divisions(self->percentBar, WM_PERCENT_BAR_STEPS);
+	graphene_percent_floater_set_scale(self->percentBar, 2); // TEMP
+	clutter_actor_insert_child_above(self->stage, ACTOR(self->percentBar), NULL);
+
+	// Update actors when the monitors change/resize
 	g_signal_connect(screen, "monitors_changed", G_CALLBACK(on_monitors_changed), self);
 	on_monitors_changed(screen, self);
-	
-	CmkStyle *style = cmk_style_get_default();
-	CMKColor bgColor = {0.28627, 0.33725, 0.36078, 1};
-	cmk_style_set_color(style, "background", &bgColor);
-	CMKColor bgColorFont = {1, 1, 1, 0.8};
-	cmk_style_set_color(style, "background-font", &bgColorFont);
 	
 	// Show everything
 	clutter_actor_show(self->stage);
@@ -158,9 +142,6 @@ void graphene_wm_start(MetaPlugin *plugin)
 	//clutter_actor_hide(self->coverGroup);
 	clutter_actor_show(self->coverGroup);
 	graphene_wm_begin_modal(self);
-
-	// The actors using the style have references to it now
-	//g_object_unref(style);
 }
 
 static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self)
