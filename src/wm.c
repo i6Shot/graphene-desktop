@@ -97,9 +97,9 @@ void graphene_wm_start(MetaPlugin *self_)
 	// cmk_stlye_get_default gets a new ref here, which we never release to
 	// ensure all widgets get the same default style.
 	CmkStyle *style = cmk_style_get_default();
-	CMKColor bgColor = {0.28627, 0.33725, 0.36078, 1};
+	CmkColor bgColor = {0.28627, 0.33725, 0.36078, 1};
 	cmk_style_set_color(style, "background", &bgColor);
-	CMKColor bgColorFont = {1, 1, 1, 0.8};
+	CmkColor bgColorFont = {1, 1, 1, 0.8};
 	cmk_style_set_color(style, "background-font", &bgColorFont);
 
 	// Background is always below all other actors
@@ -335,6 +335,8 @@ static void graphene_wm_begin_modal(GrapheneWM *self)
 {
 	if(self->isModal)
 		return;
+	// TODO: If the user is currently dragging (already in modal),
+	// this doesn't work to grab their mouse.
 	meta_plugin_begin_modal(META_PLUGIN(self), 0, 0);
 	self->isModal = TRUE;
 	xfixes_calculate_input_region(self);
