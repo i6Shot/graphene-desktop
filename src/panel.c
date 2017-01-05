@@ -6,6 +6,9 @@
  
 #include "panel.h"
 #include "cmk/shadow.h"
+#include "applets/clock.h"
+
+#define PANEL_HEIGHT 32 // Pixels; multiplied by the window scale factor
 
 struct _GraphenePanel
 {
@@ -52,15 +55,20 @@ static void graphene_panel_init(GraphenePanel *self)
 {
 	self->bar = cmk_widget_new();
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self->bar), TRUE);
+	cmk_widget_set_draw_background_color(self->bar, TRUE);
 	cmk_widget_set_background_color(self->bar, "background");
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->bar));
+
+	GrapheneClockApplet *clock = graphene_clock_applet_new();
+	cmk_widget_set_style_parent(clock, self->bar);
+	clutter_actor_add_child(self->bar, clock);
 }	
 
 static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags)
 {
 	GraphenePanel *self = GRAPHENE_PANEL(self_);
 	
-	ClutterActorBox barBox = {box->x1, box->y2-64, box->x2, box->y2};
+	ClutterActorBox barBox = {box->x1, box->y2-PANEL_HEIGHT, box->x2, box->y2};
 	clutter_actor_allocate(CLUTTER_ACTOR(self->bar), &barBox, flags);
 
 	CLUTTER_ACTOR_CLASS(graphene_panel_parent_class)->allocate(self_, box, flags);
