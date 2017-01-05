@@ -381,7 +381,7 @@ static void graphene_wm_close_dialog(GrapheneWM *self, gboolean closeCover)
 	{
 		g_signal_connect_swapped(self->dialog, "transitions_completed", G_CALLBACK(close_dialog_complete), self);
 		clutter_actor_save_easing_state(self->dialog);
-		clutter_actor_set_easing_mode(self->dialog, CLUTTER_EASE_OUT_SINE);
+		clutter_actor_set_easing_mode(self->dialog, CLUTTER_EASE_IN_BACK);
 		clutter_actor_set_easing_duration(self->dialog, WM_TRANSITION_TIME);
 		clutter_actor_set_scale(self->dialog, 0, 0);
 		clutter_actor_restore_easing_state(self->dialog);
@@ -396,7 +396,7 @@ static void graphene_wm_close_dialog(GrapheneWM *self, gboolean closeCover)
 		return;
 
 	clutter_actor_save_easing_state(self->coverGroup);
-	clutter_actor_set_easing_mode(self->coverGroup, CLUTTER_EASE_OUT_SINE);
+	clutter_actor_set_easing_mode(self->coverGroup, CLUTTER_EASE_IN_SINE);
 	clutter_actor_set_easing_duration(self->coverGroup, WM_TRANSITION_TIME);
 	clutter_actor_set_opacity(self->coverGroup, 0);
 	clutter_actor_restore_easing_state(self->coverGroup);
@@ -425,7 +425,7 @@ void graphene_wm_show_dialog(GrapheneWM *self, ClutterActor *dialog)
 	center_actor_on_primary(self, self->dialog);
 
 	clutter_actor_save_easing_state(self->dialog);
-	clutter_actor_set_easing_mode(self->dialog, CLUTTER_EASE_IN_SINE);
+	clutter_actor_set_easing_mode(self->dialog, CLUTTER_EASE_OUT_BACK);
 	clutter_actor_set_easing_duration(self->dialog, WM_TRANSITION_TIME);
 	clutter_actor_set_scale(self->dialog, 1, 1);
 	clutter_actor_restore_easing_state(self->dialog);
@@ -435,7 +435,7 @@ void graphene_wm_show_dialog(GrapheneWM *self, ClutterActor *dialog)
 
 	clutter_actor_show(self->coverGroup);
 	clutter_actor_save_easing_state(self->coverGroup);
-	clutter_actor_set_easing_mode(self->coverGroup, CLUTTER_EASE_IN_SINE);
+	clutter_actor_set_easing_mode(self->coverGroup, CLUTTER_EASE_OUT_SINE);
 	clutter_actor_set_easing_duration(self->coverGroup, WM_TRANSITION_TIME);
 	clutter_actor_set_opacity(self->coverGroup, 255);
 	clutter_actor_restore_easing_state(self->coverGroup);

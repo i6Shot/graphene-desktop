@@ -197,7 +197,7 @@ static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, in
 	return TRUE;
 }
 
-static void on_button_click(GrapheneDialog *self, CmkButton *button)
+static void on_button_activate(GrapheneDialog *self, CmkButton *button)
 {
 	g_signal_emit(self, signals[SIGNAL_SELECT], 0, cmk_button_get_name(button));
 }
@@ -228,9 +228,7 @@ void graphene_dialog_set_buttons(GrapheneDialog *self, const gchar * const *butt
 	{
 		CmkButton *button = cmk_button_new_with_text(name);
 		cmk_widget_set_style_parent(CMK_WIDGET(button), CMK_WIDGET(self));
-		ClutterAction *action = clutter_click_action_new();
-		g_signal_connect_swapped(action, "clicked", G_CALLBACK(on_button_click), self);
-		clutter_actor_add_action(CLUTTER_ACTOR(button), action);
+		g_signal_connect_swapped(button, "activate", G_CALLBACK(on_button_activate), self);
 		clutter_actor_add_child(self->buttonBox, CLUTTER_ACTOR(button));
 	}
 }
