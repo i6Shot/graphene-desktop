@@ -552,7 +552,7 @@ void graphene_wm_destroy(MetaPlugin *plugin, MetaWindowActor *windowActor)
 	case META_WINDOW_MODAL_DIALOG:
 		clutter_actor_set_pivot_point(actor, 0.5, 0.5);
 		clutter_actor_save_easing_state(actor);
-		clutter_actor_set_easing_mode(actor, CLUTTER_EASE_OUT_QUAD);
+		clutter_actor_set_easing_mode(actor, CLUTTER_EASE_IN_SINE);
 		clutter_actor_set_easing_duration(actor, WM_TRANSITION_TIME);
 		g_signal_connect(actor, "transitions_completed", G_CALLBACK(destroy_done), plugin);
 		clutter_actor_set_scale(actor, 0, 0);
@@ -591,7 +591,7 @@ void graphene_wm_map(MetaPlugin *plugin, MetaWindowActor *windowActor)
 		clutter_actor_set_scale(actor, 0, 0);
 		clutter_actor_show(actor);
 		clutter_actor_save_easing_state(actor);
-		clutter_actor_set_easing_mode(actor, CLUTTER_EASE_IN_QUAD);
+		clutter_actor_set_easing_mode(actor, CLUTTER_EASE_OUT_SINE);
 		clutter_actor_set_easing_duration(actor, WM_TRANSITION_TIME);
 		g_signal_connect(actor, "transitions_completed", G_CALLBACK(map_done), plugin);
 		clutter_actor_set_scale(actor, 1, 1);
