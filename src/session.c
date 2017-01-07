@@ -241,7 +241,7 @@ static void graphene_session_request_logout()
 	cmk_shadow_container_set_blur(sdc, 30);
 	clutter_actor_add_child(CLUTTER_ACTOR(sdc), CLUTTER_ACTOR(dialog));
 	
-	g_signal_connect_swapped(dialog, "select", G_CALLBACK(close_dialog), NULL);
+	g_signal_connect(dialog, "select", G_CALLBACK(close_dialog), NULL);
 	session->dialogCb(CLUTTER_ACTOR(sdc), session->cbUserdata);
 }
 
