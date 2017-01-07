@@ -20,6 +20,8 @@ pkg_check_modules(GIOUNIX2 REQUIRED gio-unix-2.0>=2.10)
 pkg_check_modules(LIBMUTTER REQUIRED libmutter>=3.22)
 pkg_check_modules(LIBPULSEGLIB REQUIRED libpulse-mainloop-glib>=8.0)
 pkg_check_modules(POLKITAGENT REQUIRED polkit-agent-1)
+pkg_check_modules(LIBRSVG REQUIRED librsvg-2.0)
+pkg_check_modules(GDKPIXBUF REQUIRED gdk-pixbuf-2.0)
 link_directories(${LIBMUTTER_LIBRARY_DIRS})
 
 add_executable(graphene-desktop
@@ -40,6 +42,7 @@ add_executable(graphene-desktop
 	cmk/shadow.c
 	cmk/cmk-widget.c
 	cmk/cmk-icon-loader.c
+	cmk/cmk-icon.c
 	# ${PROJECT_SOURCE_DIR}/common/dbusmonitor.c
 	sound.c
 	panel.c
@@ -50,6 +53,8 @@ target_link_libraries(graphene-desktop
 	${LIBMUTTER_LIBRARIES}
 	${LIBPULSEGLIB_LIBRARIES}
 	${POLKITAGENT_LIBRARIES}
+	${LIBRSVG_LIBRARIES}
+	${GDKPIXBUF_LIBRARIES}
 	m
 )
 target_include_directories(graphene-desktop PRIVATE
@@ -58,6 +63,8 @@ target_include_directories(graphene-desktop PRIVATE
 	${LIBMUTTER_INCLUDE_DIRS}
 	${LIBPULSEGLIB_INCLUDE_DIRS}
 	${POLKITAGENT_INCLUDE_DIRS}
+	${LIBRSVG_INCLUDE_DIRS}
+	${GDKPIXBUF_INCLUDE_DIRS}
 )
 
 # Normally, the CMake install functionality removes the executable's rpath,
