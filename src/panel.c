@@ -6,7 +6,9 @@
  
 #include "panel.h"
 #include "cmk/shadow.h"
+#include "cmk/button.h"
 #include "applets/clock.h"
+#include "applets/launcher.h"
 
 #define PANEL_HEIGHT 64 // Pixels; multiplied by the window scale factor
 #define SHADOW_HEIGHT 20
@@ -69,8 +71,8 @@ static void graphene_panel_init(GraphenePanel *self)
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->bar));
 
 	// Sample launcher + tasklist
-	ClutterActor *launcher = clutter_actor_new();
-	clutter_actor_add_child(self->bar, launcher);
+	GrapheneLauncherApplet *launcher = graphene_launcher_applet_new();
+	clutter_actor_add_child(self->bar, CLUTTER_ACTOR(launcher));
 
 	ClutterActor *tasklist = clutter_actor_new();
 	clutter_actor_set_x_expand(tasklist, TRUE);
@@ -79,7 +81,7 @@ static void graphene_panel_init(GraphenePanel *self)
 	GrapheneClockApplet *clock = graphene_clock_applet_new();
 	self->clock = clock;
 	clutter_actor_add_child(self->bar, clock);
-}	
+}
 
 static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags)
 {
