@@ -21,6 +21,7 @@ struct _GrapheneLauncherApplet
 };
 
 static void graphene_launcher_applet_dispose(GObject *self_);
+static void on_style_changed(CmkWidget *self_);
 
 G_DEFINE_TYPE(GrapheneLauncherApplet, graphene_launcher_applet, CMK_TYPE_BUTTON)
 
@@ -34,12 +35,14 @@ GrapheneLauncherApplet* graphene_launcher_applet_new(void)
 static void graphene_launcher_applet_class_init(GrapheneLauncherAppletClass *class)
 {
 	G_OBJECT_CLASS(class)->dispose = graphene_launcher_applet_dispose;
+	CMK_WIDGET_CLASS(class)->style_changed = on_style_changed;
 }
 
 static void graphene_launcher_applet_init(GrapheneLauncherApplet *self)
 {
 	//cmk_button_set_text(CMK_BUTTON(self), "Launcher");
 	
+
 	CmkIcon *icon = cmk_icon_new_from_name("open-menu-symbolic");
 	cmk_icon_set_icon_theme(icon, "Adwaita");
 	cmk_icon_set_size(icon, 64);
@@ -56,6 +59,12 @@ static void graphene_launcher_applet_dispose(GObject *self_)
 	GrapheneLauncherApplet *self = GRAPHENE_LAUNCHER_APPLET(self_);
 	//g_clear_pointer(&self->popup, gtk_widget_destroy);
 	G_OBJECT_CLASS(graphene_launcher_applet_parent_class)->dispose(self_);
+}
+
+static void on_style_changed(CmkWidget *self_)
+{
+	cmk_widget_style_set_padding(self_, cmk_widget_style_get_padding(self_) * 1.3);
+	CMK_WIDGET_CLASS(graphene_launcher_applet_parent_class)->style_changed(self_);
 }
 
 

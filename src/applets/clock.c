@@ -12,7 +12,7 @@ struct _GrapheneClockApplet
 };
 
 static void graphene_clock_applet_dispose(GObject *self_);
-static void on_style_changed(CmkWidget *self_, CmkStyle *style);
+static void on_style_changed(CmkWidget *self_);
 static void on_background_changed(CmkWidget *self_);
 static void on_interface_settings_changed(GrapheneClockApplet *self, gchar *key, GSettings *settings);
 static gboolean update(GSource *source, GSourceFunc callback, gpointer userdata);
@@ -60,17 +60,14 @@ static void graphene_clock_applet_dispose(GObject *self_)
 	G_OBJECT_CLASS(graphene_clock_applet_parent_class)->dispose(self_);
 }
 
-static void on_style_changed(CmkWidget *self_, CmkStyle *style)
+static void on_style_changed(CmkWidget *self_)
 {
 }
 
 static void on_background_changed(CmkWidget *self_)
 {
-	const gchar *background = cmk_widget_get_background_color(self_);
-	CmkColor color;
-	cmk_style_get_font_color_for_background(cmk_widget_get_actual_style(self_), background, &color);
-	ClutterColor cc = cmk_to_clutter_color(&color);
-	clutter_text_set_color(GRAPHENE_CLOCK_APPLET(self_)->text, &cc);
+	const ClutterColor *color = cmk_widget_get_foreground_color(self_);
+	clutter_text_set_color(GRAPHENE_CLOCK_APPLET(self_)->text, color);
 }
 
 static void on_interface_settings_changed(GrapheneClockApplet *self, gchar *key, GSettings *settings)

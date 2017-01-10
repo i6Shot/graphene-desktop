@@ -38,7 +38,7 @@ static guint signals[SIGNAL_LAST];
 
 static void graphene_dialog_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec);
 static void graphene_dialog_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec);
-static void on_style_changed(CmkWidget *self_, CmkStyle *style);
+static void on_style_changed(CmkWidget *self_);
 static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas *canvas);
 static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, int height, GrapheneDialog *self);
 
@@ -141,15 +141,15 @@ static void graphene_dialog_init(GrapheneDialog *self)
 	clutter_actor_set_x_align(self->buttonBox, CLUTTER_ACTOR_ALIGN_END);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), self->buttonBox);
 
-	cmk_widget_set_background_color(CMK_WIDGET(self), "background");
+	cmk_widget_set_background_color_name(CMK_WIDGET(self), "background");
 
 	g_signal_connect(CLUTTER_ACTOR(self), "notify::size", G_CALLBACK(on_size_changed), canvas);
 }
 
-static void on_style_changed(CmkWidget *self_, CmkStyle *style)
+static void on_style_changed(CmkWidget *self_)
 {
 	clutter_content_invalidate(clutter_actor_get_content(CLUTTER_ACTOR(self_)));
-	float padding = cmk_style_get_padding(style);
+	float padding = cmk_widget_style_get_padding(self_);
 	ClutterMargin margin = {padding, padding, padding, padding};
 	ClutterMargin margin2 = {padding*2, padding*2, padding*2, padding*2};
 	clutter_actor_set_margin(GRAPHENE_DIALOG(self_)->content, &margin2);
@@ -158,13 +158,11 @@ static void on_style_changed(CmkWidget *self_, CmkStyle *style)
 	ClutterActor *content = clutter_actor_get_first_child(GRAPHENE_DIALOG(self_)->content);
 	if(CLUTTER_IS_TEXT(content))
 	{
-		CmkColor color;
-		cmk_style_get_font_color_for_background(style, cmk_widget_get_background_color(self_), &color);
-		ClutterColor cc = cmk_to_clutter_color(&color);
-		clutter_text_set_color(CLUTTER_TEXT(content), &cc);
+		const ClutterColor *color = cmk_widget_get_foreground_color(self_);
+		clutter_text_set_color(CLUTTER_TEXT(content), color);
 	}
 
-	CMK_WIDGET_CLASS(graphene_dialog_parent_class)->style_changed(self_, style);
+	CMK_WIDGET_CLASS(graphene_dialog_parent_class)->style_changed(self_);
 }
 
 static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas *canvas)
@@ -176,8 +174,7 @@ static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas 
 
 static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, int height, GrapheneDialog *self)
 {
-	CmkStyle *style = cmk_widget_get_actual_style(CMK_WIDGET(self));
-	double radius = cmk_style_get_bevel_radius(style);
+	double radius = cmk_widget_style_get_bevel_radius(CMK_WIDGET(self));
 	double degrees = M_PI / 180.0;
 
 	cairo_save(cr);
@@ -192,7 +189,7 @@ static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, in
 	cairo_arc(cr, radius, radius, radius, 180 * degrees, 270 * degrees);
 	cairo_close_path(cr);
 
-	cairo_set_source_cmk_color(cr, cmk_style_get_color(style, cmk_widget_get_background_color(CMK_WIDGET(self))));
+	cairo_set_source_clutter_color(cr, cmk_widget_get_background_color(CMK_WIDGET(self)));
 	cairo_fill(cr);
 	return TRUE;
 }
@@ -208,10 +205,8 @@ void graphene_dialog_set_message(GrapheneDialog *self, const gchar *message)
 	
 	ClutterText *content = CLUTTER_TEXT(clutter_text_new());
 	
-	CmkColor color;
-	cmk_style_get_font_color_for_background(cmk_widget_get_actual_style(CMK_WIDGET(self)), cmk_widget_get_background_color(CMK_WIDGET(self)), &color);
-	ClutterColor cc = cmk_to_clutter_color(&color);
-	clutter_text_set_color(content, &cc);
+	const ClutterColor *color = cmk_widget_get_foreground_color(CMK_WIDGET(self));
+	clutter_text_set_color(content, color);
 	
 	clutter_text_set_text(content, message);
 	clutter_text_set_line_wrap(content, TRUE);

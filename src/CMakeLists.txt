@@ -21,7 +21,7 @@ pkg_check_modules(LIBMUTTER REQUIRED libmutter>=3.22)
 pkg_check_modules(LIBPULSEGLIB REQUIRED libpulse-mainloop-glib>=8.0)
 pkg_check_modules(POLKITAGENT REQUIRED polkit-agent-1)
 pkg_check_modules(LIBRSVG REQUIRED librsvg-2.0)
-pkg_check_modules(GDKPIXBUF REQUIRED gdk-pixbuf-2.0)
+pkg_check_modules(LIBGNOMEMENU REQUIRED libgnome-menu-3.0>=3.13)
 link_directories(${LIBMUTTER_LIBRARY_DIRS})
 
 add_executable(graphene-desktop
@@ -37,7 +37,6 @@ add_executable(graphene-desktop
 	dialog.c
 	background.c
 	pkauthdialog.c
-	cmk/style.c
 	cmk/button.c
 	cmk/shadow.c
 	cmk/cmk-widget.c
@@ -47,6 +46,7 @@ add_executable(graphene-desktop
 	sound.c
 	panel.c
 	applets/clock.c
+	applets/launcher.c
 )
 target_link_libraries(graphene-desktop
 	${GIOUNIX2_LIBRARIES}
@@ -54,7 +54,7 @@ target_link_libraries(graphene-desktop
 	${LIBPULSEGLIB_LIBRARIES}
 	${POLKITAGENT_LIBRARIES}
 	${LIBRSVG_LIBRARIES}
-	${GDKPIXBUF_LIBRARIES}
+	${LIBGNOMEMENU_LIBRARIES}
 	m
 )
 target_include_directories(graphene-desktop PRIVATE
@@ -64,7 +64,7 @@ target_include_directories(graphene-desktop PRIVATE
 	${LIBPULSEGLIB_INCLUDE_DIRS}
 	${POLKITAGENT_INCLUDE_DIRS}
 	${LIBRSVG_INCLUDE_DIRS}
-	${GDKPIXBUF_INCLUDE_DIRS}
+	${LIBGNOMEMENU_INCLUDE_DIRS}
 )
 
 # Normally, the CMake install functionality removes the executable's rpath,

@@ -34,6 +34,15 @@
 #define WM_TRANSITION_TIME 200 // Common transition time, ms
 #define ACTOR CLUTTER_ACTOR // I am lazy
 
+static const ClutterColor GrapheneColors[] = {
+	{73, 86, 92, 255}, // background (panel)
+	{255, 255, 255, 204}, // foreground (font)
+	{255, 255, 255, 25}, // hover
+};
+
+static const float GrapheneBevelRadius = 5.0;
+static const float GraphenePadding = 20.0;
+
 /*
  * From what I can tell, the current version of Clutter has a memory leak
  * where the ClutterTransition object isn't freed after a transition,
@@ -87,6 +96,9 @@ void graphene_wm_start(MetaPlugin *self_)
 	MetaScreen *screen = meta_plugin_get_screen(self_);
 	self->stage = meta_get_stage_for_screen(screen);
 
+	//ClutterSettings *set = clutter_settings_get_default();
+	//g_object_set(set, "font-dpi", 10000, NULL);
+
 	// Don't bother clearing the stage when we're drawing our own background
 	clutter_stage_set_no_clear_hint(CLUTTER_STAGE(self->stage), TRUE);
 
@@ -96,11 +108,12 @@ void graphene_wm_start(MetaPlugin *self_)
 	// TODO: Load styling from a file
 	// cmk_stlye_get_default gets a new ref here, which we never release to
 	// ensure all widgets get the same default style.
-	CmkStyle *style = cmk_style_get_default();
-	CmkColor bgColor = {0.28627, 0.33725, 0.36078, 1};
-	cmk_style_set_color(style, "background", &bgColor);
-	CmkColor bgColorFont = {1, 1, 1, 0.8};
-	cmk_style_set_color(style, "background-font", &bgColorFont);
+	CmkWidget *style = cmk_widget_get_style_default();
+	cmk_widget_style_set_color(style, "background", &GrapheneColors[0]);
+	cmk_widget_style_set_color(style, "foreground", &GrapheneColors[1]);
+	cmk_widget_style_set_color(style, "hover", &GrapheneColors[2]);
+	cmk_widget_style_set_bevel_radius(style, GrapheneBevelRadius);
+	cmk_widget_style_set_padding(style, GraphenePadding);
 
 	// Background is always below all other actors
 	ClutterActor *backgroundGroup = meta_background_group_new();

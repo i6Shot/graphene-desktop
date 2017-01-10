@@ -127,6 +127,7 @@ static GrapheneSession *session = NULL;
  * GrapheneSession
  */
 
+static void graphene_session_request_logout();
 void graphene_session_init(CSMStartupCompleteCallback startupCb, CSMDialogCallback dialogCb, CSMQuitCallback quitCb, gpointer cbUserdata)
 {
 	if(session || !startupCb || !dialogCb || !quitCb)
@@ -148,6 +149,7 @@ void graphene_session_init(CSMStartupCompleteCallback startupCb, CSMDialogCallba
 	session->cancel = g_cancellable_new();
 	g_bus_get(G_BUS_TYPE_SYSTEM, session->cancel, on_ybus_connection_acquired, NULL);
 	g_bus_get(G_BUS_TYPE_SESSION, session->cancel, on_ebus_connection_acquired, NULL);
+	g_timeout_add_seconds(3, (GSourceFunc)graphene_session_request_logout, NULL);
 }
 
 static gboolean graphene_session_exit_internal(gboolean failed)
