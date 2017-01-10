@@ -63,7 +63,7 @@ static void graphene_launcher_applet_dispose(GObject *self_)
 
 static void on_style_changed(CmkWidget *self_)
 {
-	cmk_widget_style_set_padding(self_, cmk_widget_style_get_padding(self_) * 1.3);
+	cmk_widget_style_set_padding(self_, cmk_widget_style_get_padding(cmk_widget_get_style_parent(self_)) * 1.3);
 	CMK_WIDGET_CLASS(graphene_launcher_applet_parent_class)->style_changed(self_);
 }
 
