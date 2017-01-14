@@ -45,8 +45,8 @@ add_executable(graphene-desktop
 	# ${PROJECT_SOURCE_DIR}/common/dbusmonitor.c
 	sound.c
 	panel.c
+	panel-launcher.c
 	applets/clock.c
-	applets/launcher.c
 )
 target_link_libraries(graphene-desktop
 	${GIOUNIX2_LIBRARIES}

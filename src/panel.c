@@ -5,14 +5,17 @@
  */
  
 #include "panel.h"
+#include "panel-internal.h"
 #include "cmk/shadow.h"
 #include "cmk/button.h"
 #include "cmk/cmk-icon.h"
 #include "applets/clock.h"
-#include "applets/launcher.h"
 
 #define PANEL_HEIGHT 64 // Pixels; multiplied by the window scale factor
 #define SHADOW_HEIGHT 20
+
+// See wm.c
+#define TRANSITION_MEMLEAK_FIX(actor, tname) g_signal_connect_after(clutter_actor_get_transition(CLUTTER_ACTOR(actor), (tname)), "stopped", G_CALLBACK(g_object_unref), NULL)
 
 struct _GraphenePanel
 {
@@ -21,19 +24,21 @@ struct _GraphenePanel
 	CPanelModalCallback modalCb;
 	gpointer cbUserdata;
 
+	// These are owned by Clutter, not refed
 	CmkShadowContainer *sdc;
 	CmkWidget *bar;
+	CmkButton *launcher;
 	GrapheneClockApplet *clock;
 	CmkWidget *popup;
 
 	CmkWidget *tasklist;
 	GHashTable *windows; // GrapheneWindow * (not owned) to CmkWidget * (refed)
+	// TODO: Dealloc windows
 };
 
-//static void graphene_panel_dispose(GObject *self_);
 static void on_style_changed(CmkWidget *self_);
-//static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas *canvas);
 static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags);
+static void on_launcher_button_activate(CmkButton *button, GraphenePanel *self);
 
 G_DEFINE_TYPE(GraphenePanel, graphene_panel, CMK_TYPE_WIDGET);
 
@@ -70,16 +75,21 @@ static void graphene_panel_init(GraphenePanel *self)
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->sdc));
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->bar));
 
-	// Sample launcher + tasklist
-	GrapheneLauncherApplet *launcher = graphene_launcher_applet_new();
-	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(launcher));
+	// Launcher
+	self->launcher = cmk_button_new();
+	CmkIcon *launcherIcon = cmk_icon_new_full("open-menu-symbolic", "Adwaita", PANEL_HEIGHT);
+	cmk_button_set_content(self->launcher, CMK_WIDGET(launcherIcon));
+	g_signal_connect(self->launcher, "activate", G_CALLBACK(on_launcher_button_activate), self);
+	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(self->launcher));
 
+	// Tasklist
 	self->windows = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, (GDestroyNotify)clutter_actor_destroy);
 	self->tasklist = cmk_widget_new();
 	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->tasklist), clutter_box_layout_new());
 	clutter_actor_set_x_expand(CLUTTER_ACTOR(self->tasklist), TRUE);
 	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(self->tasklist));
 
+	// Clock
 	GrapheneClockApplet *clock = graphene_clock_applet_new();
 	self->clock = clock;
 	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(clock));
@@ -91,9 +101,13 @@ static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *
 	
 	ClutterActorBox barBox = {box->x1, box->y2-PANEL_HEIGHT, box->x2, box->y2};
 	ClutterActorBox sdcBox = {box->x1, box->y2-PANEL_HEIGHT-SHADOW_HEIGHT, box->x2, box->y2};
+	ClutterActorBox popupBox = {box->x1, box->y1, box->x2, box->y2 - PANEL_HEIGHT};
 
 	clutter_actor_allocate(CLUTTER_ACTOR(self->sdc), &sdcBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->bar), &barBox, flags);
+
+	if(self->popup)
+		clutter_actor_allocate(CLUTTER_ACTOR(self->popup), &popupBox, flags);
 
 	CLUTTER_ACTOR_CLASS(graphene_panel_parent_class)->allocate(self_, box, flags);
 }
@@ -105,6 +119,8 @@ static void on_style_changed(CmkWidget *self_)
 	float padding = cmk_widget_style_get_padding(self_);
 	ClutterMargin margin = {padding, padding, 0, 0};
 	clutter_actor_set_margin(CLUTTER_ACTOR(GRAPHENE_PANEL(self_)->clock), &margin);
+
+	cmk_widget_style_set_padding(CMK_WIDGET(GRAPHENE_PANEL(self_)->launcher), cmk_widget_style_get_padding(self_) * 1.3);
 
 	CMK_WIDGET_CLASS(graphene_panel_parent_class)->style_changed(self_);
 }
@@ -119,8 +135,39 @@ GraphenePanelSide graphene_panel_get_side(GraphenePanel *panel)
 	return GRAPHENE_PANEL_SIDE_BOTTOM;
 }
 
-// See wm.c
-#define TRANSITION_MEMLEAK_FIX(actor, tname) g_signal_connect_after(clutter_actor_get_transition(CLUTTER_ACTOR(actor), (tname)), "stopped", G_CALLBACK(g_object_unref), NULL)
+static void on_popup_destroy(CmkWidget *popup, GraphenePanel *self)
+{
+	self->popup = NULL;
+	if(self->modalCb)
+		self->modalCb(FALSE, self->cbUserdata);
+}
+
+static void close_popup(GraphenePanel *self)
+{
+	if(self->popup)
+		clutter_actor_destroy(CLUTTER_ACTOR(self->popup));
+}
+
+static void on_launcher_button_activate(CmkButton *button, GraphenePanel *self)
+{
+	if(self->popup)
+	{
+		close_popup(self);
+		return;
+	}
+
+	if(self->modalCb)
+		self->modalCb(TRUE, self->cbUserdata);
+	self->popup = CMK_WIDGET(graphene_launcher_popup_new());
+	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->popup));
+	g_signal_connect(self->popup, "destroy", G_CALLBACK(on_popup_destroy), self);
+}
+
+
+
+/*
+ * Tasklist
+ */
 
 static void on_tasklist_button_activate(CmkButton *button, GraphenePanel *self)
 {

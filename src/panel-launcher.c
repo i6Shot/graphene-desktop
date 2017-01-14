@@ -6,178 +6,125 @@
  
 #define GMENU_I_KNOW_THIS_IS_UNSTABLE // TODO: Apparently libgnome-menu is unstable (public API frequently changed). Maybe find an alternative? 
 
-#include "launcher.h"
-#include "../cmk/cmk-icon.h"
+#include "panel-internal.h"
+#include "cmk/cmk-widget.h"
 #include <gdk/gdkx.h>
 #include <gmenu-tree.h>
 #include <gio/gdesktopappinfo.h>
-#include <glib.h>
 
-struct _GrapheneLauncherApplet
-{
-	CmkButton parent;
-	
-	//GrapheneLauncherPopup *popup;
-};
-
-static void graphene_launcher_applet_dispose(GObject *self_);
-static void on_style_changed(CmkWidget *self_);
-
-G_DEFINE_TYPE(GrapheneLauncherApplet, graphene_launcher_applet, CMK_TYPE_BUTTON)
-
-
-
-GrapheneLauncherApplet* graphene_launcher_applet_new(void)
-{
-	return GRAPHENE_LAUNCHER_APPLET(g_object_new(GRAPHENE_TYPE_LAUNCHER_APPLET, NULL));
-}
-
-static void graphene_launcher_applet_class_init(GrapheneLauncherAppletClass *class)
-{
-	G_OBJECT_CLASS(class)->dispose = graphene_launcher_applet_dispose;
-	CMK_WIDGET_CLASS(class)->style_changed = on_style_changed;
-}
-
-static void graphene_launcher_applet_init(GrapheneLauncherApplet *self)
-{
-	//cmk_button_set_text(CMK_BUTTON(self), "Launcher");
-	
-
-	CmkIcon *icon = cmk_icon_new_from_name("open-menu-symbolic");
-	cmk_icon_set_icon_theme(icon, "Adwaita");
-	cmk_icon_set_size(icon, 64);
-	//clutter_actor_set_height(CLUTTER_ACTOR(icon), 64);
-	cmk_button_set_content(CMK_BUTTON(self), CMK_WIDGET(icon));
-	//g_signal_connect(self, "clicked", G_CALLBACK(applet_on_click), NULL);
-	
-	//self->popup = graphene_launcher_popup_new();
-	//g_signal_connect_swapped(self->popup, "hide", G_CALLBACK(applet_on_popup_hide), self);
-}
-
-static void graphene_launcher_applet_dispose(GObject *self_)
-{
-	GrapheneLauncherApplet *self = GRAPHENE_LAUNCHER_APPLET(self_);
-	//g_clear_pointer(&self->popup, gtk_widget_destroy);
-	G_OBJECT_CLASS(graphene_launcher_applet_parent_class)->dispose(self_);
-}
-
-static void on_style_changed(CmkWidget *self_)
-{
-	cmk_widget_style_set_padding(self_, cmk_widget_style_get_padding(cmk_widget_get_style_parent(self_)) * 1.3);
-	CMK_WIDGET_CLASS(graphene_launcher_applet_parent_class)->style_changed(self_);
-}
-
-
-
-/*
- ******** Popup ********
- */
-
-/*
 struct _GrapheneLauncherPopup
 {
-	GtkWindow parent;
+	CmkWidget parent;
 	
-	GtkBox *popupLayout;
-	GtkBox *searchBarContainer;
-	GtkSearchEntry *searchBar;
+	//GtkBox *popupLayout;
+	//GtkBox *searchBarContainer;
+	//GtkSearchEntry *searchBar;
 	gchar *filter;
 	
-	GtkScrolledWindow *appListView;
-	GtkBox *appListBox;
+	//GtkScrolledWindow *appListView;
+	//GtkBox *appListBox;
 	
-	GMenuTree *appTree;
+	//GMenuTree *appTree;
 };
 
 
-G_DEFINE_TYPE(GrapheneLauncherPopup, graphene_launcher_popup, GTK_TYPE_WINDOW)
+G_DEFINE_TYPE(GrapheneLauncherPopup, graphene_launcher_popup, CMK_TYPE_WIDGET)
 
 
 static void graphene_launcher_popup_dispose(GObject *self_);
-static void popup_on_show(GrapheneLauncherPopup *self);
-static void popup_on_hide(GrapheneLauncherPopup *self);
-static void popup_on_mapped(GrapheneLauncherPopup *self);
-static void popup_on_monitors_changed(GrapheneLauncherPopup *self, GdkScreen *screen);
-static void popup_on_size_allocate(GrapheneLauncherPopup *self, GtkAllocation *alloc);
-static void popup_update_size(GrapheneLauncherPopup *self);
-static gboolean popup_on_mouse_event(GrapheneLauncherPopup *self, GdkEventButton *event);
-static void popup_on_search_changed(GrapheneLauncherPopup *self, GtkSearchEntry *searchBar);
-static void popup_on_search_enter(GrapheneLauncherPopup *self, GtkSearchEntry *searchBar);
-static gboolean popup_on_key_event(GrapheneLauncherPopup *self, GdkEvent *event);
-static void popup_on_vertical_scrolled(GrapheneLauncherPopup *self, GtkAdjustment *vadj);
-static void popup_applist_refresh(GrapheneLauncherPopup *self);
-static void popup_applist_populate(GrapheneLauncherPopup *self);
-static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenuTreeDirectory *directory);
-static void applist_on_item_clicked(GrapheneLauncherPopup *self, GtkButton *button);
-static void applist_launch_first(GrapheneLauncherPopup *self);
+//static void popup_on_show(GrapheneLauncherPopup *self);
+//static void popup_on_hide(GrapheneLauncherPopup *self);
+//static void popup_on_mapped(GrapheneLauncherPopup *self);
+//static void popup_on_monitors_changed(GrapheneLauncherPopup *self, GdkScreen *screen);
+//static void popup_on_size_allocate(GrapheneLauncherPopup *self, GtkAllocation *alloc);
+//static void popup_update_size(GrapheneLauncherPopup *self);
+//static gboolean popup_on_mouse_event(GrapheneLauncherPopup *self, GdkEventButton *event);
+//static void popup_on_search_changed(GrapheneLauncherPopup *self, GtkSearchEntry *searchBar);
+//static void popup_on_search_enter(GrapheneLauncherPopup *self, GtkSearchEntry *searchBar);
+//static gboolean popup_on_key_event(GrapheneLauncherPopup *self, GdkEvent *event);
+//static void popup_on_vertical_scrolled(GrapheneLauncherPopup *self, GtkAdjustment *vadj);
+//static void popup_applist_refresh(GrapheneLauncherPopup *self);
+//static void popup_applist_populate(GrapheneLauncherPopup *self);
+//static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenuTreeDirectory *directory);
+//static void applist_on_item_clicked(GrapheneLauncherPopup *self, GtkButton *button);
+//static void applist_launch_first(GrapheneLauncherPopup *self);
 
 GrapheneLauncherPopup* graphene_launcher_popup_new(void)
 {
 	return GRAPHENE_LAUNCHER_POPUP(g_object_new(GRAPHENE_TYPE_LAUNCHER_POPUP, NULL));
 }
 
-static void graphene_launcher_popup_class_init(GrapheneLauncherPopupClass *klass)
+static void graphene_launcher_popup_class_init(GrapheneLauncherPopupClass *class)
 {
-	GObjectClass *gobjectClass = G_OBJECT_CLASS(klass);
-	gobjectClass->dispose = graphene_launcher_popup_dispose;
+	G_OBJECT_CLASS(class)->dispose = graphene_launcher_popup_dispose;
+	CLUTTER_ACTOR_CLASS(class)->allocate = graphene_launcher_popup_allocate;
+	
 }
 
 static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
 {
-	gtk_window_set_type_hint(GTK_WINDOW(self), GDK_WINDOW_TYPE_HINT_POPUP_MENU);
-	g_signal_connect(self, "show", G_CALLBACK(popup_on_show), NULL);
-	g_signal_connect(self, "hide", G_CALLBACK(popup_on_hide), NULL);
-	g_signal_connect(self, "map", G_CALLBACK(popup_on_mapped), NULL);
-	g_signal_connect(self, "size-allocate", G_CALLBACK(popup_on_size_allocate), NULL);
-	g_signal_connect(self, "button_press_event", G_CALLBACK(popup_on_mouse_event), NULL);
-	g_signal_connect(self, "key_press_event", G_CALLBACK(popup_on_key_event), NULL);
-	g_signal_connect(self, "key_release_event", G_CALLBACK(popup_on_key_event), NULL);
-	g_signal_connect_swapped(gtk_widget_get_screen(GTK_WIDGET(self)), "monitors-changed", G_CALLBACK(popup_on_monitors_changed), self);
-	gtk_window_set_role(GTK_WINDOW(self), "GraphenePopup");
-	gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(self)), "graphene-launcher-popup");
-	
-	// Layout
-	self->popupLayout = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
-	gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(self->popupLayout)), "panel");
-	gtk_widget_set_halign(GTK_WIDGET(self->popupLayout), GTK_ALIGN_FILL);
-	gtk_widget_set_valign(GTK_WIDGET(self->popupLayout), GTK_ALIGN_FILL);
-	gtk_container_add(GTK_CONTAINER(self), GTK_WIDGET(self->popupLayout));
-	
-	// Search bar
-	self->searchBar = GTK_SEARCH_ENTRY(gtk_search_entry_new());
-	self->filter = NULL;
-	g_signal_connect_swapped(self->searchBar, "changed", G_CALLBACK(popup_on_search_changed), self);
-	g_signal_connect_swapped(self->searchBar, "activate", G_CALLBACK(popup_on_search_enter), self);
-	gtk_widget_set_name(GTK_WIDGET(self->searchBar), "graphene-launcher-searchbar");
-	self->searchBarContainer = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0)); // It seems the shadow-box property can't be animated on a searchentry, so wrap it in a container
-	gtk_box_pack_start(self->searchBarContainer, GTK_WIDGET(self->searchBar), FALSE, FALSE, 0);
-	gtk_widget_set_name(GTK_WIDGET(self->searchBarContainer), "graphene-launcher-searchbar-container");
-	gtk_box_pack_start(self->popupLayout, GTK_WIDGET(self->searchBarContainer), FALSE, FALSE, 0);
-	
-	// App list
-	self->appListView = GTK_SCROLLED_WINDOW(gtk_scrolled_window_new(NULL, NULL));
-	gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(self->appListView)), "graphene-applist-view");
-	gtk_scrolled_window_set_policy(self->appListView, GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
-	g_signal_connect_swapped(gtk_scrolled_window_get_vadjustment(self->appListView), "value-changed", G_CALLBACK(popup_on_vertical_scrolled), self);
-	self->appListBox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
-	gtk_container_add(GTK_CONTAINER(self->appListView), GTK_WIDGET(self->appListBox));
-	gtk_box_pack_start(self->popupLayout, GTK_WIDGET(self->appListView), TRUE, TRUE, 0);
-	
-	// Load applications
-	self->appTree = gmenu_tree_new("gnome-applications.menu", GMENU_TREE_FLAGS_SORT_DISPLAY_NAME);
-	popup_applist_refresh(self);
-	
-	gtk_widget_show_all(GTK_WIDGET(self->popupLayout));
+	cmk_widget_set_background_color_name(CMK_WIDGET(self), "background");
+	cmk_widget_set_draw_background_color(CMK_WIDGET(self), TRUE);
+	//gtk_window_set_type_hint(GTK_WINDOW(self), GDK_WINDOW_TYPE_HINT_POPUP_MENU);
+	//g_signal_connect(self, "show", G_CALLBACK(popup_on_show), NULL);
+	//g_signal_connect(self, "hide", G_CALLBACK(popup_on_hide), NULL);
+	//g_signal_connect(self, "map", G_CALLBACK(popup_on_mapped), NULL);
+	//g_signal_connect(self, "size-allocate", G_CALLBACK(popup_on_size_allocate), NULL);
+	//g_signal_connect(self, "button_press_event", G_CALLBACK(popup_on_mouse_event), NULL);
+	//g_signal_connect(self, "key_press_event", G_CALLBACK(popup_on_key_event), NULL);
+	//g_signal_connect(self, "key_release_event", G_CALLBACK(popup_on_key_event), NULL);
+	//g_signal_connect_swapped(gtk_widget_get_screen(GTK_WIDGET(self)), "monitors-changed", G_CALLBACK(popup_on_monitors_changed), self);
+	//gtk_window_set_role(GTK_WINDOW(self), "GraphenePopup");
+	//gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(self)), "graphene-launcher-popup");
+	//
+	//// Layout
+	//self->popupLayout = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
+	//gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(self->popupLayout)), "panel");
+	//gtk_widget_set_halign(GTK_WIDGET(self->popupLayout), GTK_ALIGN_FILL);
+	//gtk_widget_set_valign(GTK_WIDGET(self->popupLayout), GTK_ALIGN_FILL);
+	//gtk_container_add(GTK_CONTAINER(self), GTK_WIDGET(self->popupLayout));
+	//
+	//// Search bar
+	//self->searchBar = GTK_SEARCH_ENTRY(gtk_search_entry_new());
+	//self->filter = NULL;
+	//g_signal_connect_swapped(self->searchBar, "changed", G_CALLBACK(popup_on_search_changed), self);
+	//g_signal_connect_swapped(self->searchBar, "activate", G_CALLBACK(popup_on_search_enter), self);
+	//gtk_widget_set_name(GTK_WIDGET(self->searchBar), "graphene-launcher-searchbar");
+	//self->searchBarContainer = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0)); // It seems the shadow-box property can't be animated on a searchentry, so wrap it in a container
+	//gtk_box_pack_start(self->searchBarContainer, GTK_WIDGET(self->searchBar), FALSE, FALSE, 0);
+	//gtk_widget_set_name(GTK_WIDGET(self->searchBarContainer), "graphene-launcher-searchbar-container");
+	//gtk_box_pack_start(self->popupLayout, GTK_WIDGET(self->searchBarContainer), FALSE, FALSE, 0);
+	//
+	//// App list
+	//self->appListView = GTK_SCROLLED_WINDOW(gtk_scrolled_window_new(NULL, NULL));
+	//gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(self->appListView)), "graphene-applist-view");
+	//gtk_scrolled_window_set_policy(self->appListView, GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+	//g_signal_connect_swapped(gtk_scrolled_window_get_vadjustment(self->appListView), "value-changed", G_CALLBACK(popup_on_vertical_scrolled), self);
+	//self->appListBox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
+	//gtk_container_add(GTK_CONTAINER(self->appListView), GTK_WIDGET(self->appListBox));
+	//gtk_box_pack_start(self->popupLayout, GTK_WIDGET(self->appListView), TRUE, TRUE, 0);
+	//
+	//// Load applications
+	//self->appTree = gmenu_tree_new("gnome-applications.menu", GMENU_TREE_FLAGS_SORT_DISPLAY_NAME);
+	//popup_applist_refresh(self);
+	//
+	//gtk_widget_show_all(GTK_WIDGET(self->popupLayout));
 }
 
 static void graphene_launcher_popup_dispose(GObject *self_)
 {
 	GrapheneLauncherPopup *self = GRAPHENE_LAUNCHER_POPUP(self_);
-	g_clear_object(&self->appTree);
-	g_clear_pointer(&self->filter, g_free);
+	//g_clear_object(&self->appTree);
+	//g_clear_pointer(&self->filter, g_free);
 	G_OBJECT_CLASS(graphene_launcher_popup_parent_class)->dispose(self_);
 }
 
+static void graphene_launcher_popup_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags)
+{
+	
+}
+
+/*
 static void popup_on_show(GrapheneLauncherPopup *self)
 {
 	popup_applist_refresh(self); // TODO: Don't recreate everything every time the popup is shown. Only when things change.
