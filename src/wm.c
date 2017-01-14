@@ -19,6 +19,7 @@
 #include "wm.h"
 #include "background.h"
 #include "dialog.h"
+#include "window.h"
 #include "cmk/button.h"
 #include "cmk/shadow.h"
 #include <meta/meta-shadow-factory.h>
@@ -60,6 +61,7 @@ static const float GraphenePadding = 20.0;
 #define TRANSITION_MEMLEAK_FIX(actor, tname) g_signal_connect_after(clutter_actor_get_transition((actor), (tname)), "stopped", G_CALLBACK(g_object_unref), NULL)
 
 
+static void on_window_created(GrapheneWM *self, MetaWindow *window, MetaDisplay *display);
 static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self);
 static void update_struts(GrapheneWM *self);
 static void xfixes_add_input_actor(GrapheneWM *self, ClutterActor *actor);
@@ -95,6 +97,9 @@ void graphene_wm_start(MetaPlugin *self_)
 
 	MetaScreen *screen = meta_plugin_get_screen(self_);
 	self->stage = meta_get_stage_for_screen(screen);
+
+	MetaDisplay *display = meta_screen_get_display(screen);
+	g_signal_connect_swapped(display, "window-created", G_CALLBACK(on_window_created), self_);
 
 	//ClutterSettings *set = clutter_settings_get_default();
 	//g_object_set(set, "font-dpi", 10000, NULL);
@@ -198,6 +203,96 @@ static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self)
 	clutter_actor_set_y(ACTOR(self->panel), primary.y);
 	clutter_actor_set_width(ACTOR(self->panel), primary.width);
 	clutter_actor_set_height(ACTOR(self->panel), primary.height);
+}
+
+static void graphene_window_show(GrapheneWindow *cwindow)
+{
+	g_return_if_fail(cwindow);
+	g_return_if_fail(META_IS_WINDOW(cwindow->window));
+	MetaWindow *window = META_WINDOW(cwindow->window);
+	MetaDisplay *display = meta_window_get_display(window);
+	meta_window_activate(window, meta_display_get_current_time(display));
+}
+
+static void graphene_window_minimize(GrapheneWindow *cwindow)
+{
+	meta_window_minimize(META_WINDOW(cwindow->window));
+}
+
+static void graphene_window_set_icon_box(GrapheneWindow *cwindow, double x, double y, double width, double height)
+{
+	MetaRectangle rect = {x, y, width, height};
+	meta_window_set_icon_geometry(META_WINDOW(cwindow->window), &rect);
+}
+
+static void graphene_window_update(GrapheneWindow *cwindow)
+{
+	MetaWindow *window = META_WINDOW(cwindow->window);
+	cwindow->title = meta_window_get_title(window);
+	g_free(cwindow->icon);
+	
+	cwindow->icon = g_utf8_strdown(meta_window_get_wm_class(window), -1); // TODO: Should probably validate
+	cwindow->flags = GRAPHENE_WINDOW_FLAG_NORMAL;
+	gboolean minimized, attention, focused, skip;
+	g_object_get(window,
+		"minimized", &minimized,
+		"demands-attention", &attention,
+		"appears-focused", &focused,
+		"skip-taskbar", &skip,
+		NULL);
+	if(minimized)
+		cwindow->flags |= GRAPHENE_WINDOW_FLAG_MINIMIZED;
+	if(attention)
+		cwindow->flags |= GRAPHENE_WINDOW_FLAG_ATTENTION;
+	if(focused)
+		cwindow->flags |= GRAPHENE_WINDOW_FLAG_FOCUSED;
+	if(skip)
+		cwindow->flags |= GRAPHENE_WINDOW_FLAG_SKIP_TASKBAR;
+}
+
+static void graphene_window_changed(GrapheneWindow *cwindow)
+{
+	graphene_window_update(cwindow);
+	graphene_panel_update_window(GRAPHENE_WM(cwindow->wm)->panel, cwindow);
+}
+
+static void graphene_window_connect(GrapheneWindow *cwindow, GrapheneWindowNotify callback)
+{
+	MetaWindow *window = META_WINDOW(cwindow->window);
+	g_signal_connect_swapped(window, "notify::title", G_CALLBACK(callback), cwindow);
+	g_signal_connect_swapped(window, "notify::minimized", G_CALLBACK(callback), cwindow);
+	g_signal_connect_swapped(window, "notify::appears-focused", G_CALLBACK(callback), cwindow);
+	g_signal_connect_swapped(window, "notify::demands-attention", G_CALLBACK(callback), cwindow);
+	g_signal_connect_swapped(window, "notify::wm-class", G_CALLBACK(callback), cwindow);
+}
+
+static void on_window_destroyed(GrapheneWindow *cwindow, MetaWindow *window)
+{
+	graphene_panel_remove_window(GRAPHENE_WM(cwindow->wm)->panel, cwindow);
+	g_free(cwindow->icon);
+	g_free(cwindow);
+}
+
+static void on_window_created(GrapheneWM *self, MetaWindow *window, MetaDisplay *display)
+{
+	GrapheneWindow *cwindow = g_new0(GrapheneWindow, 1);
+	cwindow->wm = self;
+	cwindow->window = window;
+	cwindow->show = graphene_window_show;
+	cwindow->minimize = graphene_window_minimize;
+	cwindow->setIconBox = graphene_window_set_icon_box;
+
+	// This seems to be the best way to get a notification when a window is
+	// destroyed. In special cases, MetaWindow objects are freed and recreated,
+	// and I'm not sure if the window-created signal will be called in that
+	// case. TODO: Figure out.
+	g_object_weak_ref(G_OBJECT(window), (GWeakNotify)on_window_destroyed, cwindow);
+	
+	graphene_window_connect(cwindow, graphene_window_changed);
+	graphene_window_update(cwindow);
+
+	// Inform delegates
+	graphene_panel_add_window(self->panel, cwindow);
 }
 
 static void update_struts(GrapheneWM *self)

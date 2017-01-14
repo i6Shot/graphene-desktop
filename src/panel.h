@@ -8,6 +8,7 @@
 #define __GRAPHENE_PANEL_H__
 
 #include "cmk/cmk-widget.h"
+#include "window.h"
 
 G_BEGIN_DECLS
 
@@ -23,6 +24,10 @@ typedef enum
 } GraphenePanelSide;
 
 GraphenePanel * graphene_panel_new(CPanelModalCallback modalCb, gpointer userdata);
+
+void graphene_panel_add_window(GraphenePanel *panel, GrapheneWindow *window);
+void graphene_panel_remove_window(GraphenePanel *panel, GrapheneWindow *window);
+void graphene_panel_update_window(GraphenePanel *panel, GrapheneWindow *window);
 
 // The main panel bar. Return value will not change after panel construction.
 ClutterActor * graphene_panel_get_input_actor(GraphenePanel *panel);
