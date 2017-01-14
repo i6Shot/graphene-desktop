@@ -38,7 +38,8 @@
 static const ClutterColor GrapheneColors[] = {
 	{73, 86, 92, 255}, // background (panel)
 	{255, 255, 255, 204}, // foreground (font)
-	{255, 255, 255, 25}, // hover
+	{255, 255, 255, 40}, // hover
+	{255, 255, 255, 25}, // selected
 };
 
 static const float GrapheneBevelRadius = 5.0;
@@ -117,6 +118,7 @@ void graphene_wm_start(MetaPlugin *self_)
 	cmk_widget_style_set_color(style, "background", &GrapheneColors[0]);
 	cmk_widget_style_set_color(style, "foreground", &GrapheneColors[1]);
 	cmk_widget_style_set_color(style, "hover", &GrapheneColors[2]);
+	cmk_widget_style_set_color(style, "selected", &GrapheneColors[3]);
 	cmk_widget_style_set_bevel_radius(style, GrapheneBevelRadius);
 	cmk_widget_style_set_padding(style, GraphenePadding);
 
@@ -231,7 +233,14 @@ static void graphene_window_update(GrapheneWindow *cwindow)
 	cwindow->title = meta_window_get_title(window);
 	g_free(cwindow->icon);
 	
-	cwindow->icon = g_utf8_strdown(meta_window_get_wm_class(window), -1); // TODO: Should probably validate
+	const gchar *icon = meta_window_get_wm_class(window);
+	if(!icon)
+		icon = meta_window_get_wm_class_instance(window);
+	if(!icon)
+		cwindow->icon = NULL;
+	else
+		cwindow->icon = g_utf8_strdown(icon, -1); // TODO: Should probably validate
+
 	cwindow->flags = GRAPHENE_WINDOW_FLAG_NORMAL;
 	gboolean minimized, attention, focused, skip;
 	g_object_get(window,

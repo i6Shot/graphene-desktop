@@ -222,6 +222,9 @@ void graphene_panel_update_window(GraphenePanel *self, GrapheneWindow *window)
 		cmk_icon_set_icon(CMK_ICON(content), window->icon);
 	}
 
+	if(button)
+		cmk_button_set_selected(button, (window->flags & GRAPHENE_WINDOW_FLAG_FOCUSED));
+
 	if(!button && !(window->flags & GRAPHENE_WINDOW_FLAG_SKIP_TASKBAR))
 		graphene_panel_add_window(self, window);
 	else if(button && (window->flags & GRAPHENE_WINDOW_FLAG_SKIP_TASKBAR))
