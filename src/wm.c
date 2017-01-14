@@ -379,7 +379,7 @@ static void xfixes_calculate_input_region(GrapheneWM *self)
 		clutter_actor_get_transformed_position(actor, &x, &y);
 		clutter_actor_get_transformed_size(actor, &width, &height);
 		rects[i].x = (short)x;
-		rects[i].y = (short)y;
+		rects[i].y = (short)y+1; // It seems that the X region is offset by one pixel. Not sure why.
 		rects[i].width = (unsigned short)width;
 		rects[i].height = (unsigned short)height;
 		i++;
