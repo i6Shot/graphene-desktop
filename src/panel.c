@@ -29,6 +29,7 @@ struct _GraphenePanel
 	CmkButton *launcher;
 	GrapheneClockLabel *clock;
 	CmkWidget *popup;
+	guint popupEventFilterId;
 
 	CmkWidget *tasklist;
 	GHashTable *windows; // GrapheneWindow * (not owned) to CmkWidget * (not refed)
@@ -155,7 +156,38 @@ static void close_popup(GraphenePanel *self)
 {
 	if(self->popup)
 		clutter_actor_destroy(CLUTTER_ACTOR(self->popup));
+	if(self->popupEventFilterId)
+		clutter_event_remove_filter(self->popupEventFilterId);
+	self->popupEventFilterId = 0;
 }
+
+static gboolean popup_event_filter(const ClutterEvent *event, gpointer userdata)
+{
+	g_return_val_if_fail(GRAPHENE_IS_PANEL(userdata), CLUTTER_EVENT_PROPAGATE);
+	GraphenePanel *self = GRAPHENE_PANEL(userdata);
+	
+	if(((ClutterButtonEvent *)event)->type == CLUTTER_BUTTON_PRESS
+	 ||((ClutterButtonEvent *)event)->type == CLUTTER_TOUCH_BEGIN)
+	{
+		ClutterActor *source = clutter_event_get_source(event);
+		// Don't close if the source is the launcher button, otherwise it'll
+		// immediately get re-opened when the user releases their press
+		if(!clutter_actor_contains(CLUTTER_ACTOR(self->launcher), source))
+			if(self->popup && source && !clutter_actor_contains(CLUTTER_ACTOR(self->popup), source))
+				close_popup(self);
+	}
+
+	if(((ClutterKeyEvent *)event)->type == CLUTTER_KEY_PRESS)
+	{
+		if(clutter_event_get_key_symbol(event) == CLUTTER_KEY_Escape)
+		{
+			close_popup(self);
+			return CLUTTER_EVENT_STOP;
+		}
+	}
+
+	return CLUTTER_EVENT_PROPAGATE;
+} 
 
 static void on_launcher_button_activate(CmkButton *button, GraphenePanel *self)
 {
@@ -170,6 +202,9 @@ static void on_launcher_button_activate(CmkButton *button, GraphenePanel *self)
 	self->popup = CMK_WIDGET(graphene_launcher_popup_new());
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->popup));
 	g_signal_connect(self->popup, "destroy", G_CALLBACK(on_popup_destroy), self);
+
+	ClutterStage *stage = CLUTTER_STAGE(clutter_actor_get_stage(CLUTTER_ACTOR(self)));
+	self->popupEventFilterId = clutter_event_add_filter(stage, popup_event_filter, NULL, self);
 }
 
 
