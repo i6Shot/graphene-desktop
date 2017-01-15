@@ -27,6 +27,7 @@ struct _GraphenePanel
 	CmkShadowContainer *sdc;
 	CmkWidget *bar;
 	CmkButton *launcher;
+	CmkButton *settingsApplet;
 	GrapheneClockLabel *clock;
 	CmkWidget *popup;
 	guint popupEventFilterId;
@@ -81,7 +82,7 @@ static void graphene_panel_init(GraphenePanel *self)
 
 	// Launcher
 	self->launcher = cmk_button_new();
-	CmkIcon *launcherIcon = cmk_icon_new_full("open-menu-symbolic", "Adwaita", PANEL_HEIGHT);
+	CmkIcon *launcherIcon = cmk_icon_new_full("open-menu-symbolic", "Adwaita", PANEL_HEIGHT, TRUE);
 	cmk_button_set_content(self->launcher, CMK_WIDGET(launcherIcon));
 	g_signal_connect(self->launcher, "activate", G_CALLBACK(on_launcher_button_activate), self);
 	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(self->launcher));
@@ -92,6 +93,23 @@ static void graphene_panel_init(GraphenePanel *self)
 	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->tasklist), clutter_box_layout_new());
 	clutter_actor_set_x_expand(CLUTTER_ACTOR(self->tasklist), TRUE);
 	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(self->tasklist));
+
+	// Settings
+	self->settingsApplet = cmk_button_new();
+	CmkWidget *iconBox = cmk_widget_new();
+	ClutterLayoutManager *layout = clutter_box_layout_new();
+	clutter_box_layout_set_spacing(CLUTTER_BOX_LAYOUT(layout), 10);
+	clutter_actor_set_layout_manager(CLUTTER_ACTOR(iconBox), layout);
+	CmkIcon *x = cmk_icon_new_full("system-shutdown-symbolic", NULL, PANEL_HEIGHT / 2, TRUE);
+	CmkIcon *y = cmk_icon_new_full("battery-full-symbolic", NULL, PANEL_HEIGHT / 2, TRUE);
+	CmkIcon *z = cmk_icon_new_full("network-wired-symbolic", NULL, PANEL_HEIGHT / 2, TRUE);
+	CmkIcon *w = cmk_icon_new_full("audio-volume-medium-symbolic", NULL, PANEL_HEIGHT / 2, TRUE);
+	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(x)); 
+	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(w)); 
+	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(z)); 
+	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(y)); 
+	cmk_button_set_content(self->settingsApplet, iconBox);
+	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(self->settingsApplet));
 
 	// Clock
 	self->clock = graphene_clock_label_new();
