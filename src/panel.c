@@ -9,7 +9,6 @@
 #include "cmk/shadow.h"
 #include "cmk/button.h"
 #include "cmk/cmk-icon.h"
-#include "applets/clock.h"
 
 #define PANEL_HEIGHT 64 // Pixels; multiplied by the window scale factor
 #define SHADOW_HEIGHT 20
@@ -28,14 +27,14 @@ struct _GraphenePanel
 	CmkShadowContainer *sdc;
 	CmkWidget *bar;
 	CmkButton *launcher;
-	GrapheneClockApplet *clock;
+	GrapheneClockLabel *clock;
 	CmkWidget *popup;
 
 	CmkWidget *tasklist;
-	GHashTable *windows; // GrapheneWindow * (not owned) to CmkWidget * (refed)
-	// TODO: Dealloc windows
+	GHashTable *windows; // GrapheneWindow * (not owned) to CmkWidget * (not refed)
 };
 
+static void graphene_panel_dispose(GObject *self_);
 static void on_style_changed(CmkWidget *self_);
 static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags);
 static void on_launcher_button_activate(CmkButton *button, GraphenePanel *self);
@@ -57,6 +56,7 @@ GraphenePanel * graphene_panel_new(CPanelModalCallback modalCb, gpointer userdat
 
 static void graphene_panel_class_init(GraphenePanelClass *class)
 {
+	G_OBJECT_CLASS(class)->dispose = graphene_panel_dispose;
 	CLUTTER_ACTOR_CLASS(class)->allocate = graphene_panel_allocate;
 	CMK_WIDGET_CLASS(class)->style_changed = on_style_changed;
 }
@@ -93,9 +93,15 @@ static void graphene_panel_init(GraphenePanel *self)
 	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(self->tasklist));
 
 	// Clock
-	GrapheneClockApplet *clock = graphene_clock_applet_new();
-	self->clock = clock;
-	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(clock));
+	self->clock = graphene_clock_label_new();
+	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(self->clock));
+}
+
+static void graphene_panel_dispose(GObject *self_)
+{
+	GraphenePanel *self = GRAPHENE_PANEL(self_);
+	g_hash_table_unref(self->windows);
+	G_OBJECT_CLASS(graphene_panel_parent_class)->dispose(self_);
 }
 
 static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags)
@@ -190,7 +196,7 @@ static void on_tasklist_button_activate(CmkButton *button, GraphenePanel *self)
 	if(!window)
 		return;
 
-	if(window->flags & GRAPHENE_WINDOW_FLAG_MINIMIZED)
+	if((window->flags & GRAPHENE_WINDOW_FLAG_MINIMIZED) || !(window->flags & GRAPHENE_WINDOW_FLAG_FOCUSED))
 		window->show(window);
 	else
 		window->minimize(window);

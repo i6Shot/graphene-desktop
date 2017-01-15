@@ -1,42 +1,39 @@
-#include "clock.h"
+/*
+ * This file is part of graphene-desktop, the desktop environment of VeltOS.
+ * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
+ * Licensed under the Apache License 2 <www.apache.org/licenses/LICENSE-2.0>.
+ */
+
+#include "panel-internal.h"
 
 #define FORMAT_STRING_LENGTH 25
 
-struct _GrapheneClockApplet
+struct _GrapheneClockLabel
 {
 	CmkWidget parent;
 	GSettings *interfaceSettings;
 	GSource *source;
 	gchar *format;
-	ClutterText *text; // Do not unref (clutter owns)
 };
 
-static void graphene_clock_applet_dispose(GObject *self_);
-static void on_style_changed(CmkWidget *self_);
-static void on_background_changed(CmkWidget *self_);
-static void on_interface_settings_changed(GrapheneClockApplet *self, gchar *key, GSettings *settings);
+static void graphene_clock_label_dispose(GObject *self_);
+static void on_interface_settings_changed(GrapheneClockLabel *self, gchar *key, GSettings *settings);
 static gboolean update(GSource *source, GSourceFunc callback, gpointer userdata);
 
-G_DEFINE_TYPE(GrapheneClockApplet, graphene_clock_applet, CMK_TYPE_WIDGET);
+G_DEFINE_TYPE(GrapheneClockLabel, graphene_clock_label, CMK_TYPE_LABEL);
 
-GrapheneClockApplet * graphene_clock_applet_new(void)
+GrapheneClockLabel * graphene_clock_label_new(void)
 {
-	return GRAPHENE_CLOCK_APPLET(g_object_new(GRAPHENE_TYPE_CLOCK_APPLET, NULL));
+	return GRAPHENE_CLOCK_LABEL(g_object_new(GRAPHENE_TYPE_CLOCK_LABEL, NULL));
 }
 
-static void graphene_clock_applet_class_init(GrapheneClockAppletClass *class)
+static void graphene_clock_label_class_init(GrapheneClockLabelClass *class)
 {
-	G_OBJECT_CLASS(class)->dispose = graphene_clock_applet_dispose;
-	CMK_WIDGET_CLASS(class)->style_changed = on_style_changed;
-	CMK_WIDGET_CLASS(class)->background_changed = on_background_changed;
+	G_OBJECT_CLASS(class)->dispose = graphene_clock_label_dispose;
 }
 
-static void graphene_clock_applet_init(GrapheneClockApplet *self)
+static void graphene_clock_label_init(GrapheneClockLabel *self)
 {
-	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self), clutter_bin_layout_new(CLUTTER_BIN_ALIGNMENT_CENTER, CLUTTER_BIN_ALIGNMENT_CENTER));
-	self->text = CLUTTER_TEXT(clutter_text_new());
-	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->text));
-	
 	self->format = g_new(gchar, FORMAT_STRING_LENGTH);
 	self->format[0] = '\0'; // Empty string
 	
@@ -51,26 +48,16 @@ static void graphene_clock_applet_init(GrapheneClockApplet *self)
 	g_source_attach(self->source, NULL);
 }
 
-static void graphene_clock_applet_dispose(GObject *self_)
+static void graphene_clock_label_dispose(GObject *self_)
 {
-	GrapheneClockApplet *self = GRAPHENE_CLOCK_APPLET(self_);
+	GrapheneClockLabel *self = GRAPHENE_CLOCK_LABEL(self_);
 	g_clear_object(&self->interfaceSettings);
 	g_clear_pointer(&self->source, g_source_destroy);
 	g_clear_pointer(&self->format, g_free);
-	G_OBJECT_CLASS(graphene_clock_applet_parent_class)->dispose(self_);
+	G_OBJECT_CLASS(graphene_clock_label_parent_class)->dispose(self_);
 }
 
-static void on_style_changed(CmkWidget *self_)
-{
-}
-
-static void on_background_changed(CmkWidget *self_)
-{
-	const ClutterColor *color = cmk_widget_get_foreground_color(self_);
-	clutter_text_set_color(GRAPHENE_CLOCK_APPLET(self_)->text, color);
-}
-
-static void on_interface_settings_changed(GrapheneClockApplet *self, gchar *key, GSettings *settings)
+static void on_interface_settings_changed(GrapheneClockLabel *self, gchar *key, GSettings *settings)
 {
 	if(!g_str_has_prefix(key, "clock-"))
 		return;
@@ -99,7 +86,7 @@ static void on_interface_settings_changed(GrapheneClockApplet *self, gchar *key,
 
 static gboolean update(GSource *source, GSourceFunc callback, gpointer userdata)
 {
-	GrapheneClockApplet *self = GRAPHENE_CLOCK_APPLET(userdata);
+	GrapheneClockLabel *self = GRAPHENE_CLOCK_LABEL(userdata);
 	
 	// Get the time as a formatted string
 	GDateTime *dt = g_date_time_new_now_local();
@@ -107,10 +94,10 @@ static gboolean update(GSource *source, GSourceFunc callback, gpointer userdata)
 	g_date_time_unref(dt);
 	
 	// Don't call set_text unless the string changed
-	if(g_strcmp0(formatted, clutter_text_get_text(self->text)) == 0)
+	if(g_strcmp0(formatted, cmk_label_get_text(CMK_LABEL(self))) == 0)
 		g_free(formatted);
 	else
-		clutter_text_set_text(self->text, formatted);
+		cmk_label_set_text(CMK_LABEL(self), formatted);
 	
 	// Get monotonic time of the start of the next second
 	// This keeps it from falling out of sync

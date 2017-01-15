@@ -47,7 +47,7 @@ add_executable(graphene-desktop
 	sound.c
 	panel.c
 	panel-launcher.c
-	applets/clock.c
+	panel-clock.c
 )
 target_link_libraries(graphene-desktop
 	${GIOUNIX2_LIBRARIES}
