@@ -147,6 +147,10 @@ GraphenePanelSide graphene_panel_get_side(GraphenePanel *panel)
 
 static void on_popup_destroy(CmkWidget *popup, GraphenePanel *self)
 {
+	if(self->popupEventFilterId)
+		clutter_event_remove_filter(self->popupEventFilterId);
+	self->popupEventFilterId = 0;
+
 	self->popup = NULL;
 	if(self->modalCb)
 		self->modalCb(FALSE, self->cbUserdata);
@@ -156,9 +160,6 @@ static void close_popup(GraphenePanel *self)
 {
 	if(self->popup)
 		clutter_actor_destroy(CLUTTER_ACTOR(self->popup));
-	if(self->popupEventFilterId)
-		clutter_event_remove_filter(self->popupEventFilterId);
-	self->popupEventFilterId = 0;
 }
 
 static gboolean popup_event_filter(const ClutterEvent *event, gpointer userdata)
