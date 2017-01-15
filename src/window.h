@@ -4,17 +4,11 @@
  * Licensed under the Apache License 2 <www.apache.org/licenses/LICENSE-2.0>.
  *
  * The GrapheneWindow struct is for communication between the Window Manager
- * (wm.c) and its delegates (such as the panel and task switcher). The window
- * manager creates a GrapheneWindow object, with the proper methods connected,
- * and passes it to the delegate.
- * This allows two-way communication. Not all WM methods will be needed by all
- * delegates, but all delegates should implement their methods.
- *
- * The WM uses Mutter, so it could just pass a MetaWindow ref, but that makes
- * delegates very Mutter-dependant and gives them more info than necessary.
- *
- * The WM only passes delgates windows that the delagtes should care about.
- * For example, the WM won't pass the panel popup dialog windows.
+ * (wm.c) and its delegates (such as the panel and task switcher). The WM
+ * creates a GrapheneWindow for any windows a delegate should care about,
+ * and passes them to the delegates. The WM uses Mutter, so it could just pass
+ * a MetaWindow ref, but that makes delegates very Mutter-dependant and gives
+ * them more info than necessary.
  */
 
 #ifndef __GRAPHENE_WINDOW_H__
