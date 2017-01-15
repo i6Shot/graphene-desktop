@@ -4,10 +4,13 @@
  * Licensed under the Apache License 2 <www.apache.org/licenses/LICENSE-2.0>.
  */
  
-#define GMENU_I_KNOW_THIS_IS_UNSTABLE // TODO: Apparently libgnome-menu is unstable (public API frequently changed). Maybe find an alternative? 
+#define GMENU_I_KNOW_THIS_IS_UNSTABLE // TODO: Maybe find an alternative? 
 
 #include "panel-internal.h"
 #include "cmk/cmk-widget.h"
+#include "cmk/button.h"
+#include "cmk/cmk-icon.h"
+#include "cmk/shadow.h"
 #include <gdk/gdkx.h>
 #include <gmenu-tree.h>
 #include <gio/gdesktopappinfo.h>
@@ -16,15 +19,20 @@ struct _GrapheneLauncherPopup
 {
 	CmkWidget parent;
 	
+	CmkShadowContainer *sdc;
+	CmkWidget *window;
+	ClutterScrollActor *scroll;
+	CmkWidget *appListBox;
+	
 	//GtkBox *popupLayout;
 	//GtkBox *searchBarContainer;
 	//GtkSearchEntry *searchBar;
+	gdouble scrollAmount;
 	gchar *filter;
 	
 	//GtkScrolledWindow *appListView;
-	//GtkBox *appListBox;
 	
-	//GMenuTree *appTree;
+	GMenuTree *appTree;
 };
 
 
@@ -32,21 +40,16 @@ G_DEFINE_TYPE(GrapheneLauncherPopup, graphene_launcher_popup, CMK_TYPE_WIDGET)
 
 
 static void graphene_launcher_popup_dispose(GObject *self_);
-//static void popup_on_show(GrapheneLauncherPopup *self);
-//static void popup_on_hide(GrapheneLauncherPopup *self);
-//static void popup_on_mapped(GrapheneLauncherPopup *self);
-//static void popup_on_monitors_changed(GrapheneLauncherPopup *self, GdkScreen *screen);
-//static void popup_on_size_allocate(GrapheneLauncherPopup *self, GtkAllocation *alloc);
-//static void popup_update_size(GrapheneLauncherPopup *self);
-//static gboolean popup_on_mouse_event(GrapheneLauncherPopup *self, GdkEventButton *event);
+static void graphene_launcher_popup_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags);
+static gboolean on_scroll(ClutterScrollActor *scroll, ClutterScrollEvent *event, GrapheneLauncherPopup *self);
 //static void popup_on_search_changed(GrapheneLauncherPopup *self, GtkSearchEntry *searchBar);
 //static void popup_on_search_enter(GrapheneLauncherPopup *self, GtkSearchEntry *searchBar);
 //static gboolean popup_on_key_event(GrapheneLauncherPopup *self, GdkEvent *event);
 //static void popup_on_vertical_scrolled(GrapheneLauncherPopup *self, GtkAdjustment *vadj);
-//static void popup_applist_refresh(GrapheneLauncherPopup *self);
-//static void popup_applist_populate(GrapheneLauncherPopup *self);
-//static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenuTreeDirectory *directory);
-//static void applist_on_item_clicked(GrapheneLauncherPopup *self, GtkButton *button);
+static void popup_applist_refresh(GrapheneLauncherPopup *self);
+static void popup_applist_populate(GrapheneLauncherPopup *self);
+static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenuTreeDirectory *directory);
+static void applist_on_item_clicked(GrapheneLauncherPopup *self, CmkButton *button);
 //static void applist_launch_first(GrapheneLauncherPopup *self);
 
 GrapheneLauncherPopup* graphene_launcher_popup_new(void)
@@ -58,125 +61,76 @@ static void graphene_launcher_popup_class_init(GrapheneLauncherPopupClass *class
 {
 	G_OBJECT_CLASS(class)->dispose = graphene_launcher_popup_dispose;
 	CLUTTER_ACTOR_CLASS(class)->allocate = graphene_launcher_popup_allocate;
-	
 }
 
 static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
 {
-	cmk_widget_set_background_color_name(CMK_WIDGET(self), "background");
-	cmk_widget_set_draw_background_color(CMK_WIDGET(self), TRUE);
-	//gtk_window_set_type_hint(GTK_WINDOW(self), GDK_WINDOW_TYPE_HINT_POPUP_MENU);
-	//g_signal_connect(self, "show", G_CALLBACK(popup_on_show), NULL);
-	//g_signal_connect(self, "hide", G_CALLBACK(popup_on_hide), NULL);
-	//g_signal_connect(self, "map", G_CALLBACK(popup_on_mapped), NULL);
-	//g_signal_connect(self, "size-allocate", G_CALLBACK(popup_on_size_allocate), NULL);
-	//g_signal_connect(self, "button_press_event", G_CALLBACK(popup_on_mouse_event), NULL);
-	//g_signal_connect(self, "key_press_event", G_CALLBACK(popup_on_key_event), NULL);
-	//g_signal_connect(self, "key_release_event", G_CALLBACK(popup_on_key_event), NULL);
-	//g_signal_connect_swapped(gtk_widget_get_screen(GTK_WIDGET(self)), "monitors-changed", G_CALLBACK(popup_on_monitors_changed), self);
-	//gtk_window_set_role(GTK_WINDOW(self), "GraphenePopup");
-	//gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(self)), "graphene-launcher-popup");
-	//
-	//// Layout
-	//self->popupLayout = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
-	//gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(self->popupLayout)), "panel");
-	//gtk_widget_set_halign(GTK_WIDGET(self->popupLayout), GTK_ALIGN_FILL);
-	//gtk_widget_set_valign(GTK_WIDGET(self->popupLayout), GTK_ALIGN_FILL);
-	//gtk_container_add(GTK_CONTAINER(self), GTK_WIDGET(self->popupLayout));
-	//
-	//// Search bar
-	//self->searchBar = GTK_SEARCH_ENTRY(gtk_search_entry_new());
-	//self->filter = NULL;
-	//g_signal_connect_swapped(self->searchBar, "changed", G_CALLBACK(popup_on_search_changed), self);
-	//g_signal_connect_swapped(self->searchBar, "activate", G_CALLBACK(popup_on_search_enter), self);
-	//gtk_widget_set_name(GTK_WIDGET(self->searchBar), "graphene-launcher-searchbar");
-	//self->searchBarContainer = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0)); // It seems the shadow-box property can't be animated on a searchentry, so wrap it in a container
-	//gtk_box_pack_start(self->searchBarContainer, GTK_WIDGET(self->searchBar), FALSE, FALSE, 0);
-	//gtk_widget_set_name(GTK_WIDGET(self->searchBarContainer), "graphene-launcher-searchbar-container");
-	//gtk_box_pack_start(self->popupLayout, GTK_WIDGET(self->searchBarContainer), FALSE, FALSE, 0);
-	//
-	//// App list
-	//self->appListView = GTK_SCROLLED_WINDOW(gtk_scrolled_window_new(NULL, NULL));
-	//gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(self->appListView)), "graphene-applist-view");
-	//gtk_scrolled_window_set_policy(self->appListView, GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
-	//g_signal_connect_swapped(gtk_scrolled_window_get_vadjustment(self->appListView), "value-changed", G_CALLBACK(popup_on_vertical_scrolled), self);
-	//self->appListBox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
-	//gtk_container_add(GTK_CONTAINER(self->appListView), GTK_WIDGET(self->appListBox));
-	//gtk_box_pack_start(self->popupLayout, GTK_WIDGET(self->appListView), TRUE, TRUE, 0);
-	//
-	//// Load applications
-	//self->appTree = gmenu_tree_new("gnome-applications.menu", GMENU_TREE_FLAGS_SORT_DISPLAY_NAME);
-	//popup_applist_refresh(self);
-	//
-	//gtk_widget_show_all(GTK_WIDGET(self->popupLayout));
+	self->sdc = cmk_shadow_container_new();
+	cmk_shadow_container_set_blur(self->sdc, 40);
+	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->sdc));
+
+	self->window = cmk_widget_new();
+	cmk_widget_set_draw_background_color(self->window, TRUE);
+	cmk_widget_set_background_color_name(self->window, "background");
+	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->window));
+
+	// Despite the scroll box looking like its inside the popup window, it
+	// isn't actually a child of the window actor; it is a child of self.
+	// This makes allocation/sizing easer, and helps keep the scroll window
+	// from expanding too far.
+	self->scroll = CLUTTER_SCROLL_ACTOR(clutter_scroll_actor_new());
+	clutter_scroll_actor_set_scroll_mode(self->scroll, CLUTTER_SCROLL_VERTICALLY);
+	ClutterBoxLayout *listLayout = CLUTTER_BOX_LAYOUT(clutter_box_layout_new());
+	clutter_box_layout_set_orientation(listLayout, CLUTTER_ORIENTATION_VERTICAL); 
+	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->scroll), CLUTTER_LAYOUT_MANAGER(listLayout));
+	clutter_actor_set_reactive(CLUTTER_ACTOR(self->scroll), TRUE);
+	g_signal_connect(self->scroll, "scroll-event", G_CALLBACK(on_scroll), self);
+	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->scroll));
+
+	// Load applications
+	self->appTree = gmenu_tree_new("gnome-applications.menu", GMENU_TREE_FLAGS_SORT_DISPLAY_NAME);
+	popup_applist_refresh(self);
 }
 
 static void graphene_launcher_popup_dispose(GObject *self_)
 {
 	GrapheneLauncherPopup *self = GRAPHENE_LAUNCHER_POPUP(self_);
-	//g_clear_object(&self->appTree);
-	//g_clear_pointer(&self->filter, g_free);
+	g_clear_object(&self->appTree);
+	g_clear_pointer(&self->filter, g_free);
 	G_OBJECT_CLASS(graphene_launcher_popup_parent_class)->dispose(self_);
 }
 
 static void graphene_launcher_popup_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags)
 {
+	GrapheneLauncherPopup *self = GRAPHENE_LAUNCHER_POPUP(self_);
 	
+	ClutterActorBox windowBox = {box->x1, box->y1, MIN(box->x1 + 600, box->x2/2), box->y2};
+	ClutterActorBox sdcBox = {box->x1-40, box->y1-40, windowBox.x2 + 40, box->y2 + 40};
+	ClutterActorBox scrollBox = {0, 0, windowBox.x2-windowBox.x1, windowBox.y2-windowBox.y1};
+
+	clutter_actor_allocate(CLUTTER_ACTOR(self->window), &windowBox, flags);
+	clutter_actor_allocate(CLUTTER_ACTOR(self->sdc), &sdcBox, flags);
+	clutter_actor_allocate(CLUTTER_ACTOR(self->scroll), &scrollBox, flags);
+
+	CLUTTER_ACTOR_CLASS(graphene_launcher_popup_parent_class)->allocate(self_, box, flags);
+}
+
+static gboolean on_scroll(ClutterScrollActor *scroll, ClutterScrollEvent *event, GrapheneLauncherPopup *self)
+{
+	// TODO: Disable button highlight when scrolling, so it feels smoother
+	if(event->direction == CLUTTER_SCROLL_SMOOTH)
+	{
+		gdouble dx, dy;
+		clutter_event_get_scroll_delta(event, &dx, &dy);
+		self->scrollAmount += dy*50; // TODO: Not magic number for multiplier
+
+		ClutterPoint p = {0, self->scrollAmount};
+		clutter_scroll_actor_scroll_to_point(scroll, &p);
+	}
+	return TRUE;
 }
 
 /*
-static void popup_on_show(GrapheneLauncherPopup *self)
-{
-	popup_applist_refresh(self); // TODO: Don't recreate everything every time the popup is shown. Only when things change.
-	graphene_panel_capture_screen(graphene_panel_get_default());
-	gtk_grab_add(GTK_WIDGET(self));
-}
-
-static void popup_on_hide(GrapheneLauncherPopup *self)
-{
-	gtk_grab_remove(GTK_WIDGET(self));
-	graphene_panel_end_capture(graphene_panel_get_default());
-}
-
-static void popup_on_mapped(GrapheneLauncherPopup *self)
-{
-	GdkWindow *window = gtk_widget_get_window(GTK_WIDGET(self));
-	gdk_window_focus(window, gdk_x11_get_server_time(window));
-	popup_update_size(self);
-}
-
-static void popup_on_monitors_changed(GrapheneLauncherPopup *self, GdkScreen *screen)
-{
-	popup_update_size(self);
-}
-
-static void popup_on_size_allocate(GrapheneLauncherPopup *self, GtkAllocation *alloc)
-{
-	GdkRectangle rect;
-	gdk_screen_get_monitor_workarea(gtk_widget_get_screen(GTK_WIDGET(self)), graphene_panel_get_monitor(graphene_panel_get_default()), &rect);
-	gtk_window_move(GTK_WINDOW(self), rect.x, rect.y);
-}
-
-static void popup_update_size(GrapheneLauncherPopup *self)
-{
-	GdkWindow *window = gtk_widget_get_window(GTK_WIDGET(self));
-	if(window)
-	{
-		GdkRectangle rect;
-		GtkAllocation alloc;
-		gdk_screen_get_monitor_workarea(gtk_widget_get_screen(GTK_WIDGET(self)), graphene_panel_get_monitor(graphene_panel_get_default()), &rect);
-		gtk_widget_get_allocation(GTK_WIDGET(self), &alloc);
-		gdk_window_move_resize(window, rect.x, rect.y, alloc.width, rect.height);
-	}
-}
-
-static gboolean popup_on_mouse_event(GrapheneLauncherPopup *self, GdkEventButton *event)
-{
-	if(gdk_window_get_toplevel(event->window) != gtk_widget_get_window(GTK_WIDGET(self)))
-		gtk_widget_hide(GTK_WIDGET(self));
-	return GDK_EVENT_PROPAGATE;
-}
-
 static void popup_on_search_changed(GrapheneLauncherPopup *self, GtkSearchEntry *searchBar)
 {
 	g_clear_pointer(&self->filter, g_free);
@@ -196,28 +150,58 @@ static gboolean popup_on_key_event(GrapheneLauncherPopup *self, GdkEvent *event)
 		return gtk_search_entry_handle_event(self->searchBar, event);
 	return GDK_EVENT_PROPAGATE;
 }
-
-static void popup_on_vertical_scrolled(GrapheneLauncherPopup *self, GtkAdjustment *vadj)
-{
-	if(gtk_adjustment_get_value(vadj) > 5)
-		gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(self->searchBarContainer)), "shadow");
-	else
-		gtk_style_context_remove_class(gtk_widget_get_style_context(GTK_WIDGET(self->searchBarContainer)), "shadow");
-}
+*/
 
 static void popup_applist_refresh(GrapheneLauncherPopup *self)
 {
+	// TODO: This lags the entire WM. Do it not synced, also cache it
 	gmenu_tree_load_sync(self->appTree, NULL);
+
 	popup_applist_populate(self);
 }
 
 static void popup_applist_populate(GrapheneLauncherPopup *self)
 {
-	GList *widgets = gtk_container_get_children(GTK_CONTAINER(self->appListBox));
-	g_list_free_full(widgets, (GDestroyNotify)gtk_widget_destroy); // Conveniently able to destroy all the child widgets using this single function
+	clutter_actor_destroy_all_children(CLUTTER_ACTOR(self->scroll));
 	GMenuTreeDirectory *directory = gmenu_tree_get_root_directory(self->appTree);
 	popup_applist_populate_directory(self, directory);
 	gmenu_tree_item_unref(directory);
+}
+
+static gboolean add_app(GrapheneLauncherPopup *self, GDesktopAppInfo *appInfo)
+{	
+	if(g_desktop_app_info_get_nodisplay(appInfo))
+		return FALSE;
+
+	if(self->filter)
+	{
+		gchar *displayNameDown = g_utf8_strdown(g_app_info_get_display_name(G_APP_INFO(appInfo)), -1);
+		gboolean passedFilter = g_strstr_len(displayNameDown, -1, self->filter) != NULL;
+		g_free(displayNameDown);
+		if(!passedFilter)
+			return FALSE;
+	}
+	
+	CmkButton *button = cmk_button_new();
+	const gchar *iconName;
+	GIcon *gicon = g_app_info_get_icon(appInfo);
+	if(G_IS_THEMED_ICON(gicon))
+	{
+		const gchar * const * names = g_themed_icon_get_names(gicon);
+		iconName = names[0];
+	}
+
+	CmkIcon *icon = cmk_icon_new_from_name(iconName ? iconName : "open-menu-symbolic");
+	cmk_icon_set_size(icon, 48);
+	cmk_button_set_content(button, CMK_WIDGET(icon));
+	cmk_button_set_text(button, g_app_info_get_display_name(G_APP_INFO(appInfo)));
+	cmk_widget_set_style_parent(CMK_WIDGET(button), self->window);
+	clutter_actor_set_x_expand(CLUTTER_ACTOR(button), TRUE);
+	clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), CLUTTER_ACTOR(button));
+	
+	clutter_actor_set_name(CLUTTER_ACTOR(button), g_app_info_get_executable(G_APP_INFO(appInfo)));
+	g_signal_connect_swapped(button, "activate", G_CALLBACK(applist_on_item_clicked), self);
+	return TRUE;
 }
 
 static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenuTreeDirectory *directory)
@@ -234,77 +218,37 @@ static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenu
 		if(type == GMENU_TREE_ITEM_ENTRY)
 		{
 			GMenuTreeEntry *entry = gmenu_tree_iter_get_entry(it);
-			GDesktopAppInfo *appInfo = gmenu_tree_entry_get_app_info(entry);
-			g_object_ref(appInfo);
+			if(add_app(self, gmenu_tree_entry_get_app_info(entry)))
+				count += 1;
 			gmenu_tree_item_unref(entry);
-			
-			if(g_desktop_app_info_get_nodisplay(appInfo))
-				continue;
-				
-			gchar *displayNameDown = g_utf8_strdown(g_app_info_get_display_name(G_APP_INFO(appInfo)), -1);
-			gboolean passedFilter = self->filter && g_strstr_len(displayNameDown, -1, self->filter) != NULL;
-			g_free(displayNameDown);
-			if(self->filter && !passedFilter)
-				continue;
-			
-				// Get icon at correct size. TODO: Update when the icon theme updates
-			GIcon *icon = g_app_info_get_icon(G_APP_INFO(appInfo));
-			GtkIconInfo *iconInfo = gtk_icon_theme_lookup_by_gicon(gtk_icon_theme_get_default(), icon, 32, GTK_ICON_LOOKUP_FORCE_SIZE);
-			GdkPixbuf *pixbuf = gtk_icon_info_load_icon(iconInfo, NULL);
-			GtkWidget *image = gtk_image_new_from_pixbuf(pixbuf);
-			g_object_unref(pixbuf);
-			g_object_unref(iconInfo);
-			
-			GtkBox *buttonBox = GTK_BOX(gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 7));
-			gtk_box_pack_start(buttonBox, image, TRUE, TRUE, 7);
-			GtkLabel *label = GTK_LABEL(gtk_label_new(g_app_info_get_display_name(G_APP_INFO(appInfo))));
-			gtk_label_set_yalign(label, 0.5);
-			gtk_box_pack_start(buttonBox, GTK_WIDGET(label), TRUE, TRUE, 0);
-			gtk_widget_set_halign(GTK_WIDGET(buttonBox), GTK_ALIGN_START);
-
-			GtkButton *button = GTK_BUTTON(gtk_button_new());
-			gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(button)), "launcher-app-button");
-			gtk_container_add(GTK_CONTAINER(button), GTK_WIDGET(buttonBox));
-			gtk_widget_show_all(GTK_WIDGET(button));
-			gtk_box_pack_start(self->appListBox, GTK_WIDGET(button), FALSE, FALSE, 0);
-			
-			GtkSeparator *sep = GTK_SEPARATOR(gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
-			gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(sep)), "list-item-separator");
-			gtk_widget_show(GTK_WIDGET(sep));
-			gtk_box_pack_start(self->appListBox, GTK_WIDGET(sep), FALSE, FALSE, 0);
-
-			g_object_set_data_full(G_OBJECT(button), "app-info", appInfo, g_object_unref);
-			g_signal_connect_swapped(button, "clicked", G_CALLBACK(applist_on_item_clicked), self);
-
-			count += 1;
 		}
 		else if(type == GMENU_TREE_ITEM_DIRECTORY)
 		{
 			GMenuTreeDirectory *directory = gmenu_tree_iter_get_directory(it);
 			
-			GtkLabel *label = GTK_LABEL(gtk_label_new(gmenu_tree_directory_get_name(directory)));
-			gtk_widget_set_halign(GTK_WIDGET(label), GTK_ALIGN_START);
-			gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(label)), "group-label");
-			gtk_box_pack_start(self->appListBox, GTK_WIDGET(label), FALSE, FALSE, 0);
+			//GtkLabel *label = GTK_LABEL(gtk_label_new(gmenu_tree_directory_get_name(directory)));
+			//gtk_widget_set_halign(GTK_WIDGET(label), GTK_ALIGN_START);
+			//gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(label)), "group-label");
+			//gtk_box_pack_start(self->appListBox, GTK_WIDGET(label), FALSE, FALSE, 0);
 
-			GtkSeparator *sep = GTK_SEPARATOR(gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
-			gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(sep)), "list-item-separator");
-			gtk_box_pack_start(self->appListBox, GTK_WIDGET(sep), FALSE, FALSE, 0);
-			
+			//GtkSeparator *sep = GTK_SEPARATOR(gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
+			//gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(sep)), "list-item-separator");
+			//gtk_box_pack_start(self->appListBox, GTK_WIDGET(sep), FALSE, FALSE, 0);
+			//
 			guint subcount = popup_applist_populate_directory(self, directory);
 			gmenu_tree_item_unref(directory);
-			
-			if(subcount > 0)
-			{
-				gtk_widget_show(GTK_WIDGET(label));
-				gtk_widget_show(GTK_WIDGET(sep));
-				// Dropping 'count += subcount' here was not a mistake during c port
-			}
-			else
-			{
-				gtk_widget_destroy(GTK_WIDGET(label));
-				gtk_widget_destroy(GTK_WIDGET(sep));
-			}
+			//
+			//if(subcount > 0)
+			//{
+			//	gtk_widget_show(GTK_WIDGET(label));
+			//	gtk_widget_show(GTK_WIDGET(sep));
+			//	// Dropping 'count += subcount' here was not a mistake during c port
+			//}
+			//else
+			//{
+			//	gtk_widget_destroy(GTK_WIDGET(label));
+			//	gtk_widget_destroy(GTK_WIDGET(sep));
+			//}
 		}
 	}
 	
@@ -312,20 +256,20 @@ static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenu
 	return count;
 }
 
-static void applist_on_item_clicked(GrapheneLauncherPopup *self, GtkButton *button)
+static void applist_on_item_clicked(GrapheneLauncherPopup *self, CmkButton *button)
 {
-	gtk_entry_set_text(GTK_ENTRY(self->searchBar), "");
-	gtk_widget_hide(GTK_WIDGET(self));
+	clutter_actor_destroy(self);
 	
-	GDesktopAppInfo *appInfo = G_DESKTOP_APP_INFO(g_object_get_data(G_OBJECT(button), "app-info"));
-	if(appInfo)
+	const gchar *args = clutter_actor_get_name(CLUTTER_ACTOR(button));
+	if(args)
 	{
-		gchar **argsSplit = g_strsplit(g_app_info_get_executable(G_APP_INFO(appInfo)), " ", -1);
+		gchar **argsSplit = g_strsplit(args, " ", -1);
 		g_spawn_async(NULL, argsSplit, NULL, G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL | G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
 		g_strfreev(argsSplit);
 	}
 }
 
+/*
 static void applist_launch_first(GrapheneLauncherPopup *self)
 {
 	GList *widgets = gtk_container_get_children(GTK_CONTAINER(self->appListBox));

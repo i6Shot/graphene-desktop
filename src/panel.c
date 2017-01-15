@@ -75,6 +75,9 @@ static void graphene_panel_init(GraphenePanel *self)
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->sdc));
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->bar));
 
+	// Keep popup shadows from spilling onto other monitors
+	clutter_actor_set_clip_to_allocation(CLUTTER_ACTOR(self), TRUE);
+
 	// Launcher
 	self->launcher = cmk_button_new();
 	CmkIcon *launcherIcon = cmk_icon_new_full("open-menu-symbolic", "Adwaita", PANEL_HEIGHT);
