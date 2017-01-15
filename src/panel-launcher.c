@@ -7,7 +7,7 @@
 #define GMENU_I_KNOW_THIS_IS_UNSTABLE // TODO: Maybe find an alternative? 
 
 #include "panel-internal.h"
-#include "cmk/cmk-widget.h"
+#include "cmk/cmk-label.h"
 #include "cmk/button.h"
 #include "cmk/cmk-icon.h"
 #include "cmk/shadow.h"
@@ -22,15 +22,9 @@ struct _GrapheneLauncherPopup
 	CmkShadowContainer *sdc;
 	CmkWidget *window;
 	ClutterScrollActor *scroll;
-	CmkWidget *appListBox;
 	
-	//GtkBox *popupLayout;
-	//GtkBox *searchBarContainer;
-	//GtkSearchEntry *searchBar;
 	gdouble scrollAmount;
 	gchar *filter;
-	
-	//GtkScrolledWindow *appListView;
 	
 	GMenuTree *appTree;
 };
@@ -121,8 +115,19 @@ static gboolean on_scroll(ClutterScrollActor *scroll, ClutterScrollEvent *event,
 	if(event->direction == CLUTTER_SCROLL_SMOOTH)
 	{
 		gdouble dx, dy;
-		clutter_event_get_scroll_delta(event, &dx, &dy);
+		clutter_event_get_scroll_delta((ClutterEvent *)event, &dx, &dy);
 		self->scrollAmount += dy*50; // TODO: Not magic number for multiplier
+		if(self->scrollAmount < 0)
+			self->scrollAmount = 0;
+	
+		gfloat min, nat;
+		clutter_layout_manager_get_preferred_height(clutter_actor_get_layout_manager(CLUTTER_ACTOR(scroll)), CLUTTER_CONTAINER(scroll), -1, &min, &nat);
+
+		gfloat height = clutter_actor_get_height(CLUTTER_ACTOR(scroll));
+		gfloat maxScroll = nat - height;
+
+		if(self->scrollAmount > maxScroll)
+			self->scrollAmount = maxScroll;
 
 		ClutterPoint p = {0, self->scrollAmount};
 		clutter_scroll_actor_scroll_to_point(scroll, &p);
@@ -168,6 +173,16 @@ static void popup_applist_populate(GrapheneLauncherPopup *self)
 	gmenu_tree_item_unref(directory);
 }
 
+static ClutterActor * separator_new()
+{
+	ClutterActor *sep = clutter_actor_new();
+	ClutterColor c = {0,0,0,25};
+	clutter_actor_set_background_color(sep, &c);
+	clutter_actor_set_x_expand(sep, TRUE);
+	clutter_actor_set_height(sep, 2);
+	return sep;
+}
+
 static gboolean add_app(GrapheneLauncherPopup *self, GDesktopAppInfo *appInfo)
 {	
 	if(g_desktop_app_info_get_nodisplay(appInfo))
@@ -184,10 +199,10 @@ static gboolean add_app(GrapheneLauncherPopup *self, GDesktopAppInfo *appInfo)
 	
 	CmkButton *button = cmk_button_new();
 	const gchar *iconName;
-	GIcon *gicon = g_app_info_get_icon(appInfo);
+	GIcon *gicon = g_app_info_get_icon(G_APP_INFO(appInfo));
 	if(G_IS_THEMED_ICON(gicon))
 	{
-		const gchar * const * names = g_themed_icon_get_names(gicon);
+		const gchar * const * names = g_themed_icon_get_names(G_THEMED_ICON(gicon));
 		iconName = names[0];
 	}
 
@@ -201,6 +216,8 @@ static gboolean add_app(GrapheneLauncherPopup *self, GDesktopAppInfo *appInfo)
 	
 	clutter_actor_set_name(CLUTTER_ACTOR(button), g_app_info_get_executable(G_APP_INFO(appInfo)));
 	g_signal_connect_swapped(button, "activate", G_CALLBACK(applist_on_item_clicked), self);
+	
+	clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), separator_new());
 	return TRUE;
 }
 
@@ -225,30 +242,26 @@ static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenu
 		else if(type == GMENU_TREE_ITEM_DIRECTORY)
 		{
 			GMenuTreeDirectory *directory = gmenu_tree_iter_get_directory(it);
-			
-			//GtkLabel *label = GTK_LABEL(gtk_label_new(gmenu_tree_directory_get_name(directory)));
-			//gtk_widget_set_halign(GTK_WIDGET(label), GTK_ALIGN_START);
-			//gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(label)), "group-label");
-			//gtk_box_pack_start(self->appListBox, GTK_WIDGET(label), FALSE, FALSE, 0);
+	
+			CmkLabel *label = cmk_label_new_with_text(gmenu_tree_directory_get_name(directory));
+			cmk_widget_set_style_parent(CMK_WIDGET(label), self->window);
+			clutter_actor_set_x_expand(CLUTTER_ACTOR(label), TRUE);
+			clutter_actor_set_x_align(CLUTTER_ACTOR(label), CLUTTER_ACTOR_ALIGN_START);
+			ClutterMargin margin = {50, 40, 20, 20};
+			clutter_actor_set_margin(CLUTTER_ACTOR(label), &margin);
+			clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), CLUTTER_ACTOR(label));
 
-			//GtkSeparator *sep = GTK_SEPARATOR(gtk_separator_new(GTK_ORIENTATION_HORIZONTAL));
-			//gtk_style_context_add_class(gtk_widget_get_style_context(GTK_WIDGET(sep)), "list-item-separator");
-			//gtk_box_pack_start(self->appListBox, GTK_WIDGET(sep), FALSE, FALSE, 0);
-			//
+			ClutterActor *sep = separator_new();
+			clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), sep);
+			
 			guint subcount = popup_applist_populate_directory(self, directory);
 			gmenu_tree_item_unref(directory);
-			//
-			//if(subcount > 0)
-			//{
-			//	gtk_widget_show(GTK_WIDGET(label));
-			//	gtk_widget_show(GTK_WIDGET(sep));
-			//	// Dropping 'count += subcount' here was not a mistake during c port
-			//}
-			//else
-			//{
-			//	gtk_widget_destroy(GTK_WIDGET(label));
-			//	gtk_widget_destroy(GTK_WIDGET(sep));
-			//}
+
+			if(subcount == 0)
+			{
+				clutter_actor_destroy(CLUTTER_ACTOR(label));
+				clutter_actor_destroy(sep);
+			}
 		}
 	}
 	
@@ -258,7 +271,7 @@ static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenu
 
 static void applist_on_item_clicked(GrapheneLauncherPopup *self, CmkButton *button)
 {
-	clutter_actor_destroy(self);
+	clutter_actor_destroy(CLUTTER_ACTOR(self));
 	
 	const gchar *args = clutter_actor_get_name(CLUTTER_ACTOR(button));
 	if(args)
