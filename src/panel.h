@@ -29,6 +29,8 @@ void graphene_panel_add_window(GraphenePanel *panel, GrapheneWindow *window);
 void graphene_panel_remove_window(GraphenePanel *panel, GrapheneWindow *window);
 void graphene_panel_update_window(GraphenePanel *panel, GrapheneWindow *window);
 
+void graphene_panel_show_main_menu(GraphenePanel *panel);
+
 // The main panel bar. Return value will not change after panel construction.
 ClutterActor * graphene_panel_get_input_actor(GraphenePanel *panel);
 

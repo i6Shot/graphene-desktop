@@ -135,6 +135,11 @@ static void on_style_changed(CmkWidget *self_)
 	CMK_WIDGET_CLASS(graphene_panel_parent_class)->style_changed(self_);
 }
 
+void graphene_panel_show_main_menu(GraphenePanel *self)
+{
+	on_launcher_button_activate(self->launcher, self);
+}
+
 ClutterActor * graphene_panel_get_input_actor(GraphenePanel *self)
 {
 	return CLUTTER_ACTOR(self->bar);

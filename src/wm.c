@@ -843,6 +843,11 @@ static void on_key_kb_backlight_down(MetaDisplay *display, MetaScreen *screen, M
 	//	-1, NULL, NULL, NULL);
 }
 
+static void on_panel_main_menu(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
+{
+	graphene_panel_show_main_menu(self->panel);
+}
+
 static void init_keybindings(GrapheneWM *self)
 {
 	pa_proplist *proplist = pa_proplist_new();
@@ -872,7 +877,8 @@ static void init_keybindings(GrapheneWM *self)
 
 	g_object_unref(keybindings);
 
-	// meta_keybindings_set_custom_handler("panel-main-menu", (MetaKeyHandlerFunc)on_panel_main_menu, self, NULL);
+	meta_keybindings_set_custom_handler("panel-main-menu", (MetaKeyHandlerFunc)on_panel_main_menu, self, NULL);
+	meta_keybindings_set_custom_handler("panel-run-dialog", (MetaKeyHandlerFunc)on_panel_main_menu, self, NULL);
 	// meta_keybindings_set_custom_handler("switch-windows", switch_windows);
 	// meta_keybindings_set_custom_handler("switch-applications", switch_windows);
 }
