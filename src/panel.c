@@ -251,7 +251,7 @@ static void on_settings_button_activate(CmkButton *button, GraphenePanel *self)
 
 	if(self->modalCb)
 		self->modalCb(TRUE, self->cbUserdata);
-	self->popup = CMK_WIDGET(graphene_launcher_popup_new());
+	self->popup = CMK_WIDGET(graphene_settings_popup_new());
 	self->popupSource = button;
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->popup));
 	g_signal_connect(self->popup, "destroy", G_CALLBACK(on_popup_destroy), self);

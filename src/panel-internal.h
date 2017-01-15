@@ -14,7 +14,11 @@ G_BEGIN_DECLS
 
 #define GRAPHENE_TYPE_LAUNCHER_POPUP graphene_launcher_popup_get_type()
 G_DECLARE_FINAL_TYPE(GrapheneLauncherPopup, graphene_launcher_popup, GRAPHENE, LAUNCHER_POPUP, CmkWidget)
-GrapheneLauncherPopup * graphene_launcher_popup_new();
+GrapheneLauncherPopup * graphene_launcher_popup_new(void);
+
+#define GRAPHENE_TYPE_SETTINGS_POPUP graphene_settings_popup_get_type()
+G_DECLARE_FINAL_TYPE(GrapheneSettingsPopup, graphene_settings_popup, GRAPHENE, SETTINGS_POPUP, CmkWidget)
+GrapheneSettingsPopup * graphene_settings_popup_new(void);
 
 #define GRAPHENE_TYPE_CLOCK_LABEL graphene_clock_label_get_type()
 G_DECLARE_FINAL_TYPE(GrapheneClockLabel, graphene_clock_label, GRAPHENE, CLOCK_LABEL, CmkLabel);

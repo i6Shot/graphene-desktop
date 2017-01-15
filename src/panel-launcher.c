@@ -100,7 +100,7 @@ static void graphene_launcher_popup_allocate(ClutterActor *self_, const ClutterA
 	
 	ClutterActorBox windowBox = {box->x1, box->y1, MIN(box->x1 + 600, box->x2/2), box->y2};
 	ClutterActorBox sdcBox = {box->x1-40, box->y1-40, windowBox.x2 + 40, box->y2 + 40};
-	ClutterActorBox scrollBox = {0, 0, windowBox.x2-windowBox.x1, windowBox.y2-windowBox.y1};
+	ClutterActorBox scrollBox = {windowBox.x1, windowBox.y1, windowBox.x2, windowBox.y2};
 
 	clutter_actor_allocate(CLUTTER_ACTOR(self->window), &windowBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->sdc), &sdcBox, flags);
