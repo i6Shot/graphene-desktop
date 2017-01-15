@@ -42,6 +42,7 @@ add_executable(graphene-desktop
 	cmk/cmk-widget.c
 	cmk/cmk-icon-loader.c
 	cmk/cmk-icon.c
+	cmk/cmk-label.c
 	# ${PROJECT_SOURCE_DIR}/common/dbusmonitor.c
 	sound.c
 	panel.c
