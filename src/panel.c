@@ -30,6 +30,7 @@ struct _GraphenePanel
 	CmkButton *settingsApplet;
 	GrapheneClockLabel *clock;
 	CmkWidget *popup;
+	CmkButton *popupSource; // Either launcher or settingsApplet
 	guint popupEventFilterId;
 
 	CmkWidget *tasklist;
@@ -40,6 +41,7 @@ static void graphene_panel_dispose(GObject *self_);
 static void on_style_changed(CmkWidget *self_);
 static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags);
 static void on_launcher_button_activate(CmkButton *button, GraphenePanel *self);
+static void on_settings_button_activate(CmkButton *button, GraphenePanel *self);
 
 G_DEFINE_TYPE(GraphenePanel, graphene_panel, CMK_TYPE_WIDGET);
 
@@ -109,6 +111,7 @@ static void graphene_panel_init(GraphenePanel *self)
 	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(z)); 
 	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(y)); 
 	cmk_button_set_content(self->settingsApplet, iconBox);
+	g_signal_connect(self->settingsApplet, "activate", G_CALLBACK(on_settings_button_activate), self);
 	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(self->settingsApplet));
 
 	// Clock
@@ -175,6 +178,7 @@ static void on_popup_destroy(CmkWidget *popup, GraphenePanel *self)
 	self->popupEventFilterId = 0;
 
 	self->popup = NULL;
+	self->popupSource = NULL;
 	if(self->modalCb)
 		self->modalCb(FALSE, self->cbUserdata);
 }
@@ -196,7 +200,7 @@ static gboolean popup_event_filter(const ClutterEvent *event, gpointer userdata)
 		ClutterActor *source = clutter_event_get_source(event);
 		// Don't close if the source is the launcher button, otherwise it'll
 		// immediately get re-opened when the user releases their press
-		if(!clutter_actor_contains(CLUTTER_ACTOR(self->launcher), source))
+		if(self->popupSource && !clutter_actor_contains(CLUTTER_ACTOR(self->popupSource), source))
 			if(self->popup && source && !clutter_actor_contains(CLUTTER_ACTOR(self->popup), source))
 				close_popup(self);
 	}
@@ -217,13 +221,16 @@ static void on_launcher_button_activate(CmkButton *button, GraphenePanel *self)
 {
 	if(self->popup)
 	{
+		gboolean own = (self->popupSource == button);
 		close_popup(self);
-		return;
+		if(own)
+			return;
 	}
 
 	if(self->modalCb)
 		self->modalCb(TRUE, self->cbUserdata);
 	self->popup = CMK_WIDGET(graphene_launcher_popup_new());
+	self->popupSource = button;
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->popup));
 	g_signal_connect(self->popup, "destroy", G_CALLBACK(on_popup_destroy), self);
 
@@ -231,6 +238,27 @@ static void on_launcher_button_activate(CmkButton *button, GraphenePanel *self)
 	self->popupEventFilterId = clutter_event_add_filter(stage, popup_event_filter, NULL, self);
 }
 
+
+static void on_settings_button_activate(CmkButton *button, GraphenePanel *self)
+{
+	if(self->popup)
+	{
+		gboolean own = (self->popupSource == button);
+		close_popup(self);
+		if(own)
+			return;
+	}
+
+	if(self->modalCb)
+		self->modalCb(TRUE, self->cbUserdata);
+	self->popup = CMK_WIDGET(graphene_launcher_popup_new());
+	self->popupSource = button;
+	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->popup));
+	g_signal_connect(self->popup, "destroy", G_CALLBACK(on_popup_destroy), self);
+
+	ClutterStage *stage = CLUTTER_STAGE(clutter_actor_get_stage(CLUTTER_ACTOR(self)));
+	self->popupEventFilterId = clutter_event_add_filter(stage, popup_event_filter, NULL, self);
+}
 
 
 /*
