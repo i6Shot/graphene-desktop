@@ -15,6 +15,8 @@
 #include <gmenu-tree.h>
 #include <gio/gdesktopappinfo.h>
 
+#define LAUNCHER_WIDTH 300
+
 struct _GrapheneLauncherPopup
 {
 	CmkWidget parent;
@@ -35,6 +37,7 @@ G_DEFINE_TYPE(GrapheneLauncherPopup, graphene_launcher_popup, CMK_TYPE_WIDGET)
 
 static void graphene_launcher_popup_dispose(GObject *self_);
 static void graphene_launcher_popup_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags);
+static void on_style_changed(CmkWidget *self_);
 static gboolean on_scroll(ClutterScrollActor *scroll, ClutterScrollEvent *event, GrapheneLauncherPopup *self);
 //static void popup_on_search_changed(GrapheneLauncherPopup *self, GtkSearchEntry *searchBar);
 //static void popup_on_search_enter(GrapheneLauncherPopup *self, GtkSearchEntry *searchBar);
@@ -55,6 +58,7 @@ static void graphene_launcher_popup_class_init(GrapheneLauncherPopupClass *class
 {
 	G_OBJECT_CLASS(class)->dispose = graphene_launcher_popup_dispose;
 	CLUTTER_ACTOR_CLASS(class)->allocate = graphene_launcher_popup_allocate;
+	CMK_WIDGET_CLASS(class)->style_changed = on_style_changed;
 }
 
 static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
@@ -98,7 +102,8 @@ static void graphene_launcher_popup_allocate(ClutterActor *self_, const ClutterA
 {
 	GrapheneLauncherPopup *self = GRAPHENE_LAUNCHER_POPUP(self_);
 	
-	ClutterActorBox windowBox = {box->x1, box->y1, MIN(box->x1 + 600, box->x2/2), box->y2};
+	gfloat width = LAUNCHER_WIDTH * cmk_widget_style_get_scale_factor(CMK_WIDGET(self_));
+	ClutterActorBox windowBox = {box->x1, box->y1, MIN(box->x1 + width, box->x2/2), box->y2};
 	ClutterActorBox sdcBox = {box->x1-40, box->y1-40, windowBox.x2 + 40, box->y2 + 40};
 	ClutterActorBox scrollBox = {windowBox.x1, windowBox.y1, windowBox.x2, windowBox.y2};
 
@@ -107,6 +112,12 @@ static void graphene_launcher_popup_allocate(ClutterActor *self_, const ClutterA
 	clutter_actor_allocate(CLUTTER_ACTOR(self->scroll), &scrollBox, flags);
 
 	CLUTTER_ACTOR_CLASS(graphene_launcher_popup_parent_class)->allocate(self_, box, flags);
+}
+
+static void on_style_changed(CmkWidget *self_)
+{
+	clutter_actor_queue_relayout(CLUTTER_ACTOR(self_));
+	CMK_WIDGET_CLASS(graphene_launcher_popup_parent_class)->style_changed(self_);
 }
 
 static gboolean on_scroll(ClutterScrollActor *scroll, ClutterScrollEvent *event, GrapheneLauncherPopup *self)
@@ -207,7 +218,7 @@ static gboolean add_app(GrapheneLauncherPopup *self, GDesktopAppInfo *appInfo)
 	}
 
 	CmkIcon *icon = cmk_icon_new_from_name(iconName ? iconName : "open-menu-symbolic");
-	cmk_icon_set_size(icon, 48);
+	cmk_icon_set_size(icon, 24);
 	cmk_button_set_content(button, CMK_WIDGET(icon));
 	cmk_button_set_text(button, g_app_info_get_display_name(G_APP_INFO(appInfo)));
 	cmk_widget_set_style_parent(CMK_WIDGET(button), self->window);

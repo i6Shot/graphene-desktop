@@ -10,6 +10,8 @@
 #include "cmk/cmk-icon.h"
 #include "cmk/shadow.h"
 
+#define PANEL_WIDTH 300
+
 struct _GrapheneSettingsPopup
 {
 	CmkWidget parent;
@@ -27,6 +29,7 @@ G_DEFINE_TYPE(GrapheneSettingsPopup, graphene_settings_popup, CMK_TYPE_WIDGET)
 
 static void graphene_settings_popup_dispose(GObject *self_);
 static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags);
+static void on_style_changed(CmkWidget *self_);
 static gboolean on_scroll(ClutterScrollActor *scroll, ClutterScrollEvent *event, GrapheneSettingsPopup *self);
 static void enum_settings_widgets(GrapheneSettingsPopup *self);
 
@@ -39,6 +42,7 @@ static void graphene_settings_popup_class_init(GrapheneSettingsPopupClass *class
 {
 	G_OBJECT_CLASS(class)->dispose = graphene_settings_popup_dispose;
 	CLUTTER_ACTOR_CLASS(class)->allocate = graphene_settings_popup_allocate;
+	CMK_WIDGET_CLASS(class)->style_changed = on_style_changed;
 }
 
 static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
@@ -74,7 +78,8 @@ static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterA
 {
 	GrapheneSettingsPopup *self = GRAPHENE_SETTINGS_POPUP(self_);
 	
-	ClutterActorBox windowBox = {MAX(box->x2-600, box->x1+(box->x2-box->x1)/2), box->y1, box->x2, box->y2};
+	gfloat width = PANEL_WIDTH * cmk_widget_style_get_scale_factor(CMK_WIDGET(self_));
+	ClutterActorBox windowBox = {MAX(box->x2-width, box->x1+(box->x2-box->x1)/2), box->y1, box->x2, box->y2};
 	ClutterActorBox sdcBox = {windowBox.x1-40, windowBox.y1-40, windowBox.x2 + 40, box->y2 + 40};
 	ClutterActorBox scrollBox = {windowBox.x1, windowBox.y1, windowBox.x2, windowBox.y2};
 
@@ -83,6 +88,12 @@ static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterA
 	clutter_actor_allocate(CLUTTER_ACTOR(self->scroll), &scrollBox, flags);
 
 	CLUTTER_ACTOR_CLASS(graphene_settings_popup_parent_class)->allocate(self_, box, flags);
+}
+
+static void on_style_changed(CmkWidget *self_)
+{
+	clutter_actor_queue_relayout(CLUTTER_ACTOR(self_));
+	CMK_WIDGET_CLASS(graphene_settings_popup_parent_class)->style_changed(self_);
 }
 
 static gboolean on_scroll(ClutterScrollActor *scroll, ClutterScrollEvent *event, GrapheneSettingsPopup *self)
@@ -139,7 +150,7 @@ static void add_setting_widget(GrapheneSettingsPopup *self, const gchar *title, 
 
 	CmkButton *button = cmk_button_new();
 	CmkIcon *icon = cmk_icon_new_from_name(iconName);
-	cmk_icon_set_size(icon, 48);
+	cmk_icon_set_size(icon, 24);
 	cmk_button_set_content(button, CMK_WIDGET(icon));
 	cmk_button_set_text(button, title);
 	cmk_widget_set_style_parent(CMK_WIDGET(button), CMK_WIDGET(self));

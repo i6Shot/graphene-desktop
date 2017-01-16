@@ -42,8 +42,8 @@ static const ClutterColor GrapheneColors[] = {
 	{255, 255, 255, 25}, // selected
 };
 
-static const float GrapheneBevelRadius = 5.0;
-static const float GraphenePadding = 20.0;
+static const float GrapheneBevelRadius = 3.0;
+static const float GraphenePadding = 10.0;
 
 /*
  * From what I can tell, the current version of Clutter has a memory leak
@@ -92,8 +92,42 @@ const MetaPluginInfo * graphene_wm_plugin_info(MetaPlugin *plugin)
 	return &info;
 }
 
+static gint requestedDPI = 1024 * 96;
+static gfloat requestedDPIScale = 1.0;
+
+/*
+ * From all my investigation into the API and source code, there appears to
+ * be no way to interrupt Clutter's auto-detection of font dpi from the
+ * current system. Ideally, font dpi could be a Cmk style property. However,
+ * that would be very annoying and hacky to setup without creating a custom
+ * version of ClutterText (which I don't want to do).
+ * This method is called at the end of the Backend's resolution-chaged
+ * emission, and checks to see if the resolution that has been set is the
+ * one we want. If not, change it back.
+ */
+static void reset_clutter_dpi()
+{
+	ClutterSettings *settings = clutter_settings_get_default();
+	gint dpi = 0;
+	g_object_get(settings, "font-dpi", &dpi, NULL);
+	gint dpiReq = requestedDPI * requestedDPIScale;
+	if(dpi != dpiReq)
+	{
+		// The setter for font-dpi scales the value by GDK_DPI_SCALE, which
+		// is very annoying. So just make sure that's unset. Whatever.
+		g_unsetenv("GDK_DPI_SCALE");
+		g_object_set(settings, "font-dpi", dpiReq, NULL);
+	}
+}
+
 void graphene_wm_start(MetaPlugin *self_)
 {
+	g_object_set(clutter_settings_get_default(), "font-dpi", (gint)(requestedDPI * requestedDPIScale), NULL);
+	g_signal_connect_after(clutter_get_default_backend(), "resolution-changed", G_CALLBACK(reset_clutter_dpi), NULL);
+	
+	//guint resChanged = g_signal_lookup("resolution-changed", CLUTTER_TYPE_BACKEND);
+	//g_message("reschgd: %i", resChanged);
+
 	GrapheneWM *self = GRAPHENE_WM(self_);
 
 	MetaScreen *screen = meta_plugin_get_screen(self_);
@@ -101,9 +135,6 @@ void graphene_wm_start(MetaPlugin *self_)
 
 	MetaDisplay *display = meta_screen_get_display(screen);
 	g_signal_connect_swapped(display, "window-created", G_CALLBACK(on_window_created), self_);
-
-	//ClutterSettings *set = clutter_settings_get_default();
-	//g_object_set(set, "font-dpi", 10000, NULL);
 
 	// Don't bother clearing the stage when we're drawing our own background
 	clutter_stage_set_no_clear_hint(CLUTTER_STAGE(self->stage), TRUE);
@@ -781,6 +812,13 @@ static void on_key_volume_mute(MetaDisplay *display, MetaScreen *screen, MetaWin
 
 static void on_key_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
+	CmkWidget *style = cmk_widget_get_style_default();
+	cmk_widget_style_set_scale_factor(style, cmk_widget_style_get_scale_factor(style)+0.1);
+	requestedDPIScale += 0.1;
+	requestedDPIScale = MIN(MAX(requestedDPIScale, 0.1f), 10.0f);
+	g_object_set(clutter_settings_get_default(), "font-dpi", (gint)(requestedDPI * requestedDPIScale), NULL);
+	g_object_unref(style);
+
 	//if(!self->connection)
 	//	return;
 	//
@@ -797,6 +835,13 @@ static void on_key_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWi
 
 static void on_key_backlight_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
+	CmkWidget *style = cmk_widget_get_style_default();
+	cmk_widget_style_set_scale_factor(style, cmk_widget_style_get_scale_factor(style)-0.1);
+	requestedDPIScale -= 0.1;
+	requestedDPIScale = MIN(MAX(requestedDPIScale, 0.1f), 10.0f);
+	g_object_set(clutter_settings_get_default(), "font-dpi", (gint)(requestedDPI * requestedDPIScale), NULL);
+	g_object_unref(style);
+
 	//if(!self->connection)
 	//	return;
 	//
@@ -813,6 +858,15 @@ static void on_key_backlight_down(MetaDisplay *display, MetaScreen *screen, Meta
 
 static void on_key_kb_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
+
+	ClutterBackend *back = clutter_get_default_backend();
+	g_message("res: %i", clutter_backend_get_resolution(back));
+	ClutterSettings *set = clutter_settings_get_default();
+	guint dpi;
+	g_object_get(set, "font-dpi", &dpi, NULL);
+	g_message("dpi: %i", dpi);
+
+	//g_object_set(set, "font-dpi", dpi, NULL);
 	//if(!self->connection)
 	//	return;
 	//

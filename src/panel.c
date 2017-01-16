@@ -10,8 +10,7 @@
 #include "cmk/button.h"
 #include "cmk/cmk-icon.h"
 
-#define PANEL_HEIGHT 64 // Pixels; multiplied by the window scale factor
-#define SHADOW_HEIGHT 20
+#define PANEL_HEIGHT 32 // Pixels; multiplied by the window scale factor
 
 // See wm.c
 #define TRANSITION_MEMLEAK_FIX(actor, tname) g_signal_connect_after(clutter_actor_get_transition(CLUTTER_ACTOR(actor), (tname)), "stopped", G_CALLBACK(g_object_unref), NULL)
@@ -32,6 +31,7 @@ struct _GraphenePanel
 	CmkWidget *popup;
 	CmkButton *popupSource; // Either launcher or settingsApplet
 	guint popupEventFilterId;
+	ClutterBoxLayout *settingsAppletLayout;
 
 	CmkWidget *tasklist;
 	GHashTable *windows; // GrapheneWindow * (not owned) to CmkWidget * (not refed)
@@ -75,7 +75,6 @@ static void graphene_panel_init(GraphenePanel *self)
 	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->bar), clutter_box_layout_new());
 
 	self->sdc = cmk_shadow_container_new();
-	cmk_shadow_container_set_vblur(self->sdc, SHADOW_HEIGHT);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->sdc));
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->bar));
 
@@ -100,7 +99,7 @@ static void graphene_panel_init(GraphenePanel *self)
 	self->settingsApplet = cmk_button_new();
 	CmkWidget *iconBox = cmk_widget_new();
 	ClutterLayoutManager *layout = clutter_box_layout_new();
-	clutter_box_layout_set_spacing(CLUTTER_BOX_LAYOUT(layout), 10);
+	self->settingsAppletLayout = CLUTTER_BOX_LAYOUT(layout);
 	clutter_actor_set_layout_manager(CLUTTER_ACTOR(iconBox), layout);
 	CmkIcon *x = cmk_icon_new_full("system-shutdown-symbolic", NULL, PANEL_HEIGHT / 2, TRUE);
 	CmkIcon *y = cmk_icon_new_full("battery-full-symbolic", NULL, PANEL_HEIGHT / 2, TRUE);
@@ -130,9 +129,11 @@ static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *
 {
 	GraphenePanel *self = GRAPHENE_PANEL(self_);
 	
-	ClutterActorBox barBox = {box->x1, box->y2-PANEL_HEIGHT, box->x2, box->y2};
-	ClutterActorBox sdcBox = {box->x1, box->y2-PANEL_HEIGHT-SHADOW_HEIGHT, box->x2, box->y2};
-	ClutterActorBox popupBox = {box->x1, box->y1, box->x2, box->y2 - PANEL_HEIGHT};
+	gfloat panelHeight = PANEL_HEIGHT * cmk_widget_style_get_scale_factor(CMK_WIDGET(self_));
+	gfloat shadowSize = cmk_widget_style_get_padding(CMK_WIDGET(self_));
+	ClutterActorBox barBox = {box->x1, box->y2-panelHeight, box->x2, box->y2};
+	ClutterActorBox sdcBox = {box->x1, barBox.y1-shadowSize, box->x2, barBox.y1+(shadowSize*2)};
+	ClutterActorBox popupBox = {box->x1, box->y1, box->x2, box->y2 - panelHeight};
 
 	clutter_actor_allocate(CLUTTER_ACTOR(self->sdc), &sdcBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->bar), &barBox, flags);
@@ -145,13 +146,17 @@ static void graphene_panel_allocate(ClutterActor *self_, const ClutterActorBox *
 
 static void on_style_changed(CmkWidget *self_)
 {
-	GraphenePanel *panel = GRAPHENE_PANEL(self_);
+	GraphenePanel *self = GRAPHENE_PANEL(self_);
+
+	clutter_box_layout_set_spacing(self->settingsAppletLayout, cmk_widget_style_get_padding(self_)/2);
 
 	float padding = cmk_widget_style_get_padding(self_);
 	ClutterMargin margin = {padding, padding, 0, 0};
-	clutter_actor_set_margin(CLUTTER_ACTOR(GRAPHENE_PANEL(self_)->clock), &margin);
+	clutter_actor_set_margin(CLUTTER_ACTOR(self->clock), &margin);
 
-	cmk_widget_style_set_padding(CMK_WIDGET(GRAPHENE_PANEL(self_)->launcher), cmk_widget_style_get_padding(self_) * 1.3);
+	cmk_widget_style_set_padding(CMK_WIDGET(self->launcher), cmk_widget_style_get_padding(self_) * 1.3 / cmk_widget_style_get_scale_factor(self_));
+	cmk_shadow_container_set_vblur(self->sdc, padding);
+	clutter_actor_queue_relayout(CLUTTER_ACTOR(self_));
 
 	CMK_WIDGET_CLASS(graphene_panel_parent_class)->style_changed(self_);
 }
