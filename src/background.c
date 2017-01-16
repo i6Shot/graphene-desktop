@@ -113,7 +113,7 @@ static void update(GrapheneWMBackground *self)
 	MetaRectangle rect = meta_rect(0,0,0,0);
 	meta_screen_get_monitor_geometry(self->screen, self->monitor, &rect);
 	
-	clutter_actor_set_position(newActor, 0, 0);
+	clutter_actor_set_position(newActor, rect.x, rect.y);
 	clutter_actor_set_size(newActor, rect.width, rect.height);
 	clutter_actor_set_opacity(newActor, 0);
 	clutter_actor_insert_child_at_index(CLUTTER_ACTOR(self), newActor, -1);
