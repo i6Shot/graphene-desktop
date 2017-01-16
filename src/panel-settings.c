@@ -111,7 +111,7 @@ static gboolean on_scroll(ClutterScrollActor *scroll, ClutterScrollEvent *event,
 		clutter_layout_manager_get_preferred_height(clutter_actor_get_layout_manager(CLUTTER_ACTOR(scroll)), CLUTTER_CONTAINER(scroll), -1, &min, &nat);
 
 		gfloat height = clutter_actor_get_height(CLUTTER_ACTOR(scroll));
-		gfloat maxScroll = nat - height;
+		gfloat maxScroll = MAX(nat - height, 0);
 
 		if(self->scrollAmount > maxScroll)
 			self->scrollAmount = maxScroll;
