@@ -20,6 +20,7 @@
 #include "background.h"
 #include "dialog.h"
 #include "window.h"
+#include "cmk/cmk-icon-loader.h"
 #include "cmk/button.h"
 #include "cmk/shadow.h"
 #include <meta/meta-shadow-factory.h>
@@ -62,9 +63,11 @@ static const float GraphenePadding = 10.0;
 #define TRANSITION_MEMLEAK_FIX(actor, tname) g_signal_connect_after(clutter_actor_get_transition((actor), (tname)), "stopped", G_CALLBACK(g_object_unref), NULL)
 
 
-static void on_window_created(GrapheneWM *self, MetaWindow *window, MetaDisplay *display);
 static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self);
 static void update_struts(GrapheneWM *self);
+static void on_window_created(GrapheneWM *self, MetaWindow *window, MetaDisplay *display);
+static void reset_clutter_dpi();
+static void on_global_scale_changed(CmkIconLoader *iconLoader);
 static void xfixes_add_input_actor(GrapheneWM *self, ClutterActor *actor);
 static void xfixes_remove_input_actor(GrapheneWM *self, ClutterActor *actor);
 static void graphene_wm_begin_modal(GrapheneWM *self);
@@ -95,39 +98,19 @@ const MetaPluginInfo * graphene_wm_plugin_info(MetaPlugin *plugin)
 static gint requestedDPI = 1024 * 96;
 static gfloat requestedDPIScale = 1.0;
 
-/*
- * From all my investigation into the API and source code, there appears to
- * be no way to interrupt Clutter's auto-detection of font dpi from the
- * current system. Ideally, font dpi could be a Cmk style property. However,
- * that would be very annoying and hacky to setup without creating a custom
- * version of ClutterText (which I don't want to do).
- * This method is called at the end of the Backend's resolution-chaged
- * emission, and checks to see if the resolution that has been set is the
- * one we want. If not, change it back.
- */
-static void reset_clutter_dpi()
-{
-	ClutterSettings *settings = clutter_settings_get_default();
-	gint dpi = 0;
-	g_object_get(settings, "font-dpi", &dpi, NULL);
-	gint dpiReq = requestedDPI * requestedDPIScale;
-	if(dpi != dpiReq)
-	{
-		// The setter for font-dpi scales the value by GDK_DPI_SCALE, which
-		// is very annoying. So just make sure that's unset. Whatever.
-		g_unsetenv("GDK_DPI_SCALE");
-		g_object_set(settings, "font-dpi", dpiReq, NULL);
-	}
-}
-
 void graphene_wm_start(MetaPlugin *self_)
 {
+	// Some stuff for DPI scaling
+	CmkWidget *style = cmk_widget_get_style_default();
+	CmkIconLoader *iconLoader = cmk_icon_loader_get_default();
+
+	requestedDPIScale = cmk_icon_loader_get_scale(iconLoader);
+	cmk_widget_style_set_scale_factor(style, requestedDPIScale);
 	g_object_set(clutter_settings_get_default(), "font-dpi", (gint)(requestedDPI * requestedDPIScale), NULL);
 	g_signal_connect_after(clutter_get_default_backend(), "resolution-changed", G_CALLBACK(reset_clutter_dpi), NULL);
-	
-	//guint resChanged = g_signal_lookup("resolution-changed", CLUTTER_TYPE_BACKEND);
-	//g_message("reschgd: %i", resChanged);
+	g_signal_connect(iconLoader, "notify::scale", G_CALLBACK(on_global_scale_changed), NULL);
 
+	
 	GrapheneWM *self = GRAPHENE_WM(self_);
 
 	MetaScreen *screen = meta_plugin_get_screen(self_);
@@ -145,7 +128,6 @@ void graphene_wm_start(MetaPlugin *self_)
 	// TODO: Load styling from a file
 	// cmk_stlye_get_default gets a new ref here, which we never release to
 	// ensure all widgets get the same default style.
-	CmkWidget *style = cmk_widget_get_style_default();
 	cmk_widget_style_set_color(style, "background", &GrapheneColors[0]);
 	cmk_widget_style_set_color(style, "foreground", &GrapheneColors[1]);
 	cmk_widget_style_set_color(style, "hover", &GrapheneColors[2]);
@@ -237,6 +219,46 @@ static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self)
 	clutter_actor_set_width(ACTOR(self->panel), primary.width);
 	clutter_actor_set_height(ACTOR(self->panel), primary.height);
 }
+
+/*
+ * From all my investigation into the API and source code, there appears to
+ * be no way to interrupt Clutter's auto-detection of font dpi from the
+ * current system. Ideally, font dpi could be a Cmk style property. However,
+ * that would be very annoying and hacky to setup without creating a custom
+ * version of ClutterText (which I don't want to do).
+ * This method is called at the end of the Backend's resolution-chaged
+ * emission, and checks to see if the resolution that has been set is the
+ * one we want. If not, change it back.
+ */
+static void reset_clutter_dpi()
+{
+	ClutterSettings *settings = clutter_settings_get_default();
+	gint dpi = 0;
+	g_object_get(settings, "font-dpi", &dpi, NULL);
+	gint dpiReq = requestedDPI * requestedDPIScale;
+	if(dpi != dpiReq)
+	{
+		// The setter for font-dpi scales the value by GDK_DPI_SCALE, which
+		// is very annoying. So just make sure that's unset. Whatever.
+		g_unsetenv("GDK_DPI_SCALE");
+		g_object_set(settings, "font-dpi", dpiReq, NULL);
+	}
+}
+
+static void on_global_scale_changed(CmkIconLoader *iconLoader)
+{
+	CmkWidget *style = cmk_widget_get_style_default();
+	requestedDPIScale = cmk_icon_loader_get_scale(iconLoader);
+	cmk_widget_style_set_scale_factor(style, requestedDPIScale);
+	g_object_unref(style);
+	g_object_set(clutter_settings_get_default(), "font-dpi", (gint)(requestedDPI * requestedDPIScale), NULL);
+}
+
+
+
+/*
+ * Graphene Window (MetaWindow wrapper)
+ */
 
 static void graphene_window_show(GrapheneWindow *cwindow)
 {
@@ -812,13 +834,6 @@ static void on_key_volume_mute(MetaDisplay *display, MetaScreen *screen, MetaWin
 
 static void on_key_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
-	CmkWidget *style = cmk_widget_get_style_default();
-	cmk_widget_style_set_scale_factor(style, cmk_widget_style_get_scale_factor(style)+0.1);
-	requestedDPIScale += 0.1;
-	requestedDPIScale = MIN(MAX(requestedDPIScale, 0.1f), 10.0f);
-	g_object_set(clutter_settings_get_default(), "font-dpi", (gint)(requestedDPI * requestedDPIScale), NULL);
-	g_object_unref(style);
-
 	//if(!self->connection)
 	//	return;
 	//
@@ -835,13 +850,6 @@ static void on_key_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWi
 
 static void on_key_backlight_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
-	CmkWidget *style = cmk_widget_get_style_default();
-	cmk_widget_style_set_scale_factor(style, cmk_widget_style_get_scale_factor(style)-0.1);
-	requestedDPIScale -= 0.1;
-	requestedDPIScale = MIN(MAX(requestedDPIScale, 0.1f), 10.0f);
-	g_object_set(clutter_settings_get_default(), "font-dpi", (gint)(requestedDPI * requestedDPIScale), NULL);
-	g_object_unref(style);
-
 	//if(!self->connection)
 	//	return;
 	//
@@ -858,15 +866,6 @@ static void on_key_backlight_down(MetaDisplay *display, MetaScreen *screen, Meta
 
 static void on_key_kb_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
-
-	ClutterBackend *back = clutter_get_default_backend();
-	g_message("res: %i", clutter_backend_get_resolution(back));
-	ClutterSettings *set = clutter_settings_get_default();
-	guint dpi;
-	g_object_get(set, "font-dpi", &dpi, NULL);
-	g_message("dpi: %i", dpi);
-
-	//g_object_set(set, "font-dpi", dpi, NULL);
 	//if(!self->connection)
 	//	return;
 	//
