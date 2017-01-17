@@ -243,7 +243,7 @@ static gboolean add_app(GrapheneLauncherPopup *self, GDesktopAppInfo *appInfo)
 	clutter_actor_set_x_expand(CLUTTER_ACTOR(button), TRUE);
 	clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), CLUTTER_ACTOR(button));
 	
-	clutter_actor_set_name(CLUTTER_ACTOR(button), g_app_info_get_executable(G_APP_INFO(appInfo)));
+	g_object_set_data_full(G_OBJECT(button), "appinfo", g_object_ref(appInfo), g_object_unref);
 	g_signal_connect_swapped(button, "activate", G_CALLBACK(applist_on_item_clicked), self);
 
 	if(!self->firstApp)
@@ -304,27 +304,8 @@ static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenu
 static void applist_on_item_clicked(GrapheneLauncherPopup *self, CmkButton *button)
 {
 	clutter_actor_destroy(CLUTTER_ACTOR(self));
-	
-	const gchar *args = clutter_actor_get_name(CLUTTER_ACTOR(button));
-	if(args)
-	{
-		gchar **argsSplit = g_strsplit(args, " ", -1);
-		g_spawn_async(NULL, argsSplit, NULL, G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL | G_SPAWN_SEARCH_PATH, NULL, NULL, NULL, NULL);
-		g_strfreev(argsSplit);
-	}
-}
 
-/*
-static void applist_launch_first(GrapheneLauncherPopup *self)
-{
-	GList *widgets = gtk_container_get_children(GTK_CONTAINER(self->appListBox));
-	for(GList *widget = widgets; widget != NULL; widget = widget->next)
-	{
-		if(GTK_IS_BUTTON(widget->data))
-		{
-			gtk_button_clicked(GTK_BUTTON(widget->data)); // Click the first button
-			break;
-		}
-	}
-	g_list_free(widgets);
-}*/
+	GDesktopAppInfo *appInfo = g_object_get_data(G_OBJECT(button), "appinfo");
+	if(appInfo)
+		g_app_info_launch(G_APP_INFO(appInfo), NULL, NULL, NULL);
+}
