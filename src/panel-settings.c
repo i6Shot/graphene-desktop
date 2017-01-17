@@ -45,6 +45,7 @@ static void on_style_changed(CmkWidget *self_);
 static gboolean on_scroll(ClutterScrollActor *scroll, ClutterScrollEvent *event, GrapheneSettingsPopup *self);
 static void on_logout_button_activate(CmkButton *button, GrapheneSettingsPopup *self);
 static void on_user_manager_notify_loaded(GrapheneSettingsPopup *self);
+static ClutterActor * separator_new();
 static void enum_settings_widgets(GrapheneSettingsPopup *self);
 
 GrapheneSettingsPopup * graphene_settings_popup_new(CSettingsLogoutCallback logoutCb, gpointer userdata)
@@ -104,6 +105,8 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 	g_signal_connect(self->logoutButton, "activate", G_CALLBACK(on_logout_button_activate), self);
 	clutter_actor_add_child(CLUTTER_ACTOR(self->infoBox), CLUTTER_ACTOR(self->logoutButton));
 
+	clutter_actor_add_child(CLUTTER_ACTOR(self->infoBox), separator_new());
+
 	enum_settings_widgets(self);
 
 	self->userManager = act_user_manager_get_default();
@@ -124,7 +127,6 @@ static void graphene_settings_popup_dispose(GObject *self_)
 static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags)
 {
 	GrapheneSettingsPopup *self = GRAPHENE_SETTINGS_POPUP(self_);
-	float padding = cmk_widget_style_get_padding(CMK_WIDGET(self_));
 	
 	gfloat width = PANEL_WIDTH * cmk_widget_style_get_scale_factor(CMK_WIDGET(self_));
 	width = MAX(box->x2-width, box->x1+(box->x2-box->x1)/2);
@@ -136,7 +138,7 @@ static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterA
 	clutter_actor_get_preferred_height(CLUTTER_ACTOR(self->infoBox), width, &infoMin, &infoNat);
 
 	ClutterActorBox infoBox = {windowBox.x1, windowBox.y1, windowBox.x2, windowBox.y1 + infoNat};
-	ClutterActorBox scrollBox = {windowBox.x1, windowBox.y1 + infoNat + padding, windowBox.x2, windowBox.y2};
+	ClutterActorBox scrollBox = {windowBox.x1, windowBox.y1 + infoNat, windowBox.x2, windowBox.y2};
 
 	clutter_actor_allocate(CLUTTER_ACTOR(self->window), &windowBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->sdc), &sdcBox, flags);
@@ -152,7 +154,9 @@ static void on_style_changed(CmkWidget *self_)
 
 	float padding = cmk_widget_style_get_padding(self_);
 	ClutterMargin margin = {0, 0, padding, padding};
+	ClutterMargin margin2 = {0, 0, 0, padding};
 	clutter_actor_set_margin(CLUTTER_ACTOR(self->usernameLabel), &margin);
+	clutter_actor_set_margin(CLUTTER_ACTOR(self->logoutButton), &margin2);
 
 	clutter_actor_queue_relayout(CLUTTER_ACTOR(self_));
 	CMK_WIDGET_CLASS(graphene_settings_popup_parent_class)->style_changed(self_);
@@ -281,9 +285,6 @@ static void add_settings_category_label(GrapheneSettingsPopup *self, const gchar
 
 static void enum_settings_widgets(GrapheneSettingsPopup *self)
 {
-	ClutterActor *sep = separator_new();
-	clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), sep);
-
 	add_settings_category_label(self, "Personal");
 	add_setting_widget(self, "Background",       "preferences-desktop-wallpaper",    TRUE,  "background",     FALSE);
 	add_setting_widget(self, "Notifications",    "preferences-system-notifications", TRUE,  "notifications",  FALSE);
