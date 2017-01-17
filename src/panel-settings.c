@@ -100,6 +100,7 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 	clutter_actor_add_child(CLUTTER_ACTOR(self->infoBox), CLUTTER_ACTOR(self->usernameLabel));
 
 	self->logoutButton = cmk_button_new();
+	cmk_button_set_type(self->logoutButton, CMK_BUTTON_TYPE_CIRCLE);
 	cmk_button_set_content(self->logoutButton, CMK_WIDGET(cmk_icon_new_full("system-shutdown-symbolic", NULL, 48, TRUE)));
 	cmk_widget_style_set_padding(CMK_WIDGET(self->logoutButton), 0);
 	g_signal_connect(self->logoutButton, "activate", G_CALLBACK(on_logout_button_activate), self);

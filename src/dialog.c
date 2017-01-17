@@ -221,7 +221,7 @@ void graphene_dialog_set_buttons(GrapheneDialog *self, const gchar * const *butt
 	guint i=0;
 	while((name = buttons[i++]) != NULL)
 	{
-		CmkButton *button = cmk_beveled_button_new_with_text(name);
+		CmkButton *button = cmk_button_new_full(name, CMK_BUTTON_TYPE_BEVELED);
 		cmk_widget_set_style_parent(CMK_WIDGET(button), CMK_WIDGET(self));
 		g_signal_connect_swapped(button, "activate", G_CALLBACK(on_button_activate), self);
 		clutter_actor_add_child(self->buttonBox, CLUTTER_ACTOR(button));
