@@ -139,7 +139,7 @@ static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterA
 	clutter_actor_get_preferred_height(CLUTTER_ACTOR(self->infoBox), width, &infoMin, &infoNat);
 
 	ClutterActorBox infoBox = {windowBox.x1, windowBox.y1, windowBox.x2, windowBox.y1 + infoNat};
-	ClutterActorBox scrollBox = {windowBox.x1, windowBox.y1 + infoNat, windowBox.x2, windowBox.y2};
+	ClutterActorBox scrollBox = {windowBox.x1, infoBox.y2, windowBox.x2, windowBox.y2};
 
 	clutter_actor_allocate(CLUTTER_ACTOR(self->window), &windowBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->sdc), &sdcBox, flags);

@@ -24,6 +24,8 @@ struct _GrapheneLauncherPopup
 	CmkShadowContainer *sdc;
 	CmkWidget *window;
 	ClutterScrollActor *scroll;
+	ClutterText *searchBox;
+	CmkButton *firstApp;
 	
 	gdouble scrollAmount;
 	gchar *filter;
@@ -38,11 +40,10 @@ G_DEFINE_TYPE(GrapheneLauncherPopup, graphene_launcher_popup, CMK_TYPE_WIDGET)
 static void graphene_launcher_popup_dispose(GObject *self_);
 static void graphene_launcher_popup_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags);
 static void on_style_changed(CmkWidget *self_);
+static void on_search_box_mapped(ClutterActor *actor);
+static void on_search_box_text_changed(GrapheneLauncherPopup *self, ClutterText *searchBox);
+static void on_search_box_activate(GrapheneLauncherPopup *self, ClutterText *searchBox);
 static gboolean on_scroll(ClutterScrollActor *scroll, ClutterScrollEvent *event, GrapheneLauncherPopup *self);
-//static void popup_on_search_changed(GrapheneLauncherPopup *self, GtkSearchEntry *searchBar);
-//static void popup_on_search_enter(GrapheneLauncherPopup *self, GtkSearchEntry *searchBar);
-//static gboolean popup_on_key_event(GrapheneLauncherPopup *self, GdkEvent *event);
-//static void popup_on_vertical_scrolled(GrapheneLauncherPopup *self, GtkAdjustment *vadj);
 static void popup_applist_refresh(GrapheneLauncherPopup *self);
 static void popup_applist_populate(GrapheneLauncherPopup *self);
 static guint popup_applist_populate_directory(GrapheneLauncherPopup *self, GMenuTreeDirectory *directory);
@@ -85,6 +86,15 @@ static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
 	g_signal_connect(self->scroll, "scroll-event", G_CALLBACK(on_scroll), self);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->scroll));
 
+	self->searchBox = CLUTTER_TEXT(clutter_text_new());
+	clutter_text_set_editable(self->searchBox, TRUE);
+	clutter_text_set_activatable(self->searchBox, TRUE);
+	clutter_actor_set_reactive(CLUTTER_ACTOR(self->searchBox), TRUE);
+	g_signal_connect(self->searchBox, "notify::mapped", G_CALLBACK(on_search_box_mapped), NULL);
+	g_signal_connect_swapped(self->searchBox, "text-changed", G_CALLBACK(on_search_box_text_changed), self);
+	g_signal_connect_swapped(self->searchBox, "activate", G_CALLBACK(on_search_box_activate), self);
+	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->searchBox));
+
 	// Load applications
 	self->appTree = gmenu_tree_new("gnome-applications.menu", GMENU_TREE_FLAGS_SORT_DISPLAY_NAME);
 	popup_applist_refresh(self);
@@ -105,10 +115,16 @@ static void graphene_launcher_popup_allocate(ClutterActor *self_, const ClutterA
 	gfloat width = LAUNCHER_WIDTH * cmk_widget_style_get_scale_factor(CMK_WIDGET(self_));
 	ClutterActorBox windowBox = {box->x1, box->y1, MIN(box->x1 + width, box->x2/2), box->y2};
 	ClutterActorBox sdcBox = {box->x1-40, box->y1-40, windowBox.x2 + 40, box->y2 + 40};
-	ClutterActorBox scrollBox = {windowBox.x1, windowBox.y1, windowBox.x2, windowBox.y2};
+
+	gfloat searchMin, searchNat;
+	clutter_actor_get_preferred_height(CLUTTER_ACTOR(self->searchBox), width, &searchMin, &searchNat);
+
+	ClutterActorBox searchBox = {windowBox.x1, windowBox.y1, windowBox.x2, windowBox.y1 + searchNat};
+	ClutterActorBox scrollBox = {windowBox.x1, searchBox.y2, windowBox.x2, windowBox.y2};
 
 	clutter_actor_allocate(CLUTTER_ACTOR(self->window), &windowBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->sdc), &sdcBox, flags);
+	clutter_actor_allocate(CLUTTER_ACTOR(self->searchBox), &searchBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->scroll), &scrollBox, flags);
 
 	CLUTTER_ACTOR_CLASS(graphene_launcher_popup_parent_class)->allocate(self_, box, flags);
@@ -118,6 +134,29 @@ static void on_style_changed(CmkWidget *self_)
 {
 	clutter_actor_queue_relayout(CLUTTER_ACTOR(self_));
 	CMK_WIDGET_CLASS(graphene_launcher_popup_parent_class)->style_changed(self_);
+}
+
+static void on_search_box_mapped(ClutterActor *actor)
+{
+	if(clutter_actor_is_mapped(actor))
+		clutter_actor_grab_key_focus(actor);
+}
+
+static void on_search_box_text_changed(GrapheneLauncherPopup *self, ClutterText *searchBox)
+{
+	g_clear_pointer(&self->filter, g_free);
+	self->filter = g_utf8_strdown(clutter_text_get_text(searchBox), -1);
+	popup_applist_populate(self);
+}
+
+static void on_search_box_activate(GrapheneLauncherPopup *self, ClutterText *searchBox)
+{
+	if(!self->filter || g_utf8_strlen(self->filter, -1) == 0)
+		return;
+	if(!self->firstApp)
+		return;
+
+	g_signal_emit_by_name(self->firstApp, "activate");
 }
 
 static gboolean on_scroll(ClutterScrollActor *scroll, ClutterScrollEvent *event, GrapheneLauncherPopup *self)
@@ -146,28 +185,6 @@ static gboolean on_scroll(ClutterScrollActor *scroll, ClutterScrollEvent *event,
 	return TRUE;
 }
 
-/*
-static void popup_on_search_changed(GrapheneLauncherPopup *self, GtkSearchEntry *searchBar)
-{
-	g_clear_pointer(&self->filter, g_free);
-	self->filter = g_utf8_strdown(gtk_entry_get_text(GTK_ENTRY(searchBar)), -1);
-	popup_applist_populate(self);
-}
-
-static void popup_on_search_enter(GrapheneLauncherPopup *self, GtkSearchEntry *searchBar)
-{
-	if(g_utf8_strlen(self->filter, -1) > 0 && gtk_widget_is_focus(GTK_WIDGET(searchBar)))
-		applist_launch_first(self);
-}
-
-static gboolean popup_on_key_event(GrapheneLauncherPopup *self, GdkEvent *event)
-{
-	if(!gtk_widget_is_focus(GTK_WIDGET(self->searchBar)))
-		return gtk_search_entry_handle_event(self->searchBar, event);
-	return GDK_EVENT_PROPAGATE;
-}
-*/
-
 static void popup_applist_refresh(GrapheneLauncherPopup *self)
 {
 	// TODO: This lags the entire WM. Do it not synced, also cache it
@@ -179,6 +196,7 @@ static void popup_applist_refresh(GrapheneLauncherPopup *self)
 static void popup_applist_populate(GrapheneLauncherPopup *self)
 {
 	clutter_actor_destroy_all_children(CLUTTER_ACTOR(self->scroll));
+	self->firstApp = NULL;
 	GMenuTreeDirectory *directory = gmenu_tree_get_root_directory(self->appTree);
 	popup_applist_populate_directory(self, directory);
 	gmenu_tree_item_unref(directory);
@@ -227,6 +245,9 @@ static gboolean add_app(GrapheneLauncherPopup *self, GDesktopAppInfo *appInfo)
 	
 	clutter_actor_set_name(CLUTTER_ACTOR(button), g_app_info_get_executable(G_APP_INFO(appInfo)));
 	g_signal_connect_swapped(button, "activate", G_CALLBACK(applist_on_item_clicked), self);
+
+	if(!self->firstApp)
+		self->firstApp = button;
 	
 	clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), separator_new());
 	return TRUE;
