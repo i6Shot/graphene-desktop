@@ -233,7 +233,7 @@ static void close_dialog(GrapheneDialog *dialog, const gchar *button)
 	}
 }
 
-static void graphene_session_request_logout()
+void graphene_session_request_logout()
 {	
 	GrapheneDialog *dialog = graphene_dialog_new_simple("How would you like to exit?\n(Restart and Shutdown not yet implemented)", "", "Cancel", "Logout", "Restart", "Shutdown", NULL);
 

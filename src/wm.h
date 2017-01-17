@@ -44,10 +44,10 @@ struct _GrapheneWM {
 	ClutterActor *coverGroup;
 	ClutterActor *dialog;
 	GraphenePanel *panel;
+	gint modalCount;
 	
 	// For fixing an input issue with the X backend
 	// See xfixes_calculate_input_region (wm.c) for more details
-	gboolean isModal;
 	GList *xInputActors; // List of ClutterActors
 	XserverRegion xInputRegion;
 };

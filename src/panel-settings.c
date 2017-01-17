@@ -9,17 +9,29 @@
 #include "cmk/button.h"
 #include "cmk/cmk-icon.h"
 #include "cmk/shadow.h"
+#include <act/act.h>
 
 #define PANEL_WIDTH 300
 
 struct _GrapheneSettingsPopup
 {
 	CmkWidget parent;
+
+	CSettingsLogoutCallback logoutCb;
+	gpointer cbUserdata;
 	
 	CmkShadowContainer *sdc;
 	CmkWidget *window;
 	ClutterScrollActor *scroll;
+	CmkWidget *infoBox;
+	CmkButton *logoutButton;
 	
+	CmkLabel *usernameLabel;
+	ActUserManager *userManager;
+	ActUser *user;
+	guint notifyUserChangedId;
+	guint notifyIsLoadedId;
+
 	gdouble scrollAmount;
 };
 
@@ -31,11 +43,18 @@ static void graphene_settings_popup_dispose(GObject *self_);
 static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags);
 static void on_style_changed(CmkWidget *self_);
 static gboolean on_scroll(ClutterScrollActor *scroll, ClutterScrollEvent *event, GrapheneSettingsPopup *self);
+static void on_logout_button_activate(CmkButton *button, GrapheneSettingsPopup *self);
+static void on_user_manager_notify_loaded(GrapheneSettingsPopup *self);
 static void enum_settings_widgets(GrapheneSettingsPopup *self);
 
-GrapheneSettingsPopup * graphene_settings_popup_new(void)
+GrapheneSettingsPopup * graphene_settings_popup_new(CSettingsLogoutCallback logoutCb, gpointer userdata)
 {
-	return GRAPHENE_SETTINGS_POPUP(g_object_new(GRAPHENE_TYPE_SETTINGS_POPUP, NULL));
+	GrapheneSettingsPopup *popup = GRAPHENE_SETTINGS_POPUP(g_object_new(GRAPHENE_TYPE_SETTINGS_POPUP, NULL));
+	if(popup)
+	{
+		popup->logoutCb = logoutCb;
+		popup->cbUserdata = userdata;
+	}
 }
 
 static void graphene_settings_popup_class_init(GrapheneSettingsPopupClass *class)
@@ -43,6 +62,13 @@ static void graphene_settings_popup_class_init(GrapheneSettingsPopupClass *class
 	G_OBJECT_CLASS(class)->dispose = graphene_settings_popup_dispose;
 	CLUTTER_ACTOR_CLASS(class)->allocate = graphene_settings_popup_allocate;
 	CMK_WIDGET_CLASS(class)->style_changed = on_style_changed;
+}
+
+static ClutterLayoutManager * clutter_vertical_box_new()
+{
+	ClutterBoxLayout *layout = CLUTTER_BOX_LAYOUT(clutter_box_layout_new());
+	clutter_box_layout_set_orientation(layout, CLUTTER_ORIENTATION_VERTICAL); 
+	return CLUTTER_LAYOUT_MANAGER(layout);
 }
 
 static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
@@ -58,14 +84,35 @@ static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 
 	self->scroll = CLUTTER_SCROLL_ACTOR(clutter_scroll_actor_new());
 	clutter_scroll_actor_set_scroll_mode(self->scroll, CLUTTER_SCROLL_VERTICALLY);
-	ClutterBoxLayout *listLayout = CLUTTER_BOX_LAYOUT(clutter_box_layout_new());
-	clutter_box_layout_set_orientation(listLayout, CLUTTER_ORIENTATION_VERTICAL); 
-	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->scroll), CLUTTER_LAYOUT_MANAGER(listLayout));
+	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->scroll), clutter_vertical_box_new());
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self->scroll), TRUE);
 	g_signal_connect(self->scroll, "scroll-event", G_CALLBACK(on_scroll), self);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->scroll));
+	
+	self->infoBox = cmk_widget_new();
+	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->infoBox), clutter_vertical_box_new());
+	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->infoBox));
+
+	self->usernameLabel = cmk_label_new();
+	clutter_actor_set_x_expand(CLUTTER_ACTOR(self->usernameLabel), TRUE);
+	clutter_actor_set_x_align(CLUTTER_ACTOR(self->usernameLabel), CLUTTER_ACTOR_ALIGN_CENTER);
+	clutter_actor_add_child(CLUTTER_ACTOR(self->infoBox), CLUTTER_ACTOR(self->usernameLabel));
+
+	self->logoutButton = cmk_button_new();
+	cmk_button_set_content(self->logoutButton, CMK_WIDGET(cmk_icon_new_full("system-shutdown-symbolic", NULL, 48, TRUE)));
+	cmk_widget_style_set_padding(CMK_WIDGET(self->logoutButton), 0);
+	g_signal_connect(self->logoutButton, "activate", G_CALLBACK(on_logout_button_activate), self);
+	clutter_actor_add_child(CLUTTER_ACTOR(self->infoBox), CLUTTER_ACTOR(self->logoutButton));
 
 	enum_settings_widgets(self);
+
+	self->userManager = act_user_manager_get_default();
+	gboolean isLoaded = FALSE;
+	g_object_get(self->userManager, "is-loaded", &isLoaded, NULL);
+	if(isLoaded)
+		on_user_manager_notify_loaded(self);
+	else
+		self->notifyIsLoadedId = g_signal_connect_swapped(self->userManager, "notify::is-loaded", G_CALLBACK(on_user_manager_notify_loaded), self);
 }
 
 static void graphene_settings_popup_dispose(GObject *self_)
@@ -77,14 +124,23 @@ static void graphene_settings_popup_dispose(GObject *self_)
 static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags)
 {
 	GrapheneSettingsPopup *self = GRAPHENE_SETTINGS_POPUP(self_);
+	float padding = cmk_widget_style_get_padding(CMK_WIDGET(self_));
 	
 	gfloat width = PANEL_WIDTH * cmk_widget_style_get_scale_factor(CMK_WIDGET(self_));
-	ClutterActorBox windowBox = {MAX(box->x2-width, box->x1+(box->x2-box->x1)/2), box->y1, box->x2, box->y2};
+	width = MAX(box->x2-width, box->x1+(box->x2-box->x1)/2);
+
+	ClutterActorBox windowBox = {width, box->y1, box->x2, box->y2};
 	ClutterActorBox sdcBox = {windowBox.x1-40, windowBox.y1-40, windowBox.x2 + 40, box->y2 + 40};
-	ClutterActorBox scrollBox = {windowBox.x1, windowBox.y1, windowBox.x2, windowBox.y2};
+
+	gfloat infoMin, infoNat;
+	clutter_actor_get_preferred_height(CLUTTER_ACTOR(self->infoBox), width, &infoMin, &infoNat);
+
+	ClutterActorBox infoBox = {windowBox.x1, windowBox.y1, windowBox.x2, windowBox.y1 + infoNat};
+	ClutterActorBox scrollBox = {windowBox.x1, windowBox.y1 + infoNat + padding, windowBox.x2, windowBox.y2};
 
 	clutter_actor_allocate(CLUTTER_ACTOR(self->window), &windowBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->sdc), &sdcBox, flags);
+	clutter_actor_allocate(CLUTTER_ACTOR(self->infoBox), &infoBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->scroll), &scrollBox, flags);
 
 	CLUTTER_ACTOR_CLASS(graphene_settings_popup_parent_class)->allocate(self_, box, flags);
@@ -92,6 +148,12 @@ static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterA
 
 static void on_style_changed(CmkWidget *self_)
 {
+	GrapheneSettingsPopup *self = GRAPHENE_SETTINGS_POPUP(self_);
+
+	float padding = cmk_widget_style_get_padding(self_);
+	ClutterMargin margin = {0, 0, padding, padding};
+	clutter_actor_set_margin(CLUTTER_ACTOR(self->usernameLabel), &margin);
+
 	clutter_actor_queue_relayout(CLUTTER_ACTOR(self_));
 	CMK_WIDGET_CLASS(graphene_settings_popup_parent_class)->style_changed(self_);
 }
@@ -120,6 +182,45 @@ static gboolean on_scroll(ClutterScrollActor *scroll, ClutterScrollEvent *event,
 		clutter_scroll_actor_scroll_to_point(scroll, &p);
 	}
 	return TRUE;
+}
+
+static void on_logout_button_activate(CmkButton *button, GrapheneSettingsPopup *self)
+{
+	clutter_actor_destroy(CLUTTER_ACTOR(self));
+	if(self->logoutCb)
+		self->logoutCb(self->cbUserdata);
+}
+
+static void on_user_updated(GrapheneSettingsPopup *self, ActUser *user)
+{
+	const gchar *realName = NULL;
+
+	if(!user || !(realName = act_user_get_real_name(user)))
+	{
+		cmk_label_set_text(self->usernameLabel, "");
+		return;
+	}
+
+	gchar *markup = g_strdup_printf("<span font='16'><b>%s</b></span>", realName);
+	cmk_label_set_markup(self->usernameLabel, markup);
+	g_free(markup);
+}
+
+static void on_user_manager_notify_loaded(GrapheneSettingsPopup *self)
+{
+	if(self->user && self->notifyUserChangedId)
+		g_signal_handler_disconnect(self->user, self->notifyUserChangedId);
+	self->user = NULL;
+	self->notifyUserChangedId = 0;
+
+	const gchar *username = g_getenv("USER");
+	if(username)
+	{
+		self->user = act_user_manager_get_user(self->userManager, username);
+		self->notifyUserChangedId = g_signal_connect_swapped(self->user, "changed", G_CALLBACK(on_user_updated), self);
+	}
+
+	on_user_updated(self, self->user);
 }
 
 static ClutterActor * separator_new()
@@ -180,6 +281,9 @@ static void add_settings_category_label(GrapheneSettingsPopup *self, const gchar
 
 static void enum_settings_widgets(GrapheneSettingsPopup *self)
 {
+	ClutterActor *sep = separator_new();
+	clutter_actor_add_child(CLUTTER_ACTOR(self->scroll), sep);
+
 	add_settings_category_label(self, "Personal");
 	add_setting_widget(self, "Background",       "preferences-desktop-wallpaper",    TRUE,  "background",     FALSE);
 	add_setting_widget(self, "Notifications",    "preferences-system-notifications", TRUE,  "notifications",  FALSE);

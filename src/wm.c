@@ -63,6 +63,7 @@ static const float GraphenePadding = 10.0;
 #define TRANSITION_MEMLEAK_FIX(actor, tname) g_signal_connect_after(clutter_actor_get_transition((actor), (tname)), "stopped", G_CALLBACK(g_object_unref), NULL)
 
 
+extern void wm_request_logout(gpointer userdata);
 static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self);
 static void update_struts(GrapheneWM *self);
 static void on_window_created(GrapheneWM *self, MetaWindow *window, MetaDisplay *display);
@@ -143,7 +144,7 @@ void graphene_wm_start(MetaPlugin *self_)
 	clutter_actor_show(backgroundGroup);
 
 	// Panel goes lowest of WM widgets, but above the windows
-	self->panel = graphene_panel_new((CPanelModalCallback)on_panel_request_modal, self);
+	self->panel = graphene_panel_new((CPanelModalCallback)on_panel_request_modal, wm_request_logout, self);
 	ClutterActor *panelBar = graphene_panel_get_input_actor(self->panel);
 	xfixes_add_input_actor(self, panelBar);
 	clutter_actor_insert_child_above(self->stage, ACTOR(self->panel), NULL);
@@ -418,7 +419,7 @@ static void xfixes_calculate_input_region(GrapheneWM *self)
 
 	guint numActors = g_list_length(self->xInputActors);
 
-	if(self->isModal || numActors == 0)
+	if(self->modalCount > 0 || numActors == 0)
 	{
 		meta_empty_stage_input_region(screen);
 		if(self->xInputRegion)
@@ -503,21 +504,27 @@ static void xfixes_remove_input_actor(GrapheneWM *self, ClutterActor *actor)
 
 static void graphene_wm_begin_modal(GrapheneWM *self)
 {
-	if(self->isModal)
+	if(self->modalCount > 0)
+	{
+		self->modalCount ++;
 		return;
+	}
+
 	// TODO: If the user is currently dragging (already in modal),
 	// this doesn't work to grab their mouse.
+	self->modalCount ++;
 	meta_plugin_begin_modal(META_PLUGIN(self), 0, 0);
-	self->isModal = TRUE;
 	xfixes_calculate_input_region(self);
 }
 
 static void graphene_wm_end_modal(GrapheneWM *self)
 {
-	if(!self->isModal)
+	self->modalCount --;
+	if(self->modalCount > 0)
 		return;
+
+	self->modalCount = 0;
 	meta_plugin_end_modal(META_PLUGIN(self), 0);
-	self->isModal = FALSE;
 	xfixes_calculate_input_region(self);
 }
 

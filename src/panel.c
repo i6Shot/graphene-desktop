@@ -20,6 +20,7 @@ struct _GraphenePanel
 	CmkWidget parent;
 
 	CPanelModalCallback modalCb;
+	CPanelLogoutCallback logoutCb;
 	gpointer cbUserdata;
 
 	// These are owned by Clutter, not refed
@@ -47,12 +48,13 @@ G_DEFINE_TYPE(GraphenePanel, graphene_panel, CMK_TYPE_WIDGET);
 
 
 
-GraphenePanel * graphene_panel_new(CPanelModalCallback modalCb, gpointer userdata)
+GraphenePanel * graphene_panel_new(CPanelModalCallback modalCb, CPanelLogoutCallback logoutCb, gpointer userdata)
 {
 	GraphenePanel *panel = GRAPHENE_PANEL(g_object_new(GRAPHENE_TYPE_PANEL, NULL));
 	if(panel)
 	{
 		panel->modalCb = modalCb;
+		panel->logoutCb = logoutCb;
 		panel->cbUserdata = userdata;
 	}
 	return panel;
@@ -256,7 +258,7 @@ static void on_settings_button_activate(CmkButton *button, GraphenePanel *self)
 
 	if(self->modalCb)
 		self->modalCb(TRUE, self->cbUserdata);
-	self->popup = CMK_WIDGET(graphene_settings_popup_new());
+	self->popup = CMK_WIDGET(graphene_settings_popup_new(self->logoutCb, self->cbUserdata));
 	self->popupSource = button;
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->popup));
 	g_signal_connect(self->popup, "destroy", G_CALLBACK(on_popup_destroy), self);

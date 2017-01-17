@@ -16,6 +16,7 @@ G_BEGIN_DECLS
 G_DECLARE_FINAL_TYPE(GraphenePanel, graphene_panel, GRAPHENE, PANEL, CmkWidget)
 
 typedef void (*CPanelModalCallback)(gboolean modal, gpointer userdata);
+typedef void (*CPanelLogoutCallback)(gpointer userdata);
 
 typedef enum
 {
@@ -23,7 +24,7 @@ typedef enum
 	GRAPHENE_PANEL_SIDE_BOTTOM,
 } GraphenePanelSide;
 
-GraphenePanel * graphene_panel_new(CPanelModalCallback modalCb, gpointer userdata);
+GraphenePanel * graphene_panel_new(CPanelModalCallback modalCb, CPanelLogoutCallback logoutCb, gpointer userdata);
 
 void graphene_panel_add_window(GraphenePanel *panel, GrapheneWindow *window);
 void graphene_panel_remove_window(GraphenePanel *panel, GrapheneWindow *window);

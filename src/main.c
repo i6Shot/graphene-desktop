@@ -113,3 +113,9 @@ static void on_session_quit(gboolean failed, gpointer userdata)
 	g_message("SM has completed %s. Exiting mutter.", failed ? "with an error" : "successfully");
 	meta_quit(failed ? META_EXIT_ERROR : META_EXIT_SUCCESS);
 }
+
+// Called directly from wm.c (extern)
+void wm_request_logout(gpointer userdata)
+{
+	graphene_session_request_logout();
+}
