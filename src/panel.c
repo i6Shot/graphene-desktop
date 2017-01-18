@@ -11,7 +11,6 @@
 #include "cmk/cmk-icon.h"
 #include "settings-battery.h"
 #include "network.h"
-#include "volume.h"
 
 #define PANEL_HEIGHT 32 // Pixels; multiplied by the window scale factor
 
