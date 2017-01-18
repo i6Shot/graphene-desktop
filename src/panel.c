@@ -9,6 +9,9 @@
 #include "cmk/shadow.h"
 #include "cmk/button.h"
 #include "cmk/cmk-icon.h"
+#include "settings-battery.h"
+#include "network.h"
+#include "volume.h"
 
 #define PANEL_HEIGHT 32 // Pixels; multiplied by the window scale factor
 
@@ -103,14 +106,11 @@ static void graphene_panel_init(GraphenePanel *self)
 	ClutterLayoutManager *layout = clutter_box_layout_new();
 	self->settingsAppletLayout = CLUTTER_BOX_LAYOUT(layout);
 	clutter_actor_set_layout_manager(CLUTTER_ACTOR(iconBox), layout);
-	CmkIcon *x = cmk_icon_new_full("system-shutdown-symbolic", NULL, PANEL_HEIGHT / 2, TRUE);
-	CmkIcon *y = cmk_icon_new_full("battery-full-symbolic", NULL, PANEL_HEIGHT / 2, TRUE);
-	CmkIcon *z = cmk_icon_new_full("network-wired-symbolic", NULL, PANEL_HEIGHT / 2, TRUE);
-	CmkIcon *w = cmk_icon_new_full("audio-volume-medium-symbolic", NULL, PANEL_HEIGHT / 2, TRUE);
-	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(x)); 
+	CmkIcon *w = cmk_icon_new_full("audio-volume-high-symbolic", NULL, PANEL_HEIGHT *3/4, TRUE);
+	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(cmk_icon_new_full("system-shutdown-symbolic", NULL, PANEL_HEIGHT * 3/4, TRUE)));
 	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(w)); 
-	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(z)); 
-	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(y)); 
+	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(graphene_network_icon_new(PANEL_HEIGHT * 2/4))); 
+	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(graphene_battery_icon_new(PANEL_HEIGHT * 3/4))); 
 	cmk_button_set_content(self->settingsApplet, iconBox);
 	g_signal_connect(self->settingsApplet, "activate", G_CALLBACK(on_settings_button_activate), self);
 	clutter_actor_add_child(CLUTTER_ACTOR(self->bar), CLUTTER_ACTOR(self->settingsApplet));
@@ -150,7 +150,7 @@ static void on_style_changed(CmkWidget *self_)
 {
 	GraphenePanel *self = GRAPHENE_PANEL(self_);
 
-	clutter_box_layout_set_spacing(self->settingsAppletLayout, cmk_widget_style_get_padding(self_)/2);
+	//clutter_box_layout_set_spacing(self->settingsAppletLayout, cmk_widget_style_get_padding(self_)/2);
 
 	float padding = cmk_widget_style_get_padding(self_);
 	ClutterMargin margin = {padding, padding, 0, 0};

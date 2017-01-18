@@ -50,6 +50,8 @@ add_executable(graphene-desktop
 	panel-launcher.c
 	panel-settings.c
 	panel-clock.c
+	settings-battery.c
+	network.c
 )
 target_link_libraries(graphene-desktop
 	${GIOUNIX2_LIBRARIES}
