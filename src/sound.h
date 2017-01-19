@@ -1,258 +1,130 @@
 /*
- * This file is part of graphene-desktop.
+ * This file is part of graphene-desktop, the desktop environment of VeltOS.
  * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- * 
- *     http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *
- * sound.h/c
- * Methods for controlling system sound, including volume and audio output devices.
- * This is not (currently) designed for advanced audio configuration. It's just enough
- * for a simple GUI mixer.
- * Requires PulseAudio. Will cleanly fail if PulseAudio is not installed on the system.
- *
- * NOTE: Not entirely functional yet. Should work for getting/setting volume on
- * the active output device.
+ * Licensed under the Apache License 2 <www.apache.org/licenses/LICENSE-2.0>.
  */
 
-#ifndef __GRAPHENE_SOUND_H__
-#define __GRAPHENE_SOUND_H__
+#ifndef __CSK_AUDIO_H__
+#define __CSK_AUDIO_H__
 
-#include <pulse/pulseaudio.h>
-#include <stdbool.h>
+#include <glib/gobject.h>
 
-struct _SoundSettings;
-typedef struct _SoundSettings SoundSettings;
+G_BEGIN_DECLS
 
-struct _SoundDevice;
-typedef struct _SoundDevice SoundDevice;
+#define CSK_TYPE_AUDIO_DEVICE csk_audio_device_get_type()
+G_DECLARE_FINAL_TYPE(CskAudioDevice, csk_audio_device, CSK, AUDIO_DEVICE, GObject)
 
-typedef enum {
-  SOUND_DEVICE_TYPE_ERROR,
-  SOUND_DEVICE_TYPE_OUTPUT,
-  // SOUND_DEVICE_TYPE_OUTPUT_CLIENT, // Represents a client who is outputting audio
-  SOUND_DEVICE_TYPE_INPUT,
-} SoundDeviceType;
-
-typedef enum {
-  SOUND_SETTINGS_EVENT_TYPE_STATE_CHANGED,
-  SOUND_SETTINGS_EVENT_TYPE_ACTIVE_DEVICE_CHANGED,
-  SOUND_SETTINGS_EVENT_TYPE_DEVICE_CHANGED,
-  SOUND_SETTINGS_EVENT_TYPE_DEVICE_ADDED,
-  SOUND_SETTINGS_EVENT_TYPE_DEVICE_REMOVED
-} SoundSettingsEventType;
-
-typedef enum {
-  SOUND_SETTINGS_STATE_UNCONNECTED,
-  SOUND_SETTINGS_STATE_CONNECTING,
-  SOUND_SETTINGS_STATE_READY,
-  SOUND_SETTINGS_STATE_FAILED,
-  SOUND_SETTINGS_STATE_TERMINATED // Clean exit
-} SoundSettingsState;
+typedef enum
+{
+	CSK_AUDIO_DEVICE_TYPE_INVALID,
+	CSK_AUDIO_DEVICE_TYPE_OUTPUT,
+	CSK_AUDIO_DEVICE_TYPE_OUTPUT_CLIENT, // Represents a client who is outputting audio
+	CSK_AUDIO_DEVICE_TYPE_INPUT,
+	CSK_AUDIO_DEVICE_TYPE_INPUT_CLIENT, // A client who is listening to audio
+} CskAudioDeviceType;
 
 /*
- * Called when a mainloop object originally passed to sound_settings_init needs to be freed.
- * All this callback should do is free/unref mainloop.
- * You may pass a method such as pa_glib_mainloop_free directly to sound_settings_init.
+ * Returns the type of the device. If the device has been removed, but a
+ * CmkAudioDevice for it still exists, it will obtain the INVALID type.
+ * Monitor the "type" property to see when a device becomes invalid, and
+ * if it does, unref it and remove it from any GUI lists.
  */
-typedef void (*DestroyPAMainloopNotify)(void *mainloop);
+CskAudioDeviceType csk_audio_device_get_type(CskAudioDevice *device);
 
 /*
- * Called when an event happens.
- *
- * device: the affected device in the DEVICE_CHANGED, DEVICE_ADDED, DEVICE_REMOVED,
- * and ACTIVE_DEVICE_CHANGED events.
- * In only the case of DEVICE_REMOVED, 'device' will be an invalidated device,
- * and you must unref the device when you are finished with it.
- * For ACTIVE_DEVICE_CHANGED, 'device' is the now-active device.
- * For other events, device is NULL.
+ * Gets the human-readable name of the device.
  */
-typedef void (*SoundSettingsEventCallback)(SoundSettings *settings, SoundSettingsEventType type, SoundDevice *device, void *userdata);
+const char * csk_audio_device_get_name(CskAudioDevice *device);
 
 /*
- * Creates a new instance of SoundSettings. If none yet exists, the return value of
- * sound_settings_get_default will be the SoundSettings created by this function
- * until it is freed. Consequently, you'll probably only need to call this once per
- * application. Unref the returned value with sound_settings_unref.
- *
- * Functions such as sound_settings_get_default_output_device probably won't work
- * immediately after this function returns, since a connection must be made to
- * PulseAudio first. Use sound_settings_set_changed_callback to listen for changes.
- *
- * mainloop: Create this using one of PA's mainloop implementations. pa_glib_mainloop
- * can be used for GLib/GTK applications. Must not be NULL. This value must be freed
- * from the destroyMainloopCallback.
- * 
- * mainloopAPI: The general representation of mainloop. For example, if using pa_glib_mainloop,
- * this would be pa_glib_mainloop_get_api(mainloop). In some cases, it might be the
- * same value as mainloop. This value does NOT get unrefed/freed in destroyMainloopCallback.
- *
- * props: Properties for the PA sound context. Create with pa_proplist_new and add
- * properties with pa_proplist_sets. Must not be NULL. You should free this value
- * after this function exits.
- *
- * destroyMainloopCallback: Called when the passed mainloop object needs to be freed.
- * See DestroyPAMainloopNotify documentation for more info. You probably just want to
- * pass pa_glib_mainloop_free for this.
+ * Gets the human-readable description of the device.
  */
-SoundSettings * sound_settings_init(void *mainloop, pa_mainloop_api *mainloopAPI, pa_proplist *props, DestroyPAMainloopNotify destroyMainloopCallback);
- 
-/*
- * Returns a ref of the default SoundSettings (the SoundSettings created by the first
- * call to sound_settings_init). Unref the returned value with sound_settings_unref.
- */
-SoundSettings * sound_settings_get_default();
-
-/*
- * Gets the current state of settings.
- */
-SoundSettingsState sound_settings_get_state(SoundSettings *settings);
-
-/*
- * Increases the ref count of settings by 1, and returns settings.
- * Does nothing and returns NULL if settings is NULL.
- */
-SoundSettings * sound_settings_ref(SoundSettings *settings);
-
-/*
- * Decrease the ref count of settings by 1, and free settings if it reaches 0.
- * Returns false if settings is NULL or if settings has not been freed, true otherwise.
- * When settings is freed, and SoundDevice you do not hold a ref to will be freed.
- *
- * DO NOT CALL this inside the callback set in sound_settings_set_event_callback.
- * Even if it's a state change to TERMINATED. If you do, you will have a bad day.
- */
-bool sound_settings_unref(SoundSettings *settings);
-
-/*
- * Set a callback for events. See the documentation for SoundSettingsChangedCallback
- * for more info.
- * In only the case of event type DEVICE_REMOVED, you must unref the device passed
- * to callback when you are finished with it.
- */
-void sound_settings_set_event_callback(SoundSettings *settings, SoundSettingsEventCallback callback, void *userdata);
-
-/*
- * Allows iterating through all sound devices. Pass NULL to 'prev' to get the first
- * device, and then pass the previous return value for the next device. NULL is returned
- * when there are no more devices.
- * Do not unref these values. Use sound_device_ref if you need to keep a reference.
- */
-SoundDevice * sound_devices_iterate(SoundSettings *settings, SoundDevice *prev);
-
-/*
- * Returns the default input/output device. Do not unref; use sound_device_ref if you
- * need to keep a reference. Returns NULL on failure or no default device.
- */
-SoundDevice * sound_settings_get_default_output_device(SoundSettings *settings);
-SoundDevice * sound_settings_get_default_input_device(SoundSettings *settings);
-
-/*
- * Returns the currently active input/output device. Do not unref; use sound_device_ref
- * if you need to keep a reference. Returns NULL on failure or no active device.
- */
-SoundDevice * sound_settings_get_active_output_device(SoundSettings *settings);
-SoundDevice * sound_settings_get_active_input_device(SoundSettings *settings);
-
-/*
- * Returns the type of the device, or SOUND_DEVICE_TYPE_ERROR on failure.
- * Is successful on invalid devices.
- */
-SoundDeviceType sound_device_get_type(SoundDevice *device);
-
-/*
- * Gets the human-readable name of the device. Do not free the returned string.
- */
-const char * sound_device_get_name(SoundDevice *device);
-
-/*
- * Gets the human-readable description of the device. Do not free the returned string.
- */
-const char * sound_device_get_description(SoundDevice *device);
+const char * csk_audio_device_get_description(CskAudioDevice *device);
 
 /*
  * Returns the volume of the device, a range from 0 to +infinity, where 1 is
- * "100%" and larger values are amplified.
+ * "100%" and larger values are amplified. Returns 0 on failure.
  */
-float sound_device_get_volume(SoundDevice *device);
+float csk_audio_device_get_volume(CskAudioDevice *device);
 
 /*
- * Returns the left/right balance of the device. The value is clamped to [-1, 1]
- * where -1 is completely left and 1 is completely right. On devices where
- * balance doesn't make sense (ex. mono input), this returns 0.
+ * Sets the volume of the device, 0 to +infinity, where 1 is "100%"
  */
-float sound_device_get_balance(SoundDevice *device);
+void csk_audio_device_set_volume(CskAudioDevice *device, float volume);
 
 /*
- * Returns true if the device is muted, false otherise.
+ * Returns the left/right balance of the device. The value is clamped to 
+ * [-1, 1] where -1 is completely left and 1 is completely right. On
+ * devices where balance doesn't make sense (ex. mono input), this returns 0.
  */
-bool sound_device_get_muted(SoundDevice *device);
+float csk_audio_device_get_balance(CskAudioDevice *device);
 
 /*
- * Sets this device as the currently active input or output device.
- * Returns true on success, false otherwise.
- * Has no effect on invalid devices and returns false.
+ * Sets the balance of the device, -1 to 1 (completely left to completely
+ * right)
  */
-bool sound_device_activate(SoundDevice *device);
+void csk_audio_device_set_balance(CskAudioDevice *device, float balance);
 
 /*
- * Convenience methd for device == sound_settings_get_active_*_device
+ * Returns TRUE if the device is muted, FALSE otherise. Returns TRUE
+ * on failure.
  */
-bool sound_device_is_active(SoundDevice *device);
+bool csk_audio_device_get_muted(CskAudioDevice *device);
 
 /*
- * Return true if this device is still a valid device, false otherwise. If it
- * is no longer valid, you should unref it and clear it from any GUI lists immediately.
+ * Sets if the device is muted.
  */
-bool sound_device_is_valid(SoundDevice *device);
+void csk_audio_device_set_muted(CskAudioDevice *device, bool muted);
 
 /*
- * Sets the volume of the device. See sound_device_get_volume for allowed values
- * for volume. Returns true on success, false otherwise.
- * Has no effect on invalid devices and returns false.
+ * Returns TRUE if this device is the default output or input device.
+ * This is always FALSE for client devices.
  */
-bool sound_device_set_volume(SoundDevice *device, float volume);
+bool csk_audio_device_is_default(CskAudioDevice *device);
 
 /*
- * Sets the balance of the device. See sound_device_get_balance for allowed values
- * for balance. Returns true on success, false otherwise.
- * Has no effect on invalid devices and returns false.
+ * Sets this device as the default input or output device.
+ * Returns TRUE on success, FALSE otherwise.
+ * This always fails on client devices.
  */
-bool sound_device_set_balance(SoundDevice *device, float balance);
+bool csk_audio_device_set_default(CskAudioDevice *device);
+
+
+
+#define CSK_TYPE_AUDIO_DEVICE_MANAGER csk_audio_device_manager_get_type()
+G_DECLARE_FINAL_TYPE(CskAudioDevice, csk_audio_device, CSK, AUDIO_DEVICE_MANAGER, GObject)
 
 /*
- * Sets the balance of the device. See sound_device_get_balance for allowed values
- * for balance. Returns true on success, false otherwise.
- * Has no effect on invalid devices and returns false.
- * Has no effect on devices where balance doesn't make sense (ex. mono input) and
- * returns true.
+ * Returns a reference to the default audio device manager. Free with
+ * g_object_unref. You must wait for the manager's state to become
+ * READY before getting any audio devices.
  */
-bool sound_device_set_balance(SoundDevice *device, float balance);
+CskAudioDeviceManager * csk_audio_device_manager_get_default();
 
 /*
- * Sets if the device is muted. Returns true on success, false on failure.
+ * Returns TRUE if the manager is ready. You should not attempt to get
+ * any audio devices if the manager is not ready. See "ready" property.
  */
-bool sound_device_set_muted(SoundDevice *device, bool muted);
+bool csk_audio_device_manager_is_ready(CskAudioDeviceManager *manager);
 
 /*
- * Increases the ref count of device by 1, and returns device.
- * Does nothing and returns NULL if device is NULL.
+ * Gets the current default audio output device (transfer none, call
+ * g_object_ref if you need to keep the device around).
+ * Returns NULL on failure.
  */
-SoundDevice * sound_device_ref(SoundDevice *device);
+CskAudioDevice * csk_audio_device_manager_get_default_output(CskAudioDeviceManager *manager);
 
 /*
- * Decrease the ref count of device by 1. The ref count will not drop below 1
- * and be freed until the device has been invalidated by its SoundSettings owner.
+ * Gets the current default audio input device (transfer none, call
+ * g_object_ref if you need to keep the device around).
+ * Returns NULL on failure.
  */
-void sound_device_unref(SoundDevice *device);
+CskAudioDevice * csk_audio_device_manager_get_default_output(CskAudioDeviceManager *manager);
 
-#endif // __GRAPHENE_SOUND_H__
+/*
+ * Gets a list of all audio input devices. [transfer none]
+ * Returns NULL on failure.
+ */
+GList * csk_audio_device_manager_get_devices(CskAudioDeviceManager *manager);
+
+#endif // __GRAPHENE_AUDIO_H__
