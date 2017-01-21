@@ -40,7 +40,7 @@ struct _GrapheneWM {
 	ClutterActor *stage;
 	MetaBackgroundGroup *backgroundGroup;
 	GraphenePercentFloater *percentBar;
-	SoundSettings *soundSettings;
+	CskAudioDeviceManager *audioManager;
 	ClutterActor *coverGroup;
 	ClutterActor *dialog;
 	GraphenePanel *panel;

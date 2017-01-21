@@ -27,7 +27,6 @@
 #include <meta/display.h>
 #include <meta/keybindings.h>
 #include <meta/util.h>
-#include <pulse/glib-mainloop.h>
 #include <glib-unix.h>
 #include <stdio.h>
 
@@ -119,6 +118,8 @@ void graphene_wm_start(MetaPlugin *self_)
 
 	MetaDisplay *display = meta_screen_get_display(screen);
 	g_signal_connect_swapped(display, "window-created", G_CALLBACK(on_window_created), self_);
+
+	self->audioManager = csk_audio_device_manager_get_default();
 
 	// Don't bother clearing the stage when we're drawing our own background
 	clutter_stage_set_no_clear_hint(CLUTTER_STAGE(self->stage), TRUE);
@@ -482,7 +483,7 @@ static void xfixes_remove_input_actor(GrapheneWM *self, ClutterActor *actor)
 	if(meta_is_wayland_compositor())
 		return;
 	g_return_if_fail(CLUTTER_IS_ACTOR(actor));
-	gboolean changed = false;
+	gboolean changed = FALSE;
 	for(GList *it = self->xInputActors; it != NULL;)
 	{
 		if(it->data == actor)
@@ -492,7 +493,7 @@ static void xfixes_remove_input_actor(GrapheneWM *self, ClutterActor *actor)
 			g_signal_handlers_disconnect_by_func(temp->data, xfixes_calculate_input_region, self);
 			g_signal_handlers_disconnect_by_func(temp->data, xfixes_remove_input_actor, self);
 			self->xInputActors = g_list_delete_link(self->xInputActors, temp);
-			changed = true;
+			changed = TRUE;
 		}
 		else
 			it = it->next;
@@ -803,40 +804,43 @@ static void map_done(ClutterActor *actor, MetaPlugin *plugin)
 
 static void on_key_volume_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
-	SoundDevice *device = sound_settings_get_active_output_device(self->soundSettings);
-	sound_device_set_muted(device, FALSE);
+	CskAudioDevice *device = csk_audio_device_manager_get_default_output(self->audioManager);
+
+	csk_audio_device_set_muted(device, FALSE);
 	
 	float stepSize = 1.0/WM_PERCENT_BAR_STEPS;
 	if(clutter_event_has_shift_modifier((ClutterEvent *)event))
 		stepSize /= 2;
 	
-	float vol = sound_device_get_volume(device) + stepSize;
+	float vol = csk_audio_device_get_volume(device) + stepSize;
 	vol = (vol > 1) ? 1 : vol;
 	graphene_percent_floater_set_percent(self->percentBar, vol);
-	sound_device_set_volume(device, vol);
+	csk_audio_device_set_volume(device, vol);
 }
 
 static void on_key_volume_down(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
-	SoundDevice *device = sound_settings_get_active_output_device(self->soundSettings);
-	sound_device_set_muted(device, FALSE);
-	
+	CskAudioDevice *device = csk_audio_device_manager_get_default_output(self->audioManager);
+
+	csk_audio_device_set_muted(device, FALSE);
+
 	float stepSize = 1.0/WM_PERCENT_BAR_STEPS;
 	if(clutter_event_has_shift_modifier((ClutterEvent *)event))
 		stepSize /= 2;
 	
-	float vol = sound_device_get_volume(device) - stepSize;
+	float vol = csk_audio_device_get_volume(device) - stepSize;
 	vol = (vol < 0) ? 0 : vol;
 	graphene_percent_floater_set_percent(self->percentBar, vol);
-	sound_device_set_volume(device, vol);
+	csk_audio_device_set_volume(device, vol);
 }
 
 static void on_key_volume_mute(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
-	SoundDevice *device = sound_settings_get_active_output_device(self->soundSettings);
-	gboolean newMute = !sound_device_get_muted(device);
-	graphene_percent_floater_set_percent(self->percentBar, newMute ? 0 : sound_device_get_volume(device));
-	sound_device_set_muted(device, newMute);
+	CskAudioDevice *device = csk_audio_device_manager_get_default_output(self->audioManager);
+
+	gboolean newMute = !csk_audio_device_get_muted(device);
+	graphene_percent_floater_set_percent(self->percentBar, newMute ? 0 : csk_audio_device_get_volume(device));
+	csk_audio_device_set_muted(device, newMute);
 }
 
 static void on_key_backlight_up(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
@@ -910,15 +914,10 @@ static void on_panel_main_menu(MetaDisplay *display, MetaScreen *screen, MetaWin
 
 static void init_keybindings(GrapheneWM *self)
 {
-	pa_proplist *proplist = pa_proplist_new();
-	pa_proplist_sets(proplist, PA_PROP_APPLICATION_NAME, "graphene-window-manager");
-	// pa_proplist_sets(proplist, PA_PROP_APPLICATION_ID, g_application_get_application_id(g_application_get_default()));
-	pa_proplist_sets(proplist, PA_PROP_APPLICATION_ICON_NAME, "multimedia-volume-control-symbolic");
-	pa_proplist_sets(proplist, PA_PROP_APPLICATION_VERSION, WM_VERSION_STRING);
-	
-	pa_glib_mainloop *mainloop = pa_glib_mainloop_new(g_main_context_default());
-	self->soundSettings = sound_settings_init(mainloop, pa_glib_mainloop_get_api(mainloop), proplist, (DestroyPAMainloopNotify)pa_glib_mainloop_free);
-
+	//pa_proplist_sets(proplist, PA_PROP_APPLICATION_NAME, "graphene-window-manager");
+	//// pa_proplist_sets(proplist, PA_PROP_APPLICATION_ID, g_application_get_application_id(g_application_get_default()));
+	//pa_proplist_sets(proplist, PA_PROP_APPLICATION_ICON_NAME, "multimedia-volume-control-symbolic");
+	//pa_proplist_sets(proplist, PA_PROP_APPLICATION_VERSION, WM_VERSION_STRING);
 
 	GSettings *keybindings = g_settings_new("io.velt.desktop.keybindings");
 	MetaDisplay *display = meta_screen_get_display(meta_plugin_get_screen(META_PLUGIN(self)));
