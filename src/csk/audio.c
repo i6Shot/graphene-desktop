@@ -4,7 +4,7 @@
  * Licensed under the Apache License 2 <www.apache.org/licenses/LICENSE-2.0>.
  */
 
-#include "sound.h"
+#include "audio.h"
 #include <pulse/pulseaudio.h>
 #include <pulse/glib-mainloop.h>
 

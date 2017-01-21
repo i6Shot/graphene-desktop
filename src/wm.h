@@ -26,7 +26,7 @@
 #include <meta/meta-plugin.h>
 #include <meta/meta-background-group.h>
 #include "percent-floater.h"
-#include "sound.h"
+#include "csk/audio.h"
 #include "panel.h"
 
 G_BEGIN_DECLS
