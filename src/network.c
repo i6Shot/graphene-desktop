@@ -87,9 +87,9 @@ static void graphene_network_control_init(GrapheneNetworkControl *self)
     "org.wicd.daemon",
     NULL, &error);
   
-  if(!self->wicdDaemonProxy)
+  if(!self->wicdDaemonProxy || error)
   {
-    g_warning("Failed to connect to wicd: %s", error->message);
+    g_warning("Failed to connect to wicd: %s", error ? error->message : "");
     g_clear_error(&error);
     return;
   }
@@ -98,10 +98,19 @@ static void graphene_network_control_init(GrapheneNetworkControl *self)
   
   // GetConnectionStatus returns ((uas))
   GVariant *statusVariantWrap = g_dbus_proxy_call_sync(self->wicdDaemonProxy, "GetConnectionStatus", NULL, G_DBUS_CALL_FLAGS_NONE, 1000, NULL, NULL);
-  
+
+  if(!statusVariantWrap || g_variant_check_format_string(statusVariantWrap, "((uas))", FALSE))
+  {
+    g_warning("Failed to get wicd connection status.");
+    return;
+  }
+
   // Drops the outer tuple, leaving (uas)
   GVariant *statusVariant = g_variant_get_child_value(statusVariantWrap, 0);
   g_variant_unref(statusVariantWrap);
+
+  if(!statusVariant)
+    return;
 
   // Gets the status int
   guint32 status;
