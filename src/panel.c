@@ -106,9 +106,8 @@ static void graphene_panel_init(GraphenePanel *self)
 	ClutterLayoutManager *layout = clutter_box_layout_new();
 	self->settingsAppletLayout = CLUTTER_BOX_LAYOUT(layout);
 	clutter_actor_set_layout_manager(CLUTTER_ACTOR(iconBox), layout);
-	CmkIcon *w = cmk_icon_new_full("audio-volume-high-symbolic", NULL, PANEL_HEIGHT *3/4, TRUE);
 	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(cmk_icon_new_full("system-shutdown-symbolic", NULL, PANEL_HEIGHT * 3/4, TRUE)));
-	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(w)); 
+	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(graphene_volume_icon_new(PANEL_HEIGHT * 3/4))); 
 	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(graphene_network_icon_new(PANEL_HEIGHT * 2/4))); 
 	clutter_actor_add_child(CLUTTER_ACTOR(iconBox), CLUTTER_ACTOR(graphene_battery_icon_new(PANEL_HEIGHT * 3/4))); 
 	cmk_button_set_content(self->settingsApplet, iconBox);
