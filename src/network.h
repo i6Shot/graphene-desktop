@@ -22,7 +22,6 @@
 
 #include <glib.h>
 #include <glib-object.h>
-#include "cmk/cmk-icon.h"
 
 G_BEGIN_DECLS
 
@@ -35,11 +34,6 @@ const gchar * graphene_network_control_get_ip(GrapheneNetworkControl *net);
 gint graphene_network_control_get_signal_strength(GrapheneNetworkControl *net);
 const gchar * graphene_network_control_get_essid(GrapheneNetworkControl *net);
 const gchar * graphene_network_control_get_icon_name(GrapheneNetworkControl *net);
-
-#define GRAPHENE_TYPE_NETWORK_ICON  graphene_network_icon_get_type()
-G_DECLARE_FINAL_TYPE(GrapheneNetworkIcon, graphene_network_icon, GRAPHENE, NETWORK_ICON, CmkIcon)
-GrapheneNetworkIcon * graphene_network_icon_new(gfloat size);
-
 
 G_END_DECLS
 
