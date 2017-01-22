@@ -127,3 +127,60 @@ static void volume_icon_on_update(GrapheneVolumeIcon *self, const GParamSpec *sp
 	cmk_icon_set_icon(CMK_ICON(self), iconName);
 }
 
+
+#include "settings-battery.h"
+
+struct _GrapheneBatteryIcon
+{
+	CmkIcon parent;
+	GrapheneBatteryInfo *batInfo;
+};
+
+static void graphene_battery_icon_dispose(GObject *self_);
+static void battery_icon_on_update(GrapheneBatteryIcon *self, GrapheneBatteryInfo *info);
+
+G_DEFINE_TYPE(GrapheneBatteryIcon, graphene_battery_icon, CMK_TYPE_ICON)
+
+
+GrapheneBatteryIcon * graphene_battery_icon_new(gfloat size)
+{
+	GrapheneBatteryIcon *self = GRAPHENE_BATTERY_ICON(g_object_new(GRAPHENE_TYPE_BATTERY_ICON, "use-foreground-color", TRUE, NULL));
+	if(size > 0)
+		cmk_icon_set_size(CMK_ICON(self), size);
+	return self;
+}
+
+static void graphene_battery_icon_class_init(GrapheneBatteryIconClass *class)
+{
+	G_OBJECT_CLASS(class)->dispose = graphene_battery_icon_dispose;
+}
+
+static void graphene_battery_icon_init(GrapheneBatteryIcon *self)
+{
+	ClutterColor bg = {0,0,0,0}; // Bg doesn't actually matter
+	ClutterColor fg = {255,0,0,255};
+	cmk_widget_style_set_color(CMK_WIDGET(self), "warning", &bg); 
+	cmk_widget_style_set_color(CMK_WIDGET(self), "warning-foreground", &fg); 
+
+	self->batInfo = graphene_battery_info_get_default();
+	g_signal_connect_swapped(self->batInfo, "update", G_CALLBACK(battery_icon_on_update), self);
+	battery_icon_on_update(self, self->batInfo);
+}
+
+static void graphene_battery_icon_dispose(GObject *self_)
+{
+	G_OBJECT_CLASS(graphene_battery_icon_parent_class)->dispose(self_);
+}
+
+static void battery_icon_on_update(GrapheneBatteryIcon *self, GrapheneBatteryInfo *info)
+{
+	gchar *iconName = graphene_battery_info_get_icon_name(info);
+	cmk_icon_set_icon(CMK_ICON(self), iconName);
+	g_free(iconName);
+
+	if(graphene_battery_info_get_percent(info) <= 15)
+		cmk_widget_set_background_color_name(CMK_WIDGET(self), "warning");
+	else
+		cmk_widget_set_background_color_name(CMK_WIDGET(self), NULL);
+}
+

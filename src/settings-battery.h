@@ -23,10 +23,6 @@ const gchar * graphene_battery_info_get_state_string(GrapheneBatteryInfo *self);
 gchar * graphene_battery_info_get_icon_name(GrapheneBatteryInfo *self); // Returns a newly-allocated string
 gint64 graphene_battery_info_get_time(GrapheneBatteryInfo *self); // Time until charged or time until empty, depending on state
 
-#define GRAPHENE_TYPE_BATTERY_ICON  graphene_battery_icon_get_type()
-G_DECLARE_FINAL_TYPE(GrapheneBatteryIcon, graphene_battery_icon, GRAPHENE, BATTERY_ICON, CmkIcon)
-GrapheneBatteryIcon * graphene_battery_icon_new(gfloat size);
-
 G_END_DECLS
 
 #endif /* __GRAPHENE_BATTERY_H__ */
