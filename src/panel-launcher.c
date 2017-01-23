@@ -21,7 +21,7 @@ struct _GrapheneLauncherPopup
 {
 	CmkWidget parent;
 	
-	CmkShadowContainer *sdc;
+	CmkShadow *sdc;
 	CmkWidget *window;
 	ClutterScrollActor *scroll;
 	CmkButton *firstApp;
@@ -69,8 +69,8 @@ static void graphene_launcher_popup_class_init(GrapheneLauncherPopupClass *class
 
 static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
 {
-	self->sdc = cmk_shadow_container_new();
-	cmk_shadow_container_set_blur(self->sdc, 40);
+	self->sdc = cmk_shadow_new();
+	cmk_shadow_set_blur(self->sdc, 40);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->sdc));
 
 	self->window = cmk_widget_new();

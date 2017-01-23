@@ -27,7 +27,7 @@ struct _GraphenePanel
 	gpointer cbUserdata;
 
 	// These are owned by Clutter, not refed
-	CmkShadowContainer *sdc;
+	CmkShadow *sdc;
 	CmkWidget *bar;
 	CmkButton *launcher;
 	CmkButton *settingsApplet;
@@ -79,7 +79,7 @@ static void graphene_panel_init(GraphenePanel *self)
 
 	clutter_actor_set_layout_manager(CLUTTER_ACTOR(self->bar), clutter_box_layout_new());
 
-	self->sdc = cmk_shadow_container_new();
+	self->sdc = cmk_shadow_new();
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->sdc));
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->bar));
 
@@ -156,7 +156,7 @@ static void on_style_changed(CmkWidget *self_)
 	clutter_actor_set_margin(CLUTTER_ACTOR(self->clock), &margin);
 
 	cmk_widget_style_set_padding(CMK_WIDGET(self->launcher), cmk_widget_style_get_padding(self_) * 1.3 / cmk_widget_style_get_scale_factor(self_));
-	cmk_shadow_container_set_vblur(self->sdc, padding);
+	cmk_shadow_set_vblur(self->sdc, padding);
 	clutter_actor_queue_relayout(CLUTTER_ACTOR(self_));
 
 	CMK_WIDGET_CLASS(graphene_panel_parent_class)->style_changed(self_);
