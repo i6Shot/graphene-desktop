@@ -235,7 +235,7 @@ static void close_dialog(GrapheneDialog *dialog, const gchar *button)
 
 void graphene_session_request_logout()
 {	
-	GrapheneDialog *dialog = graphene_dialog_new_simple("How would you like to exit?\n(Restart and Shutdown not yet implemented)", "", "Cancel", "Logout", "Restart", "Shutdown", NULL);
+	GrapheneDialog *dialog = graphene_dialog_new_simple("How would you like to exit?\n(Restart and Shutdown not yet implemented)", NULL, "Cancel", "Logout", "Restart", "Shutdown", NULL);
 
 	CmkShadowContainer *sdc = cmk_shadow_container_new();
 	cmk_shadow_container_set_blur(sdc, 30);
