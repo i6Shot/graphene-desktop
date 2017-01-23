@@ -99,7 +99,7 @@ static void graphene_network_control_init(GrapheneNetworkControl *self)
   // GetConnectionStatus returns ((uas))
   GVariant *statusVariantWrap = g_dbus_proxy_call_sync(self->wicdDaemonProxy, "GetConnectionStatus", NULL, G_DBUS_CALL_FLAGS_NONE, 1000, NULL, NULL);
 
-  if(!statusVariantWrap || g_variant_check_format_string(statusVariantWrap, "((uas))", FALSE))
+  if(!statusVariantWrap || !g_variant_check_format_string(statusVariantWrap, "((uas))", FALSE))
   {
     g_warning("Failed to get wicd connection status.");
     return;
