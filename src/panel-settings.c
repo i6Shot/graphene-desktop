@@ -74,8 +74,7 @@ static ClutterLayoutManager * clutter_vertical_box_new()
 
 static void graphene_settings_popup_init(GrapheneSettingsPopup *self)
 {
-	self->sdc = cmk_shadow_new();
-	cmk_shadow_set_blur(self->sdc, 40);
+	self->sdc = cmk_shadow_new_full(CMK_SHADOW_MASK_LEFT | CMK_SHADOW_MASK_BOTTOM, 40);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->sdc));
 
 	self->window = cmk_widget_new();
@@ -142,7 +141,7 @@ static void graphene_settings_popup_allocate(ClutterActor *self_, const ClutterA
 	ClutterActorBox scrollBox = {windowBox.x1, infoBox.y2, windowBox.x2, windowBox.y2};
 
 	clutter_actor_allocate(CLUTTER_ACTOR(self->window), &windowBox, flags);
-	clutter_actor_allocate(CLUTTER_ACTOR(self->sdc), &sdcBox, flags);
+	clutter_actor_allocate(CLUTTER_ACTOR(self->sdc), &windowBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->infoBox), &infoBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->scroll), &scrollBox, flags);
 
