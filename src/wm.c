@@ -594,7 +594,10 @@ void graphene_wm_show_dialog(GrapheneWM *self, ClutterActor *dialog)
 	if(!dialog)
 		return;
 
-	self->dialog = dialog;
+	CmkShadow *shadow = cmk_shadow_new_full(CMK_SHADOW_MASK_ALL, 40);
+	clutter_actor_add_child(CLUTTER_ACTOR(shadow), dialog);
+
+	self->dialog = CLUTTER_ACTOR(shadow);
 	clutter_actor_insert_child_above(self->stage, self->dialog, NULL);
 	clutter_actor_show(self->dialog);
 	clutter_actor_set_pivot_point(self->dialog, 0.5, 0.5);
