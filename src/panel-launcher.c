@@ -1,8 +1,8 @@
-/*
- * This file is part of graphene-desktop, the desktop environment of VeltOS.
- * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
- * Licensed under the Apache License 2 <www.apache.org/licenses/LICENSE-2.0>.
- */
+//*
+// * This file is part of graphene-desktop, the desktop environment of VeltOS.
+// * Copyright (C) 2016 Velt Technologies, Aidan Shafran <zelbrium@gmail.com>
+// * Licensed under the Apache License 2 <www.apache.org/licenses/LICENSE-2.0>.
+// */
  
 #define GMENU_I_KNOW_THIS_IS_UNSTABLE // TODO: Maybe find an alternative? 
 
@@ -21,7 +21,7 @@ struct _GrapheneLauncherPopup
 {
 	CmkWidget parent;
 	
-	CmkShadowContainer *sdc;
+	CmkShadow *sdc;
 	CmkWidget *window;
 	ClutterScrollActor *scroll;
 	CmkButton *firstApp;
@@ -69,8 +69,7 @@ static void graphene_launcher_popup_class_init(GrapheneLauncherPopupClass *class
 
 static void graphene_launcher_popup_init(GrapheneLauncherPopup *self)
 {
-	self->sdc = cmk_shadow_container_new();
-	cmk_shadow_container_set_blur(self->sdc, 40);
+	self->sdc = cmk_shadow_new_full(CMK_SHADOW_MASK_RIGHT | CMK_SHADOW_MASK_BOTTOM, 40);
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->sdc));
 
 	self->window = cmk_widget_new();
@@ -148,7 +147,7 @@ static void graphene_launcher_popup_allocate(ClutterActor *self_, const ClutterA
 	ClutterActorBox scrollBox = {windowBox.x1, separatorBox.y2, windowBox.x2, windowBox.y2};
 
 	clutter_actor_allocate(CLUTTER_ACTOR(self->window), &windowBox, flags);
-	clutter_actor_allocate(CLUTTER_ACTOR(self->sdc), &sdcBox, flags);
+	clutter_actor_allocate(CLUTTER_ACTOR(self->sdc), &windowBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->searchBox), &searchBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->searchIcon), &iconBox, flags);
 	clutter_actor_allocate(CLUTTER_ACTOR(self->searchSeparator), &separatorBox, flags);
