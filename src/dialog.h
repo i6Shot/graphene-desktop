@@ -17,7 +17,16 @@
 G_BEGIN_DECLS
 
 #define GRAPHENE_TYPE_DIALOG  graphene_dialog_get_type()
-G_DECLARE_FINAL_TYPE(GrapheneDialog, graphene_dialog, GRAPHENE, DIALOG, CmkWidget)
+G_DECLARE_DERIVABLE_TYPE(GrapheneDialog, graphene_dialog, GRAPHENE, DIALOG, CmkWidget)
+
+typedef struct _GrapheneDialogClass GrapheneDialogClass;
+
+struct _GrapheneDialogClass
+{
+	CmkWidgetClass parentClass;
+	
+	void (*select) (GrapheneDialog *dialog, const gchar *selection);
+};
 
 GrapheneDialog * graphene_dialog_new();
 

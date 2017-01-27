@@ -12,10 +12,9 @@
 
 #define ICON_SIZE 48
 
-struct _GrapheneDialog
+typedef struct _GrapheneDialogPrivate GrapheneDialogPrivate;
+struct _GrapheneDialogPrivate
 {
-	CmkWidget parent;
-	
 	ClutterText *message;
 	ClutterActor *content;
 	ClutterActor *icon;
@@ -50,8 +49,8 @@ static void on_style_changed(CmkWidget *self_);
 static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas *canvas);
 static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, int height, GrapheneDialog *self);
 
-G_DEFINE_TYPE(GrapheneDialog, graphene_dialog, CMK_TYPE_WIDGET);
-
+G_DEFINE_TYPE_WITH_PRIVATE(GrapheneDialog, graphene_dialog, CMK_TYPE_WIDGET);
+#define PRIVATE(dialog) ((GrapheneDialogPrivate *)graphene_dialog_get_instance_private(dialog))
 
 
 GrapheneDialog * graphene_dialog_new()
@@ -96,7 +95,7 @@ static void graphene_dialog_class_init(GrapheneDialogClass *class)
 	
 	CMK_WIDGET_CLASS(class)->style_changed = on_style_changed;
 
-	signals[SIGNAL_SELECT] = g_signal_new("select", G_TYPE_FROM_CLASS(class), G_SIGNAL_RUN_FIRST, 0, NULL, NULL, NULL, G_TYPE_NONE, 1, G_TYPE_STRING);
+	signals[SIGNAL_SELECT] = g_signal_new("select", G_TYPE_FROM_CLASS(class), G_SIGNAL_RUN_FIRST, G_STRUCT_OFFSET(GrapheneDialogClass, select), NULL, NULL, NULL, G_TYPE_NONE, 1, G_TYPE_STRING);
 }
 
 static void graphene_dialog_init(GrapheneDialog *self)
@@ -107,13 +106,14 @@ static void graphene_dialog_init(GrapheneDialog *self)
 	g_signal_connect(canvas, "draw", G_CALLBACK(on_draw_canvas), self);
 	clutter_actor_set_content(CLUTTER_ACTOR(self), canvas);
 
-	self->buttonBox = clutter_actor_new();
+	GrapheneDialogPrivate *private = PRIVATE(self);
+	private->buttonBox = clutter_actor_new();
 	ClutterLayoutManager *buttonLayout = clutter_box_layout_new();
 	clutter_box_layout_set_orientation(CLUTTER_BOX_LAYOUT(buttonLayout), CLUTTER_ORIENTATION_HORIZONTAL);
-	clutter_actor_set_layout_manager(self->buttonBox, buttonLayout);
-	clutter_actor_set_x_expand(self->buttonBox, TRUE);
-	clutter_actor_set_x_align(self->buttonBox, CLUTTER_ACTOR_ALIGN_END);
-	clutter_actor_add_child(CLUTTER_ACTOR(self), self->buttonBox);
+	clutter_actor_set_layout_manager(private->buttonBox, buttonLayout);
+	clutter_actor_set_x_expand(private->buttonBox, TRUE);
+	clutter_actor_set_x_align(private->buttonBox, CLUTTER_ACTOR_ALIGN_END);
+	clutter_actor_add_child(CLUTTER_ACTOR(self), private->buttonBox);
 
 	cmk_widget_set_background_color_name(CMK_WIDGET(self), "background");
 
@@ -123,28 +123,29 @@ static void graphene_dialog_init(GrapheneDialog *self)
 static void graphene_dialog_get_preferred_width(ClutterActor *self_, gfloat forHeight, gfloat *minWidth, gfloat *natWidth)
 {
 	GrapheneDialog *self = GRAPHENE_DIALOG(self_);
+	GrapheneDialogPrivate *private = PRIVATE(self);
 	float padding = cmk_widget_style_get_padding(CMK_WIDGET(self_));
 	float scale = cmk_widget_style_get_scale_factor(CMK_WIDGET(self_));
 
 	gfloat width = 0;
 	width += padding * 2; // edges
 
-	if(self->icon)
+	if(private->icon)
 		width += ICON_SIZE*scale + padding; // Icon gets padding/2 extra padding
 
 	gfloat messageWidthNat = 0;
 	gfloat contentWidthNat = 0;
 	gfloat min; // unused
 
-	if(self->message)
+	if(private->message)
 	{
-		clutter_actor_get_preferred_width(CLUTTER_ACTOR(self->message), forHeight, &min, &messageWidthNat);
+		clutter_actor_get_preferred_width(CLUTTER_ACTOR(private->message), forHeight, &min, &messageWidthNat);
 		messageWidthNat += padding*2; // give message extra padding
 	}
 
-	if(self->content)
+	if(private->content)
 	{
-		clutter_actor_get_preferred_width(self->content, forHeight, &min, &contentWidthNat);
+		clutter_actor_get_preferred_width(private->content, forHeight, &min, &contentWidthNat);
 		contentWidthNat += padding*2; // extra padding
 	}
 
@@ -157,7 +158,7 @@ static void graphene_dialog_get_preferred_width(ClutterActor *self_, gfloat forH
 	
 	// Make sure all the buttons have room
 	gfloat bbWidthNat = 0;
-	clutter_actor_get_preferred_width(self->buttonBox, -1, &min, &bbWidthNat);
+	clutter_actor_get_preferred_width(private->buttonBox, -1, &min, &bbWidthNat);
 	if(bbWidthNat + padding*2 > width)
 		width = bbWidthNat + padding*2;
 
@@ -168,6 +169,7 @@ static void graphene_dialog_get_preferred_width(ClutterActor *self_, gfloat forH
 static void graphene_dialog_get_preferred_height(ClutterActor *self_, gfloat forWidth, gfloat *minHeight, gfloat *natHeight)
 {
 	GrapheneDialog *self = GRAPHENE_DIALOG(self_);
+	GrapheneDialogPrivate *private = PRIVATE(self);
 	float padding = cmk_widget_style_get_padding(CMK_WIDGET(self_));
 	float scale = cmk_widget_style_get_scale_factor(CMK_WIDGET(self_));
 
@@ -179,17 +181,17 @@ static void graphene_dialog_get_preferred_height(ClutterActor *self_, gfloat for
 	gfloat iconHeight = 0;
 	gfloat min; // unused
 
-	if(self->message)
-		clutter_actor_get_preferred_height(CLUTTER_ACTOR(self->message), forWidth, &min, &messageHeightNat);
-	if(self->content)
-		clutter_actor_get_preferred_height(self->content, forWidth, &min, &contentHeightNat);
-	if(self->icon)
+	if(private->message)
+		clutter_actor_get_preferred_height(CLUTTER_ACTOR(private->message), forWidth, &min, &messageHeightNat);
+	if(private->content)
+		clutter_actor_get_preferred_height(private->content, forWidth, &min, &contentHeightNat);
+	if(private->icon)
 		iconHeight = ICON_SIZE*scale + padding*2;
 
 	gfloat bodyHeight = messageHeightNat + contentHeightNat;
 	if(bodyHeight > 0)
 		bodyHeight += padding*3; // extra top padding + double bottom padding
-	if(bodyHeight > 0 && self->message && self->content)
+	if(bodyHeight > 0 && private->message && private->content)
 		bodyHeight += padding*2; // double separation padding
 
 	// Whichever is taller: icon or body (message + padding + content)
@@ -197,7 +199,7 @@ static void graphene_dialog_get_preferred_height(ClutterActor *self_, gfloat for
 	
 	// Height for buttons
 	gfloat bbHeightNat = 0;
-	clutter_actor_get_preferred_height(self->buttonBox, -1, &min, &bbHeightNat);
+	clutter_actor_get_preferred_height(private->buttonBox, -1, &min, &bbHeightNat);
 	height += bbHeightNat;
 
 	*natHeight = height;
@@ -231,6 +233,7 @@ static void graphene_dialog_allocate(ClutterActor *self_, const ClutterActorBox 
 	 */
 
 	GrapheneDialog *self = GRAPHENE_DIALOG(self_);
+	GrapheneDialogPrivate *private = PRIVATE(self);
 
 	float padding = cmk_widget_style_get_padding(CMK_WIDGET(self_));
 	float scale = cmk_widget_style_get_scale_factor(CMK_WIDGET(self_));
@@ -242,29 +245,29 @@ static void graphene_dialog_allocate(ClutterActor *self_, const ClutterActorBox 
 
 	ClutterActorBox bodyBox = padBox;
 
-	if(self->icon)
+	if(private->icon)
 	{
 		// Give icon a margin of padding/2
 		ClutterActorBox iconBox = {padBox.x1+padding/2,padBox.y1+padding/2,padBox.x1+ICON_SIZE*scale+padding/2,padBox.y1+ICON_SIZE*scale+padding/2};
 		bodyBox.x1 = iconBox.x2 + padding/2; // Shrink the body
-		clutter_actor_allocate(self->icon, &iconBox, flags);
+		clutter_actor_allocate(private->icon, &iconBox, flags);
 	}
 	
 	// Allocate buttons
 	gfloat bbHeightNat = 0;
 	gfloat min;
-	clutter_actor_get_preferred_height(self->buttonBox, -1, &bbHeightNat, &min);
+	clutter_actor_get_preferred_height(private->buttonBox, -1, &bbHeightNat, &min);
 
 	ClutterActorBox buttonBox = {padBox.x1, padBox.y2-bbHeightNat, padBox.x2, padBox.y2};
 	bodyBox.y2 = buttonBox.y1 - padding; // Shrink body
-	clutter_actor_allocate(self->buttonBox, &buttonBox, flags);
+	clutter_actor_allocate(private->buttonBox, &buttonBox, flags);
 
 	// Place message (and TODO content)
 	ClutterActorBox messageBox = {bodyBox.x1+padding, bodyBox.y1+padding, bodyBox.x2-padding, bodyBox.y2-padding};
 	if(!_clutter_actor_box_valid(&messageBox))
 		goto allocate_exit;
 
-	clutter_actor_allocate(CLUTTER_ACTOR(self->message), &messageBox, flags);
+	clutter_actor_allocate(CLUTTER_ACTOR(private->message), &messageBox, flags);
 
 allocate_exit:
 	CLUTTER_ACTOR_CLASS(graphene_dialog_parent_class)->allocate(self_, box, flags);
@@ -275,10 +278,11 @@ static void on_style_changed(CmkWidget *self_)
 	clutter_content_invalidate(clutter_actor_get_content(CLUTTER_ACTOR(self_)));
 	clutter_actor_queue_relayout(CLUTTER_ACTOR(self_));
 	
-	if(GRAPHENE_DIALOG(self_)->message)
+	GrapheneDialogPrivate *private = PRIVATE(GRAPHENE_DIALOG(self_));
+	if(private->message)
 	{
 		const ClutterColor *color = cmk_widget_get_foreground_color(self_);
-		clutter_text_set_color(CLUTTER_TEXT(GRAPHENE_DIALOG(self_)->message), color);
+		clutter_text_set_color(private->message, color);
 	}
 
 	CMK_WIDGET_CLASS(graphene_dialog_parent_class)->style_changed(self_);
@@ -321,45 +325,47 @@ static void on_button_activate(GrapheneDialog *self, CmkButton *button)
 void graphene_dialog_set_message(GrapheneDialog *self, const gchar *message)
 {
 	g_return_if_fail(GRAPHENE_IS_DIALOG(self));
+	GrapheneDialogPrivate *private = PRIVATE(self);
 
 	if(!message)
 	{
-		clutter_actor_destroy(CLUTTER_ACTOR(self->message));
-		self->message = NULL;
+		clutter_actor_destroy(CLUTTER_ACTOR(private->message));
+		private->message = NULL;
 		return;
 	}
 	
-	if(!self->message)
+	if(!private->message)
 	{
-		self->message = CLUTTER_TEXT(clutter_text_new());	
+		private->message = CLUTTER_TEXT(clutter_text_new());	
 		const ClutterColor *color = cmk_widget_get_foreground_color(CMK_WIDGET(self));
-		clutter_text_set_color(self->message, color);
-		clutter_text_set_line_wrap(self->message, TRUE);
-		clutter_text_set_text(self->message, message);
-		clutter_actor_set_x_align(CLUTTER_ACTOR(self->message), CLUTTER_ACTOR_ALIGN_START);
-		clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->message));
+		clutter_text_set_color(private->message, color);
+		clutter_text_set_line_wrap(private->message, TRUE);
+		clutter_text_set_text(private->message, message);
+		clutter_actor_set_x_align(CLUTTER_ACTOR(private->message), CLUTTER_ACTOR_ALIGN_START);
+		clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(private->message));
 	}
 	else
 	{
-		clutter_text_set_text(self->message, message);
+		clutter_text_set_text(private->message, message);
 	}
 }
 
 void graphene_dialog_set_content(GrapheneDialog *self, ClutterActor *content)
 {
 	g_return_if_fail(GRAPHENE_IS_DIALOG(self));
-	if(self->content == content)
+	GrapheneDialogPrivate *private = PRIVATE(self);
+	if(private->content == content)
 		return;
 
-	if(self->content)
+	if(private->content)
 	{
-		clutter_actor_remove_child(CLUTTER_ACTOR(self), self->content);
-		self->content = NULL;
+		clutter_actor_remove_child(CLUTTER_ACTOR(self), private->content);
+		private->content = NULL;
 	}
 	
 	if(content)
 	{
-		self->content = content;
+		private->content = content;
 		clutter_actor_add_child(CLUTTER_ACTOR(self), content);
 	}
 }
@@ -367,7 +373,8 @@ void graphene_dialog_set_content(GrapheneDialog *self, ClutterActor *content)
 void graphene_dialog_set_buttons(GrapheneDialog *self, const gchar * const *buttons)
 {
 	g_return_if_fail(GRAPHENE_IS_DIALOG(self));
-	clutter_actor_destroy_all_children(self->buttonBox);
+	GrapheneDialogPrivate *private = PRIVATE(self);
+	clutter_actor_destroy_all_children(private->buttonBox);
 
 	const gchar *name = NULL;
 	guint i=0;
@@ -376,23 +383,24 @@ void graphene_dialog_set_buttons(GrapheneDialog *self, const gchar * const *butt
 		CmkButton *button = cmk_button_new_full(name, CMK_BUTTON_TYPE_BEVELED);
 		cmk_widget_set_style_parent(CMK_WIDGET(button), CMK_WIDGET(self));
 		g_signal_connect_swapped(button, "activate", G_CALLBACK(on_button_activate), self);
-		clutter_actor_add_child(self->buttonBox, CLUTTER_ACTOR(button));
+		clutter_actor_add_child(private->buttonBox, CLUTTER_ACTOR(button));
 	}
 }
 
 void graphene_dialog_set_icon(GrapheneDialog *self, const gchar *iconName)
 {
 	g_return_if_fail(GRAPHENE_IS_DIALOG(self));
+	GrapheneDialogPrivate *private = PRIVATE(self);
 	
-	if(self->icon)
+	if(private->icon)
 	{
-		clutter_actor_destroy(self->icon);
-		self->icon = NULL;
+		clutter_actor_destroy(private->icon);
+		private->icon = NULL;
 	}
 
 	if(iconName)
 	{
-		self->icon = CLUTTER_ACTOR(cmk_icon_new_from_name(iconName));
-		clutter_actor_add_child(CLUTTER_ACTOR(self), self->icon);
+		private->icon = CLUTTER_ACTOR(cmk_icon_new_from_name(iconName));
+		clutter_actor_add_child(CLUTTER_ACTOR(self), private->icon);
 	}
 }
