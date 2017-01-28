@@ -262,12 +262,28 @@ static void graphene_dialog_allocate(ClutterActor *self_, const ClutterActorBox 
 	bodyBox.y2 = buttonBox.y1 - padding; // Shrink body
 	clutter_actor_allocate(private->buttonBox, &buttonBox, flags);
 
-	// Place message (and TODO content)
-	ClutterActorBox messageBox = {bodyBox.x1+padding, bodyBox.y1+padding, bodyBox.x2-padding, bodyBox.y2-padding};
+	// Place message
+	gfloat messageHeightNat = 0;
+	clutter_actor_get_preferred_height(CLUTTER_ACTOR(private->message), (bodyBox.x2-bodyBox.x1-padding-padding), &messageHeightNat, &min);
+	ClutterActorBox messageBox = {bodyBox.x1+padding,
+		bodyBox.y1+padding,
+		bodyBox.x2-padding,
+		MIN(bodyBox.y2-padding, bodyBox.y1+padding+messageHeightNat)
+	};
 	if(!_clutter_actor_box_valid(&messageBox))
 		goto allocate_exit;
-
 	clutter_actor_allocate(CLUTTER_ACTOR(private->message), &messageBox, flags);
+	
+	bodyBox.y1 = messageBox.y2;
+	
+	ClutterActorBox contentBox = {bodyBox.x1+padding,
+		bodyBox.y1+padding,
+		bodyBox.x2-padding,
+		bodyBox.y2-padding
+	};
+	if(!_clutter_actor_box_valid(&contentBox))
+		goto allocate_exit;
+	clutter_actor_allocate(CLUTTER_ACTOR(private->content), &contentBox, flags);
 
 allocate_exit:
 	CLUTTER_ACTOR_CLASS(graphene_dialog_parent_class)->allocate(self_, box, flags);
