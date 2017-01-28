@@ -188,6 +188,10 @@ static void on_search_box_text_changed(GrapheneLauncherPopup *self, ClutterText 
 	g_clear_pointer(&self->filter, g_free);
 	self->filter = g_utf8_strdown(clutter_text_get_text(searchBox), -1);
 	popup_applist_populate(self);
+
+	self->scrollAmount = 0;
+	ClutterPoint p = {0, self->scrollAmount};
+	clutter_scroll_actor_scroll_to_point(self->scroll, &p);
 }
 
 static void on_search_box_activate(GrapheneLauncherPopup *self, ClutterText *searchBox)
