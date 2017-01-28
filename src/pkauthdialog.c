@@ -21,9 +21,18 @@
 #include "pkauthdialog.h"
 #include <polkitagent/polkitagent.h>
 
+typedef enum
+{
+	PK_STATE_NONE, // The agent session has not been started
+	PK_STATE_IDENTITY, // The user has selected an identity
+	PK_STATE_WAITING, // The agent session has made a request to the user
+	PK_STATE_AUTHENTICATING, // The user has responded to the request
+	PK_STATE_CANCELLED // The agent session has been cancelled
+} PkState;
+
 struct _GraphenePKAuthDialog
 {
-	ClutterActor parent;
+	GrapheneDialog parent;
 	gchar *actionId;
 	gchar *message;
 	gchar *iconName;
@@ -31,7 +40,7 @@ struct _GraphenePKAuthDialog
 	GList *identities;
 	PolkitAgentSession *agentSession;
 	ClutterText *responseField;
-	gboolean cancelled;
+	PkState state;
 };
 
 enum
@@ -43,6 +52,7 @@ enum
 static guint signals[SIGNAL_LAST];
 
 static void graphene_pk_auth_dialog_dispose(GObject *self_);
+static void on_option_selected(GrapheneDialog *self_, const gchar *selection);
 static void on_select_identity(GraphenePKAuthDialog *self, gpointer userdata);
 static gboolean on_activate(GraphenePKAuthDialog *self, ClutterButtonEvent *event, gpointer userdata);
 static void on_auth_agent_completed(PolkitAgentSession *agentSession, gboolean gainedAuthorization, gpointer userdata);
@@ -50,41 +60,11 @@ static void on_auth_agent_request(PolkitAgentSession *agentSession, gchar *reque
 static void on_auth_agent_show_error(PolkitAgentSession *agentSession, gchar *text, gpointer userdata);
 static void on_auth_agent_show_info(PolkitAgentSession *agentSession, gchar *text, gpointer userdata);
 static GList * get_pkidentities_from_variant(GVariant *identitiesV, GError **error);
+static void grab_focus_on_map(ClutterActor *actor);
 
-G_DEFINE_TYPE(GraphenePKAuthDialog, graphene_pk_auth_dialog, CLUTTER_TYPE_ACTOR);
+G_DEFINE_TYPE(GraphenePKAuthDialog, graphene_pk_auth_dialog, GRAPHENE_TYPE_DIALOG);
 
 
-static void graphene_pk_auth_dialog_class_init(GraphenePKAuthDialogClass *class)
-{
-	G_OBJECT_CLASS(class)->dispose = graphene_pk_auth_dialog_dispose;
-	
-	/*
-	 * Emitted when authentication has been completed or cancelled.
-	 * You should close this GraphenePKAuthDialog instance on this signal.
-	 * The first parameter is TRUE if the dialog was cancelled.
-	 * The second parameter is TRUE if authentication was successful.
-	 */
-	signals[SIGNAL_COMPLETE] = g_signal_new("complete", G_TYPE_FROM_CLASS(class), G_SIGNAL_RUN_FIRST, 0, NULL, NULL, NULL, G_TYPE_NONE, 2, G_TYPE_BOOLEAN, G_TYPE_BOOLEAN);
-}
-
-static void graphene_pk_auth_dialog_init(GraphenePKAuthDialog *self)
-{
-}
-
-static void graphene_pk_auth_dialog_dispose(GObject *self_)
-{
-	GraphenePKAuthDialog *self = GRAPHENE_PK_AUTH_DIALOG(self_);
-	
-	g_clear_object(&self->agentSession);
-	g_clear_pointer(&self->actionId, g_free);
-	g_clear_pointer(&self->message, g_free);
-	g_clear_pointer(&self->iconName, g_free);
-	g_clear_pointer(&self->cookie, g_free);
-	g_list_free_full(self->identities, (GDestroyNotify)g_object_unref);
-	self->identities = NULL;
-
-	G_OBJECT_CLASS(graphene_pk_auth_dialog_parent_class)->dispose(G_OBJECT(self));
-}
 
 GraphenePKAuthDialog * graphene_pk_auth_dialog_new(const gchar *actionId, const gchar *message, const gchar *iconName, const gchar *cookie, GVariant *identitiesV, GError **error)
 {
@@ -104,63 +84,121 @@ GraphenePKAuthDialog * graphene_pk_auth_dialog_new(const gchar *actionId, const 
 
 	self->actionId = g_strdup(actionId);
 	self->message = g_strdup(message);
-	self->iconName = g_strdup(iconName);
 	self->cookie = g_strdup(cookie);
 	self->identities = identities;
 
-	ClutterActor *actor = CLUTTER_ACTOR(self);
-	clutter_actor_set_width(actor, 800);
-	clutter_actor_set_height(actor, 500);
-	ClutterColor *frameColor = clutter_color_new(79, 88, 92, 255);
-	clutter_actor_set_background_color(actor, frameColor);
-	clutter_color_free(frameColor);
+	graphene_dialog_set_message(GRAPHENE_DIALOG(self), self->message);
+
+	if(!iconName || g_strcmp0(iconName, "") == 0)
+		graphene_dialog_set_icon(GRAPHENE_DIALOG(self), "locked");
+	else
+		graphene_dialog_set_icon(GRAPHENE_DIALOG(self), self->iconName);
 
 	ClutterText *passwordBox = CLUTTER_TEXT(clutter_text_new());
+	clutter_actor_set_x_expand(CLUTTER_ACTOR(passwordBox), TRUE);
+	clutter_actor_set_y_align(CLUTTER_ACTOR(passwordBox), CLUTTER_ACTOR_ALIGN_CENTER);
 	clutter_text_set_password_char(passwordBox, 8226);
 	clutter_text_set_activatable(passwordBox, TRUE);
 	clutter_text_set_editable(passwordBox, TRUE);
-	clutter_actor_set_size(CLUTTER_ACTOR(passwordBox), 300, 40);
-	clutter_actor_set_position(CLUTTER_ACTOR(passwordBox), 40, 100);
-	clutter_actor_add_child(actor, CLUTTER_ACTOR(passwordBox));
 	clutter_actor_set_reactive(CLUTTER_ACTOR(passwordBox), TRUE);
 	self->responseField = passwordBox;
-	clutter_actor_grab_key_focus(CLUTTER_ACTOR(passwordBox));
+	graphene_dialog_set_content(GRAPHENE_DIALOG(self), passwordBox);
 
-	frameColor = clutter_color_new(0, 255, 0, 255);
-	clutter_actor_set_background_color(CLUTTER_ACTOR(passwordBox), frameColor);
-	clutter_color_free(frameColor);
-
-	ClutterActor *okay = clutter_actor_new();
-	clutter_actor_set_size(okay, 100, 40);
-	clutter_actor_set_position(okay, 660, 400);
-	clutter_actor_add_child(actor, okay);
-	clutter_actor_set_reactive(okay, TRUE);
-
-	frameColor = clutter_color_new(255, 0, 0, 255);
-	clutter_actor_set_background_color(okay, frameColor);
-	clutter_color_free(frameColor);
-
-	g_signal_connect_swapped(okay, "button-press-event", G_CALLBACK(on_activate), self);
 	g_signal_connect_swapped(passwordBox, "activate", G_CALLBACK(on_activate), self);
+	g_signal_connect(passwordBox, "notify::mapped", G_CALLBACK(grab_focus_on_map), NULL);
 
 	on_select_identity(self, NULL); // TEMP
 	return self;
 }
 
+static void graphene_pk_auth_dialog_class_init(GraphenePKAuthDialogClass *class)
+{
+	G_OBJECT_CLASS(class)->dispose = graphene_pk_auth_dialog_dispose;
+	GRAPHENE_DIALOG_CLASS(class)->select = on_option_selected;
+	
+	/*
+	 * Emitted when authentication has been completed or cancelled.
+	 * You should close this GraphenePKAuthDialog instance on this signal.
+	 * The first parameter is TRUE if the dialog was cancelled.
+	 * The second parameter is TRUE if authentication was successful.
+	 */
+	signals[SIGNAL_COMPLETE] = g_signal_new("complete", G_TYPE_FROM_CLASS(class), G_SIGNAL_RUN_FIRST, 0, NULL, NULL, NULL, G_TYPE_NONE, 2, G_TYPE_BOOLEAN, G_TYPE_BOOLEAN);
+}
+
+static void graphene_pk_auth_dialog_init(GraphenePKAuthDialog *self)
+{
+	self->state = PK_STATE_NONE;
+	const gchar * const buttons[] = {"Cancel", "Authenticate", NULL};
+	graphene_dialog_set_buttons(GRAPHENE_DIALOG(self), buttons);
+}
+
+static void graphene_pk_auth_dialog_dispose(GObject *self_)
+{
+	GraphenePKAuthDialog *self = GRAPHENE_PK_AUTH_DIALOG(self_);
+	
+	g_clear_object(&self->agentSession);
+	g_clear_pointer(&self->actionId, g_free);
+	g_clear_pointer(&self->message, g_free);
+	g_clear_pointer(&self->iconName, g_free);
+	g_clear_pointer(&self->cookie, g_free);
+	g_list_free_full(self->identities, (GDestroyNotify)g_object_unref);
+	self->identities = NULL;
+
+	G_OBJECT_CLASS(graphene_pk_auth_dialog_parent_class)->dispose(G_OBJECT(self));
+}
+
+static void grab_focus_on_map(ClutterActor *actor)
+{
+	if(clutter_actor_is_mapped(actor))
+		clutter_actor_grab_key_focus(actor);
+}
+
+static void pk_cancel(GraphenePKAuthDialog *self)
+{
+	if(!self->agentSession || self->state == PK_STATE_NONE || self->state == PK_STATE_CANCELLED)
+		return;
+	
+	self->state = PK_STATE_CANCELLED;
+	polkit_agent_session_cancel(self->agentSession);
+}
+
+static void pk_respond(GraphenePKAuthDialog *self, const gchar *response)
+{
+	if(!self->agentSession || self->state != PK_STATE_WAITING)
+		return;
+
+	self->state = PK_STATE_AUTHENTICATING;
+	polkit_agent_session_response(self->agentSession, response);
+}
+
 void graphene_pk_auth_dialog_cancel(GraphenePKAuthDialog *self)
 {
 	g_return_if_fail(GRAPHENE_IS_PK_AUTH_DIALOG(self));
-	if(self->agentSession)
-	{
-		self->cancelled = TRUE;
-		polkit_agent_session_cancel(self->agentSession);
-	}
+	pk_cancel(self);
+}
+
+static void on_option_selected(GrapheneDialog *self_, const gchar *selection)
+{
+	GraphenePKAuthDialog *self = GRAPHENE_PK_AUTH_DIALOG(self_);
+
+	if(g_strcmp0(selection, "Cancel") == 0)
+		pk_cancel(self);
+	else
+		pk_respond(self, clutter_text_get_text(self->responseField));
+}
+
+static gboolean on_activate(GraphenePKAuthDialog *self, ClutterButtonEvent *event, gpointer userdata)
+{
+	pk_respond(self, clutter_text_get_text(self->responseField));
 }
 
 static void on_select_identity(GraphenePKAuthDialog *self, gpointer userdata)
 {
+	pk_cancel(self);
 	// TODO: Get selected identity
 	PolkitIdentity *identity = POLKIT_IDENTITY(self->identities->data);
+	if(!identity)
+		return;
 	
 	self->agentSession = polkit_agent_session_new(identity, self->cookie);
 	
@@ -169,32 +207,26 @@ static void on_select_identity(GraphenePKAuthDialog *self, gpointer userdata)
 	connect("request", on_auth_agent_request);
 	connect("show-error", on_auth_agent_show_error);
 	connect("show-info", on_auth_agent_show_info);
+	self->state = PK_STATE_IDENTITY;
+	polkit_agent_session_initiate(self->agentSession);
 	#undef connect
-}
-
-static gboolean on_activate(GraphenePKAuthDialog *self, ClutterButtonEvent *event, gpointer userdata)
-{
-	if(self->agentSession)
-	{
-		clutter_actor_set_reactive(CLUTTER_ACTOR(self), FALSE);
-		clutter_actor_set_reactive(CLUTTER_ACTOR(self->responseField), FALSE);
-		clutter_actor_set_opacity(CLUTTER_ACTOR(self), 150);
-		polkit_agent_session_initiate(self->agentSession);
-		polkit_agent_session_response(self->agentSession, clutter_text_get_text(self->responseField));
-	}
 }
 
 static void on_auth_agent_completed(PolkitAgentSession *agentSession, gboolean gainedAuthorization, gpointer userdata)
 {
 	g_return_if_fail(GRAPHENE_IS_PK_AUTH_DIALOG(userdata));
 	GraphenePKAuthDialog *self = GRAPHENE_PK_AUTH_DIALOG(userdata);
+	gboolean cancelled = (self->state == PK_STATE_CANCELLED);
+	self->state = PK_STATE_NONE;
 	g_clear_object(&self->agentSession);
-	g_signal_emit(self, signals[SIGNAL_COMPLETE], 0, self->cancelled, gainedAuthorization);
+	g_signal_emit(self, signals[SIGNAL_COMPLETE], 0, cancelled, gainedAuthorization);
+	// TODO: Try multiple times?
 }
 
 static void on_auth_agent_request(PolkitAgentSession *agentSession, gchar *request, gboolean echoOn, gpointer userdata)
 {
 	g_message("Request: %s (echo: %i)", request, echoOn);
+	GRAPHENE_PK_AUTH_DIALOG(userdata)->state = PK_STATE_WAITING;
 }
 
 static void on_auth_agent_show_error(PolkitAgentSession *agentSession, gchar *text, gpointer userdata)

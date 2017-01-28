@@ -18,12 +18,12 @@
 #ifndef __GRAPHENE_PK_AUTH_DIALOG_H__
 #define __GRAPHENE_PK_AUTH_DIALOG_H__
 
-#include <clutter/clutter.h>
+#include "dialog.h"
 
 G_BEGIN_DECLS
 
 #define GRAPHENE_TYPE_PK_AUTH_DIALOG graphene_pk_auth_dialog_get_type()
-G_DECLARE_FINAL_TYPE(GraphenePKAuthDialog, graphene_pk_auth_dialog, GRAPHENE, PK_AUTH_DIALOG, ClutterActor);
+G_DECLARE_FINAL_TYPE(GraphenePKAuthDialog, graphene_pk_auth_dialog, GRAPHENE, PK_AUTH_DIALOG, GrapheneDialog);
 
 /*
  * The Polkit Authentication Dialog fully handles authentication, and emits

@@ -53,7 +53,6 @@
 #include "status-notifier-watcher.h"
 #include <session-dbus-iface.h>
 #include <stdio.h>
-#include "cmk/shadow.h"
 #include "pkauthdialog.h"
 #include "dialog.h"
 
@@ -235,13 +234,10 @@ static void close_dialog(GrapheneDialog *dialog, const gchar *button)
 
 void graphene_session_request_logout()
 {	
-	GrapheneDialog *dialog = graphene_dialog_new_simple("How would you like to exit?\n(Restart and Shutdown not yet implemented)", "", "Cancel", "Logout", "Restart", "Shutdown", NULL);
+	GrapheneDialog *dialog = graphene_dialog_new_simple("How would you like to exit?\n(Restart and Shutdown not yet implemented)", NULL, "Cancel", "Logout", "Restart", "Shutdown", NULL);
 
-	CmkShadow *sdc = cmk_shadow_new_full(CMK_SHADOW_MASK_ALL, 30);
-	clutter_actor_add_child(CLUTTER_ACTOR(sdc), CLUTTER_ACTOR(dialog));
-	
 	g_signal_connect(dialog, "select", G_CALLBACK(close_dialog), NULL);
-	session->dialogCb(CLUTTER_ACTOR(sdc), session->cbUserdata);
+	session->dialogCb(CLUTTER_ACTOR(dialog), session->cbUserdata);
 }
 
 static void on_ybus_connection_acquired(GObject *source, GAsyncResult *res, gpointer userdata)
