@@ -221,7 +221,7 @@ void graphene_session_logout()
 
 static void close_dialog(GrapheneDialog *dialog, const gchar *button)
 {
-	if(g_strcmp0(button, "Cancel") == 0)
+	if(g_strcmp0(button, "Cancel") == 0 || g_strcmp0(button, "esc") == 0)
 	{
 		session->dialogCb(NULL, session->cbUserdata);
 	}

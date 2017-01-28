@@ -26,8 +26,7 @@ struct _GrapheneDialogPrivate
 
 enum
 {
-	PROP_CONTENT = 1,
-	PROP_ALLOW_ESC,
+	PROP_ALLOW_ESC = 1,
 	PROP_LAST
 };
 
@@ -40,14 +39,18 @@ enum
 static GParamSpec *properties[PROP_LAST];
 static guint signals[SIGNAL_LAST];
 
+static void graphene_dialog_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec);
+static void graphene_dialog_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec);
 static void graphene_dialog_get_preferred_width(ClutterActor *self_, gfloat forHeight, gfloat *minWidth, gfloat *natWidth);
 static void graphene_dialog_get_preferred_height(ClutterActor *self_, gfloat forWidth, gfloat *minHeight, gfloat *natHeight);
 static void graphene_dialog_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags);
 static void graphene_dialog_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec);
 static void graphene_dialog_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec);
+static void grab_focus_on_map(ClutterActor *actor);
 static void on_style_changed(CmkWidget *self_);
 static void on_size_changed(ClutterActor *self, GParamSpec *spec, ClutterCanvas *canvas);
 static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, int height, GrapheneDialog *self);
+static gboolean on_dialog_captured_event(ClutterActor *actor, ClutterEvent *event, GrapheneDialog *self);
 
 G_DEFINE_TYPE_WITH_PRIVATE(GrapheneDialog, graphene_dialog, CMK_TYPE_WIDGET);
 #define PRIVATE(dialog) ((GrapheneDialogPrivate *)graphene_dialog_get_instance_private(dialog))
@@ -89,11 +92,19 @@ GrapheneDialog * graphene_dialog_new_simple(const gchar *message, const gchar *i
 
 static void graphene_dialog_class_init(GrapheneDialogClass *class)
 {
+	GObjectClass *base = G_OBJECT_CLASS(class);
+	base->set_property = graphene_dialog_set_property;
+	base->get_property = graphene_dialog_get_property;
+
 	CLUTTER_ACTOR_CLASS(class)->get_preferred_width = graphene_dialog_get_preferred_width;
 	CLUTTER_ACTOR_CLASS(class)->get_preferred_height = graphene_dialog_get_preferred_height;
 	CLUTTER_ACTOR_CLASS(class)->allocate = graphene_dialog_allocate;
 	
 	CMK_WIDGET_CLASS(class)->style_changed = on_style_changed;
+
+	properties[PROP_ALLOW_ESC] = g_param_spec_boolean("allow-esc", "allow esc", "allow escape key to close dialog (with selection 'esc')", TRUE, G_PARAM_READWRITE);
+
+	g_object_class_install_properties(base, PROP_LAST, properties);
 
 	signals[SIGNAL_SELECT] = g_signal_new("select", G_TYPE_FROM_CLASS(class), G_SIGNAL_RUN_FIRST, G_STRUCT_OFFSET(GrapheneDialogClass, select), NULL, NULL, NULL, G_TYPE_NONE, 1, G_TYPE_STRING);
 }
@@ -117,7 +128,40 @@ static void graphene_dialog_init(GrapheneDialog *self)
 
 	cmk_widget_set_background_color_name(CMK_WIDGET(self), "background");
 
-	g_signal_connect(CLUTTER_ACTOR(self), "notify::size", G_CALLBACK(on_size_changed), canvas);
+	g_signal_connect(self, "notify::size", G_CALLBACK(on_size_changed), canvas);
+	g_signal_connect(self, "captured-event", G_CALLBACK(on_dialog_captured_event), self);
+	g_signal_connect(self, "notify::mapped", G_CALLBACK(grab_focus_on_map), NULL);
+	private->allowEsc = TRUE;
+}
+
+static void graphene_dialog_set_property(GObject *self_, guint propertyId, const GValue *value, GParamSpec *pspec)
+{
+	g_return_if_fail(GRAPHENE_IS_DIALOG(self_));
+	
+	switch(propertyId)
+	{
+	case PROP_ALLOW_ESC:
+		PRIVATE(GRAPHENE_DIALOG(self_))->allowEsc = g_value_get_boolean(value);
+		break;
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(self_, propertyId, pspec);
+		break;
+	}
+}
+
+static void graphene_dialog_get_property(GObject *self_, guint propertyId, GValue *value, GParamSpec *pspec)
+{
+	g_return_if_fail(GRAPHENE_IS_DIALOG(self_));
+	
+	switch(propertyId)
+	{
+	case PROP_ALLOW_ESC:
+		g_value_set_boolean(value, PRIVATE(GRAPHENE_DIALOG(self_))->allowEsc);
+		break;
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(self_, propertyId, pspec);
+		break;
+	}
 }
 
 static void graphene_dialog_get_preferred_width(ClutterActor *self_, gfloat forHeight, gfloat *minWidth, gfloat *natWidth)
@@ -289,6 +333,12 @@ allocate_exit:
 	CLUTTER_ACTOR_CLASS(graphene_dialog_parent_class)->allocate(self_, box, flags);
 }
 
+static void grab_focus_on_map(ClutterActor *actor)
+{
+	if(clutter_actor_is_mapped(actor))
+		clutter_actor_grab_key_focus(actor);
+}
+
 static void on_style_changed(CmkWidget *self_)
 {
 	clutter_content_invalidate(clutter_actor_get_content(CLUTTER_ACTOR(self_)));
@@ -332,6 +382,23 @@ static gboolean on_draw_canvas(ClutterCanvas *canvas, cairo_t *cr, int width, in
 	cairo_fill(cr);
 	return TRUE;
 }
+
+static gboolean on_dialog_captured_event(ClutterActor *actor, ClutterEvent *event, GrapheneDialog *self)
+{
+	if(!PRIVATE(self)->allowEsc)
+		return FALSE;
+
+	if(((ClutterKeyEvent *)event)->type == CLUTTER_KEY_PRESS)
+	{
+		if(clutter_event_get_key_symbol(event) == CLUTTER_KEY_Escape)
+		{
+			g_signal_emit(self, signals[SIGNAL_SELECT], 0, "esc");
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+} 
 
 static void on_button_activate(GrapheneDialog *self, CmkButton *button)
 {

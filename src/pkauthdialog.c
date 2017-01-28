@@ -181,10 +181,10 @@ static void on_option_selected(GrapheneDialog *self_, const gchar *selection)
 {
 	GraphenePKAuthDialog *self = GRAPHENE_PK_AUTH_DIALOG(self_);
 
-	if(g_strcmp0(selection, "Cancel") == 0)
-		pk_cancel(self);
-	else
+	if(g_strcmp0(selection, "Authenticate") == 0)
 		pk_respond(self, clutter_text_get_text(self->responseField));
+	else
+		pk_cancel(self);
 }
 
 static gboolean on_activate(GraphenePKAuthDialog *self, ClutterButtonEvent *event, gpointer userdata)
