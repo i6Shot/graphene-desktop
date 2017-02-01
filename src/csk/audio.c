@@ -33,6 +33,7 @@ struct _CskAudioDeviceManager
 {
 	GObject parent;
 
+	pa_proplist *contextProps;
 	pa_glib_mainloop *mainloop;
 	pa_mainloop_api *mainloopAPI;
   	pa_context *context;
@@ -287,7 +288,7 @@ static void csk_audio_device_manager_class_init(CskAudioDeviceManagerClass *clas
 
 static void csk_audio_device_manager_init(CskAudioDeviceManager *self)
 {
-	pa_proplist *proplist = pa_proplist_new();
+	self->contextProps = pa_proplist_new();
 	//pa_proplist_sets(proplist, PA_PROP_APPLICATION_NAME, "graphene-window-manager");
 	// pa_proplist_sets(proplist, PA_PROP_APPLICATION_ID, g_application_get_application_id(g_application_get_default()));
 	//pa_proplist_sets(proplist, PA_PROP_APPLICATION_ICON_NAME, "multimedia-volume-control-symbolic");
@@ -295,11 +296,13 @@ static void csk_audio_device_manager_init(CskAudioDeviceManager *self)
 	
 	self->mainloop = pa_glib_mainloop_new(g_main_context_default());
 	self->mainloopAPI = pa_glib_mainloop_get_api(self->mainloop);
-	self->context = pa_context_new_with_proplist(self->mainloopAPI, NULL, proplist);
+	self->context = pa_context_new_with_proplist(self->mainloopAPI, NULL, self->contextProps);
 	
 	pa_context_set_state_callback(self->context, (pa_context_notify_cb_t)on_manager_pa_state_change, self);
 	pa_context_set_subscribe_callback(self->context, (pa_context_subscribe_cb_t)on_manager_pa_event, self);
 
+	// NOFAIL: Instead of failing if the PulseAudio daemon is unavailable, enter
+	// the "connecting" state and wait for it to appear.
 	pa_context_connect(self->context, NULL, PA_CONTEXT_NOFAIL, NULL);
 }
 
@@ -322,6 +325,12 @@ static void csk_audio_device_manager_dispose(GObject *self_)
 	{
 		pa_glib_mainloop_free(self->mainloop);
 		self->mainloop = NULL;
+	}
+
+	if(self->contextProps)
+	{
+		pa_proplist_free(self->contextProps);
+		self->contextProps = NULL;
 	}
 
 	self->mainloopAPI = NULL;
@@ -393,11 +402,36 @@ static void unref_all_devices(CskAudioDeviceManager *self)
 	}
 }
 
+static gboolean reconnect(CskAudioDeviceManager *self)
+{
+	g_return_val_if_fail(CSK_IS_AUDIO_DEVICE_MANAGER(self), G_SOURCE_REMOVE);
+	unref_all_devices(self);
+
+	if(self->context)
+	{
+		pa_context_set_subscribe_callback(self->context, NULL, NULL);
+		pa_context_set_state_callback(self->context, NULL, NULL);
+		pa_context_disconnect(self->context);
+		pa_context_unref(self->context);
+		self->context = NULL;
+	}
+
+	self->context = pa_context_new_with_proplist(self->mainloopAPI, NULL, self->contextProps);
+	
+	pa_context_set_state_callback(self->context, (pa_context_notify_cb_t)on_manager_pa_state_change, self);
+	pa_context_set_subscribe_callback(self->context, (pa_context_subscribe_cb_t)on_manager_pa_event, self);
+	pa_context_connect(self->context, NULL, PA_CONTEXT_NOFAIL, NULL);
+
+	return G_SOURCE_REMOVE;
+}
+
 static void on_manager_pa_state_change(pa_context *context, CskAudioDeviceManager *self)
 {
 	gboolean prevReady = self->ready;
 
-	switch(pa_context_get_state(context))
+	int state = pa_context_get_state(context);
+	g_message("state: %i", state);
+	switch(state)
 	{
 	case PA_CONTEXT_READY:
 	{
@@ -427,6 +461,9 @@ static void on_manager_pa_state_change(pa_context *context, CskAudioDeviceManage
 	default:
 		self->ready = FALSE;
 		unref_all_devices(self);
+		// Reconnect
+		if(state == PA_CONTEXT_FAILED)
+			g_timeout_add_seconds(1, (GSourceFunc)reconnect, self);
 		break;
 	}
 

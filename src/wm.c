@@ -809,6 +809,12 @@ static void on_key_volume_up(MetaDisplay *display, MetaScreen *screen, MetaWindo
 {
 	CskAudioDevice *device = csk_audio_device_manager_get_default_output(self->audioManager);
 
+	if(!device)
+	{
+		graphene_percent_floater_set_percent(self->percentBar, 0);
+		return;
+	}
+
 	csk_audio_device_set_muted(device, FALSE);
 	
 	float stepSize = 1.0/WM_PERCENT_BAR_STEPS;
@@ -825,6 +831,12 @@ static void on_key_volume_down(MetaDisplay *display, MetaScreen *screen, MetaWin
 {
 	CskAudioDevice *device = csk_audio_device_manager_get_default_output(self->audioManager);
 
+	if(!device)
+	{
+		graphene_percent_floater_set_percent(self->percentBar, 0);
+		return;
+	}
+
 	csk_audio_device_set_muted(device, FALSE);
 
 	float stepSize = 1.0/WM_PERCENT_BAR_STEPS;
@@ -840,6 +852,12 @@ static void on_key_volume_down(MetaDisplay *display, MetaScreen *screen, MetaWin
 static void on_key_volume_mute(MetaDisplay *display, MetaScreen *screen, MetaWindow *window, ClutterKeyEvent *event, MetaKeyBinding *binding, GrapheneWM *self)
 {
 	CskAudioDevice *device = csk_audio_device_manager_get_default_output(self->audioManager);
+
+	if(!device)
+	{
+		graphene_percent_floater_set_percent(self->percentBar, 0);
+		return;
+	}
 
 	gboolean newMute = !csk_audio_device_get_muted(device);
 	graphene_percent_floater_set_percent(self->percentBar, newMute ? 0 : csk_audio_device_get_volume(device));
