@@ -164,6 +164,9 @@ void graphene_wm_start(MetaPlugin *self_)
 	graphene_percent_floater_set_scale(self->percentBar, 2); // TEMP
 	clutter_actor_insert_child_above(self->stage, ACTOR(self->percentBar), NULL);
 
+	self->notificationBox = graphene_notification_box_new((NotificationAddedCb)xfixes_add_input_actor, self);
+	clutter_actor_insert_child_above(self->stage, ACTOR(self->notificationBox), NULL);
+
 	// Update actors when the monitors change/resize
 	g_signal_connect(screen, "monitors_changed", G_CALLBACK(on_monitors_changed), self);
 	on_monitors_changed(screen, self);
@@ -216,10 +219,11 @@ static void on_monitors_changed(MetaScreen *screen, GrapheneWM *self)
 	if(self->dialog)
 		center_actor_on_primary(self, self->dialog);
 
-	clutter_actor_set_x(ACTOR(self->panel), primary.x);
-	clutter_actor_set_y(ACTOR(self->panel), primary.y);
-	clutter_actor_set_width(ACTOR(self->panel), primary.width);
-	clutter_actor_set_height(ACTOR(self->panel), primary.height);
+	clutter_actor_set_position(ACTOR(self->panel), primary.x, primary.y);
+	clutter_actor_set_size(ACTOR(self->panel), primary.width, primary.height);
+
+	clutter_actor_set_position(ACTOR(self->notificationBox), primary.x, primary.y);
+	clutter_actor_set_size(ACTOR(self->notificationBox), primary.width, primary.height);
 }
 
 /*

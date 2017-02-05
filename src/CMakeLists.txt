@@ -16,6 +16,13 @@ add_custom_command(
   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/status-notifier-dbus-ifaces.xml
 )
 
+add_custom_command(
+  OUTPUT notifications-dbus-iface.c notifications-dbus-iface.h
+  COMMAND gdbus-codegen --interface-prefix org.freedesktop --c-namespace DBus --generate-c-code notifications-dbus-iface ${CMAKE_CURRENT_SOURCE_DIR}/notifications-dbus-iface.xml
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/notifications-dbus-iface.xml
+)
+
 pkg_check_modules(GIOUNIX2 REQUIRED gio-unix-2.0>=2.10)
 pkg_check_modules(LIBMUTTER REQUIRED libmutter>=3.22)
 pkg_check_modules(LIBPULSEGLIB REQUIRED libpulse-mainloop-glib>=8.0)
@@ -53,6 +60,8 @@ add_executable(graphene-desktop
 	panel-clock.c
 	settings-battery.c
 	network.c
+	notifications-dbus-iface.c
+	notifications.c
 )
 target_link_libraries(graphene-desktop
 	${GIOUNIX2_LIBRARIES}

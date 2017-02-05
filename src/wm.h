@@ -28,6 +28,7 @@
 #include "percent-floater.h"
 #include "csk/audio.h"
 #include "panel.h"
+#include "notifications.h"
 
 G_BEGIN_DECLS
 
@@ -44,6 +45,7 @@ struct _GrapheneWM {
 	ClutterActor *coverGroup;
 	ClutterActor *dialog;
 	GraphenePanel *panel;
+	GrapheneNotificationBox *notificationBox;
 	gint modalCount;
 	
 	// For fixing an input issue with the X backend
