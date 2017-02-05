@@ -244,15 +244,6 @@ static gint notification_compare_func(gconstpointer a, gconstpointer b)
   return (((const GrapheneNotification *)a)->id < ((const GrapheneNotification *)b)->id) ? 1 : -1; // Sort newest to the top
 }
 
-// TODO: Probably make this a cmk widget method for convenience
-static void clutter_actor_box_scale(ClutterActorBox *b, gfloat scale)
-{
-	b->x1 *= scale;
-	b->y1 *= scale;
-	b->x2 *= scale;
-	b->y2 *= scale;
-}
-
 static void graphene_notification_box_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags)
 {
 	GList *children = clutter_actor_get_children(self_);
@@ -269,7 +260,7 @@ static void graphene_notification_box_allocate(ClutterActor *self_, const Clutte
 		box.y1 = NOTIFICATION_SPACING + i*(NOTIFICATION_HEIGHT + NOTIFICATION_SPACING);
 		box.x2 = box.x1 + NOTIFICATION_WIDTH;
 		box.y2 = box.y1 + NOTIFICATION_HEIGHT;
-		clutter_actor_box_scale(&box, scale);
+		cmk_scale_actor_box(&box, scale, TRUE);
 
 		clutter_actor_save_easing_state(n_);
 		clutter_actor_set_easing_mode(n_, CLUTTER_EASE_OUT_SINE);
@@ -334,13 +325,6 @@ static void graphene_notification_dispose(GObject *self_)
 	G_OBJECT_CLASS(graphene_notification_box_parent_class)->dispose(self_);
 }
 
-// Can be called from timeouts (TODO probably make into cmk_widget_destroy)
-static gboolean actor_destroy(ClutterActor *actor)
-{
-	clutter_actor_destroy(actor);
-	return G_SOURCE_REMOVE;
-}
-
 static void graphene_notification_stop_timeout(GrapheneNotification *self)
 {
 	if(self->timeoutSourceId)
@@ -353,7 +337,7 @@ static void graphene_notification_set_timeout(GrapheneNotification *self, gint t
 	graphene_notification_stop_timeout(self);
 	self->timeout = timeout;
 	if(timeout > 0)
-		self->timeoutSourceId = g_timeout_add(timeout, (GSourceFunc)actor_destroy, self);
+		self->timeoutSourceId = g_timeout_add(timeout, (GSourceFunc)cmk_widget_destroy, self);
 }
 
 static void graphene_notification_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags)
