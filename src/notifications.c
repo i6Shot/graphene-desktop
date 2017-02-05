@@ -58,6 +58,8 @@ static gboolean on_dbus_call_get_capabilities(GrapheneNotificationBox *self, GDB
 static gboolean on_dbus_call_notify(GrapheneNotificationBox *self, GDBusMethodInvocation *invocation, const gchar *app_name, guint replaces_id, const gchar *app_icon, const gchar *summary, const gchar *body, const gchar * const *actions, GVariant *hints, gint expire_timeout, DBusNotifications *object);
 static gboolean on_dbus_call_close_notification(GrapheneNotificationBox *self, GDBusMethodInvocation *invocation, guint id, DBusNotifications *object);
 static gboolean on_dbus_call_get_server_information(GrapheneNotificationBox *self, GDBusMethodInvocation *invocation, DBusNotifications *object);
+static void add_notification(GrapheneNotificationBox *self, GrapheneNotification *n);
+static gboolean remove_notification(GrapheneNotification *n);
 static void graphene_notification_box_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags);
 
 GrapheneNotification * graphene_notification_new(void);
@@ -119,8 +121,9 @@ static GrapheneNotification * get_notification_by_id(GrapheneNotificationBox *se
 	ClutterActor *child = clutter_actor_get_first_child(CLUTTER_ACTOR(self));
 	while(child)
 	{
-		if(GRAPHENE_IS_NOTIFICATION(child) && GRAPHENE_NOTIFICATION(child)->id == id)
-			return GRAPHENE_NOTIFICATION(child);
+		ClutterActor *n_ = clutter_actor_get_first_child(child);
+		if(GRAPHENE_IS_NOTIFICATION(n_) && GRAPHENE_NOTIFICATION(n_)->id == id)
+			return GRAPHENE_NOTIFICATION(n_);
 		child = clutter_actor_get_next_sibling(child);
 	}
 	return NULL;
@@ -132,7 +135,7 @@ static void remove_server_fail_notification(GrapheneNotificationBox *self)
 		return;
 	GrapheneNotification *n = get_notification_by_id(self, self->failNotificationId);
 	if(n)
-		clutter_actor_destroy(CLUTTER_ACTOR(n));
+		remove_notification(n);
 	self->failNotificationId = 0;
 }
 
@@ -141,13 +144,14 @@ static void post_server_fail_notification(GrapheneNotificationBox *self)
 	g_warning("Notification server failed");
 	remove_server_fail_notification(self);
 		
-	//NotificationInfo *info = g_new0(NotificationInfo, 1);
-	//info->icon = g_strdup("dialog-error");
-	//info->summary = g_strdup("System Notification Server Failed");
-	//info->body = g_strdup("You may not receive any notifications until you relog.");
-	//info->urgency = NOTIFICATION_URGENCY_CRITICAL;
-	//show_notification(self, info);
-	//self->failNotificationId = info->id;
+	GrapheneNotification *n = graphene_notification_new();
+	n->id = ++self->nextNotificationId;
+	n->urgency = NOTIFICATION_URGENCY_CRITICAL;
+
+	cmk_icon_set_icon(n->icon, "dialog-warning-symbolic");
+	clutter_text_set_markup(n->text, "<b>System Notifications Failed</b>\nYou may need to relog.");
+
+	add_notification(self, n);
 }
 
 static void on_dbus_connection_acquired(GDBusConnection *connection, const gchar *name, GrapheneNotificationBox *self)
@@ -195,8 +199,6 @@ static gboolean on_dbus_call_notify(GrapheneNotificationBox *self,
 	remove_server_fail_notification(self);
 
 	GrapheneNotification *n = graphene_notification_new();
-	cmk_widget_set_draw_background_color(CMK_WIDGET(n), TRUE);
-	cmk_widget_set_background_color_name(CMK_WIDGET(n), "background");
 	n->id = ++self->nextNotificationId;
 	n->urgency = NOTIFICATION_URGENCY_NORMAL; // TODO: Get from hints
 
@@ -205,12 +207,7 @@ static gboolean on_dbus_call_notify(GrapheneNotificationBox *self,
 	clutter_text_set_markup(n->text, text);
 	g_free(text);
 
-	//CmkShadow *shadow = cmk_shadow_new_full(CMK_SHADOW_MASK_ALL, 40);
-	//clutter_actor_add_child(CLUTTER_ACTOR(shadow), CLUTTER_ACTOR(n));
-	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(n));
-	if(self->notificationAddedCb)
-		self->notificationAddedCb(self->cbUserdata, CLUTTER_ACTOR(n));
-
+	add_notification(self, n);
 	graphene_notification_set_timeout(n, expire_timeout);
 	
 	dbus_notifications_complete_notify(object, invocation, n->id);
@@ -221,7 +218,6 @@ static gboolean on_dbus_call_close_notification(GrapheneNotificationBox *self, G
 {
 	GrapheneNotification *n = get_notification_by_id(self, id);
 	if(n)
-		clutter_actor_destroy(CLUTTER_ACTOR(n));
 
 	dbus_notifications_complete_close_notification(object, invocation);
 	return TRUE;
@@ -238,10 +234,31 @@ static gboolean on_dbus_call_get_server_information(GrapheneNotificationBox *sel
 	return TRUE;
 }
 
+static void add_notification(GrapheneNotificationBox *self, GrapheneNotification *n)
+{
+	CmkShadow *shadow = cmk_shadow_new_full(CMK_SHADOW_MASK_ALL, 20);
+	clutter_actor_add_child(CLUTTER_ACTOR(shadow), CLUTTER_ACTOR(n));
+	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(shadow));
+	if(self->notificationAddedCb)
+		self->notificationAddedCb(self->cbUserdata, CLUTTER_ACTOR(n));
+}
+
+static gboolean remove_notification(GrapheneNotification *n)
+{
+	ClutterActor *parent = clutter_actor_get_parent(CLUTTER_ACTOR(n));
+	if(CMK_IS_SHADOW(parent))
+		clutter_actor_destroy(parent);
+	else
+		clutter_actor_destroy(CLUTTER_ACTOR(n));
+	return G_SOURCE_REMOVE;
+}
+
 static gint notification_compare_func(gconstpointer a, gconstpointer b)
 {
-  // TODO: Sort "critical" notifications to the top
-  return (((const GrapheneNotification *)a)->id < ((const GrapheneNotification *)b)->id) ? 1 : -1; // Sort newest to the top
+	// TODO: Sort "critical" notifications to the top
+	a = cmk_shadow_get_first_child((CmkShadow *)a);
+	b = cmk_shadow_get_first_child((CmkShadow *)b);
+	return (((const GrapheneNotification *)a)->id < ((const GrapheneNotification *)b)->id) ? 1 : -1; // Sort newest to the top
 }
 
 static void graphene_notification_box_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags)
@@ -311,14 +328,14 @@ static void graphene_notification_init(GrapheneNotification *self)
 	clutter_actor_add_child(CLUTTER_ACTOR(self), CLUTTER_ACTOR(self->icon));
 
 	clutter_actor_set_reactive(CLUTTER_ACTOR(self), TRUE);
+
+	cmk_widget_set_draw_background_color(CMK_WIDGET(self), TRUE);
+	cmk_widget_set_background_color_name(CMK_WIDGET(self), "background");
 }
 
 static void graphene_notification_dispose(GObject *self_)
 {
 	GrapheneNotification *self = GRAPHENE_NOTIFICATION(self_);
-
-	//GrapheneNotificationBox *self = GRAPHENE_NOTIFICATION_BOX(clutter_actor_get_parent(CLUTTER_ACTOR(notification)));
-	//if(GRAPHENE_IS_NOTIFICATION_BOX(self))
 
 	graphene_notification_stop_timeout(self);
 
@@ -337,7 +354,7 @@ static void graphene_notification_set_timeout(GrapheneNotification *self, gint t
 	graphene_notification_stop_timeout(self);
 	self->timeout = timeout;
 	if(timeout > 0)
-		self->timeoutSourceId = g_timeout_add(timeout, (GSourceFunc)cmk_widget_destroy, self);
+		self->timeoutSourceId = g_timeout_add(timeout, (GSourceFunc)remove_notification, self);
 }
 
 static void graphene_notification_allocate(ClutterActor *self_, const ClutterActorBox *box, ClutterAllocationFlags flags)
@@ -359,7 +376,7 @@ static void graphene_notification_allocate(ClutterActor *self_, const ClutterAct
 
 static gboolean graphene_notification_press(ClutterActor *self_, ClutterButtonEvent *event)
 {
-	clutter_actor_destroy(self_);
+	remove_notification(GRAPHENE_NOTIFICATION(self_));
 	return TRUE;
 }
 

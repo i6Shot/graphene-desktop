@@ -144,7 +144,11 @@ void graphene_wm_start(MetaPlugin *self_)
 	clutter_actor_insert_child_below(self->stage, backgroundGroup, NULL);
 	clutter_actor_show(backgroundGroup);
 
-	// Panel goes lowest of WM widgets, but above the windows
+	// Notifications go lowest of all widgets (but above windows)
+	self->notificationBox = graphene_notification_box_new((NotificationAddedCb)xfixes_add_input_actor, self);
+	clutter_actor_insert_child_above(self->stage, ACTOR(self->notificationBox), NULL);
+
+	// Panel is 2nd lowest
 	self->panel = graphene_panel_new((CPanelModalCallback)on_panel_request_modal, wm_request_logout, self);
 	ClutterActor *panelBar = graphene_panel_get_input_actor(self->panel);
 	xfixes_add_input_actor(self, panelBar);
@@ -163,9 +167,6 @@ void graphene_wm_start(MetaPlugin *self_)
 	graphene_percent_floater_set_divisions(self->percentBar, WM_PERCENT_BAR_STEPS);
 	graphene_percent_floater_set_scale(self->percentBar, 2); // TEMP
 	clutter_actor_insert_child_above(self->stage, ACTOR(self->percentBar), NULL);
-
-	self->notificationBox = graphene_notification_box_new((NotificationAddedCb)xfixes_add_input_actor, self);
-	clutter_actor_insert_child_above(self->stage, ACTOR(self->notificationBox), NULL);
 
 	// Update actors when the monitors change/resize
 	g_signal_connect(screen, "monitors_changed", G_CALLBACK(on_monitors_changed), self);
