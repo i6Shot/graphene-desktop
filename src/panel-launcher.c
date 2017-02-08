@@ -15,7 +15,7 @@
 #include <gmenu-tree.h>
 #include <gio/gdesktopappinfo.h>
 
-#define LAUNCHER_WIDTH 300
+#define LAUNCHER_WIDTH 600
 
 struct _GrapheneLauncherPopup
 {
