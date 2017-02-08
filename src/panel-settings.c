@@ -11,7 +11,7 @@
 #include "cmk/shadow.h"
 #include <act/act.h>
 
-#define PANEL_WIDTH 300
+#define PANEL_WIDTH 600
 
 struct _GrapheneSettingsPopup
 {
